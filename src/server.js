@@ -2,8 +2,9 @@ require('dotenv').config({ path: '.env.local' });
 
 const express = require('express');
 const path = require('path');
-const { upsertBusiness, getBusinessById, getOrCreateConversation, addMessage, getConversationHistory } = require('./db');
+const { upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getOrCreateConversation, addMessage, getConversationHistory } = require('./db');
 const { generateReply } = require('./claude');
+const { sendWhatsAppMessage } = require('./whatsapp');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -49,6 +50,67 @@ app.post('/test/simulate', async (req, res) => {
     res.json({ reply, conversation_id: conversation.id });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// --- WhatsApp webhook ---
+
+app.get('/webhook', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+
+  if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+    return res.status(200).send(challenge);
+  }
+  res.status(403).send('Forbidden');
+});
+
+app.post('/webhook', async (req, res) => {
+  // Respond 200 immediately so Meta doesn't retry
+  res.status(200).send('OK');
+
+  try {
+    const body = req.body;
+    if (body.object !== 'whatsapp_business_account') return;
+
+    for (const entry of body.entry || []) {
+      for (const change of entry.changes || []) {
+        if (change.field !== 'messages') continue;
+
+        const value = change.value;
+        const phoneNumberId = value.metadata?.phone_number_id;
+        const messages = value.messages || [];
+
+        if (!messages.length) continue;
+
+        const business = getBusinessByWhatsappNumber(phoneNumberId);
+        if (!business) {
+          console.warn(`No business found for phone_number_id: ${phoneNumberId}`);
+          continue;
+        }
+
+        for (const msg of messages) {
+          if (msg.type !== 'text') continue;
+
+          const customerPhone = msg.from;
+          const text = msg.text?.body;
+          if (!text) continue;
+
+          const conversation = getOrCreateConversation(business.id, customerPhone);
+          const history = getConversationHistory(conversation.id, 20);
+
+          const reply = await generateReply(business, history, text);
+
+          addMessage(conversation.id, 'user', text);
+          addMessage(conversation.id, 'assistant', reply);
+
+          await sendWhatsAppMessage(customerPhone, reply);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Webhook processing error:', err.message);
   }
 });
 

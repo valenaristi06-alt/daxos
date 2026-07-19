@@ -73,6 +73,14 @@ function deserializeBusiness(row) {
   };
 }
 
+const stmtGetBusinessByPhone = db.prepare('SELECT * FROM businesses WHERE whatsapp_number = ?');
+
+function getBusinessByWhatsappNumber(number) {
+  const row = stmtGetBusinessByPhone.get(String(number));
+  if (!row) return null;
+  return deserializeBusiness(row);
+}
+
 // --- conversations ---
 
 const stmtGetConversation = db.prepare(`
@@ -111,6 +119,7 @@ function getConversationHistory(conversation_id, limit = 50) {
 module.exports = {
   upsertBusiness,
   getBusinessById,
+  getBusinessByWhatsappNumber,
   getOrCreateConversation,
   addMessage,
   getConversationHistory,
