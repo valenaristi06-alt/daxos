@@ -63,6 +63,18 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         </div>
       </section>
 
+      <!-- Style profile card (shown after save/analyze) -->
+      <div class="style-card" id="style-card" style="display:none">
+        <div class="style-card-header">
+          <div>
+            <p class="style-card-terminal">&gt; style.profile</p>
+            <p class="style-card-title">Así hablás</p>
+          </div>
+          <button type="button" class="btn-reanalyze" id="btn-reanalyze">Volver a analizar</button>
+        </div>
+        <div class="style-grid" id="style-grid"></div>
+      </div>
+
       <hr class="divider" />
 
       <!-- Comportamiento -->
@@ -178,6 +190,25 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
     initRadioGroup('prioridad-group');
     initRadioGroup('largo-group');
 
+    // ── Style profile card ──
+    const TONO_LABELS = { cercano:'Cercano', formal:'Formal', directo:'Directo', persuasivo:'Persuasivo', informativo:'Informativo' };
+    const EMOJI_LABELS = { ninguno:'Sin emojis', moderado:'Emojis moderados', frecuente:'Emojis frecuentes' };
+    const LARGO_LABELS = { corto:'Mensajes cortos', medio:'Mensajes medios', largo:'Mensajes largos' };
+    const CIERRE_LABELS = { 'con pregunta':'Cierra con pregunta', 'con llamado a la acción':'Llamado a la acción', abierto:'Cierre abierto', mixto:'Cierre mixto' };
+
+    function renderStyleProfile(profile) {
+      if (!profile) { document.getElementById('style-card').style.display = 'none'; return; }
+      document.getElementById('style-card').style.display = 'block';
+      const grid = document.getElementById('style-grid');
+      grid.innerHTML = `
+        <div class="style-chip">${TONO_LABELS[profile.tono] || profile.tono}</div>
+        <div class="style-chip">${EMOJI_LABELS[profile.uso_emojis] || profile.uso_emojis}</div>
+        <div class="style-chip">${LARGO_LABELS[profile.largo_mensajes] || profile.largo_mensajes}</div>
+        <div class="style-chip">${CIERRE_LABELS[profile.forma_de_cerrar] || profile.forma_de_cerrar}</div>
+        ${(profile.caracteristicas || []).map(c => `<div class="style-chip style-chip-muted">${c}</div>`).join('')}
+      `;
+    }
+
     // ── Load existing business data ──
     async function loadBusiness() {
       const res = await fetch('/api/business');
@@ -196,7 +227,25 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       document.getElementById('sin_respuesta').value = s.sin_respuesta || '';
       setRadio('prioridad', s.prioridad);
       setRadio('largo_mensajes', s.largo_mensajes);
+
+      renderStyleProfile(b.style_profile);
     }
+
+    // ── Re-analyze button ──
+    document.getElementById('btn-reanalyze').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-reanalyze');
+      btn.disabled = true;
+      btn.textContent = 'Analizando…';
+      try {
+        const res = await fetch('/api/business/analyze-style', { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) renderStyleProfile(data);
+        else alert(data.error || 'Error al analizar');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Volver a analizar';
+      }
+    });
 
     // ── Save ──
     document.getElementById('form').addEventListener('submit', async (e) => {
@@ -237,9 +286,16 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       btn.disabled = false;
 
       if (res.ok) {
+        const saved = await res.json();
         status.className = 'save-status ok';
         status.textContent = '✓ Guardado';
         setTimeout(() => { status.className = 'save-status'; }, 3000);
+        // Re-fetch to get style_profile once analysis completes (fires async on server)
+        setTimeout(async () => {
+          const fresh = await fetch('/api/business');
+          const b = await fresh.json();
+          if (b?.style_profile) renderStyleProfile(b.style_profile);
+        }, 4000);
       } else {
         const data = await res.json();
         status.className = 'save-status error';

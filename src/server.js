@@ -7,8 +7,8 @@ const bcrypt = require('bcryptjs');
 const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
-const { createUser, getUserByEmail, getUserById, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, getConversationsByBusinessId, getConversationById, getOrCreateConversation, addMessage, getConversationHistory } = require('./db');
-const { generateReply } = require('./claude');
+const { createUser, getUserByEmail, getUserById, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setStyleProfile, getConversationsByBusinessId, getConversationById, getOrCreateConversation, addMessage, getConversationHistory } = require('./db');
+const { generateReply, analyzeStyle } = require('./claude');
 const { sendWhatsAppMessage } = require('./whatsapp');
 
 const app = express();
@@ -95,7 +95,7 @@ app.get('/api/business', requireAuth, (req, res) => {
   res.json(business || null);
 });
 
-app.put('/api/business', requireAuth, (req, res) => {
+app.put('/api/business', requireAuth, async (req, res) => {
   const { name, whatsapp_number, sales_examples, survey_answers, response_mode } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'El nombre del negocio es requerido' });
 
@@ -110,9 +110,36 @@ app.put('/api/business', requireAuth, (req, res) => {
       response_mode,
     });
     if (!user.business_id) setUserBusiness(user.id, business.id);
+
+    // Style analysis — non-blocking, failure never interrupts save
+    if (Array.isArray(sales_examples) && sales_examples.length > 0) {
+      analyzeStyle(sales_examples)
+        .then(profile => setStyleProfile(business.id, profile))
+        .catch(err => console.error('[style-analysis] failed:', err.message));
+    }
+
     res.json(business);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/business/analyze-style', requireAuth, async (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.status(400).json({ error: 'No tenés un negocio configurado' });
+
+  const business = getBusinessById(user.business_id);
+  if (!business?.sales_examples?.length) {
+    return res.status(400).json({ error: 'Agregá ejemplos de venta primero' });
+  }
+
+  try {
+    const profile = await analyzeStyle(business.sales_examples);
+    setStyleProfile(business.id, profile);
+    res.json(profile);
+  } catch (err) {
+    console.error('[style-analysis] failed:', err.message);
+    res.status(500).json({ error: 'El análisis falló. Intentá de nuevo.' });
   }
 });
 

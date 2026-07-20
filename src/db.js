@@ -32,7 +32,7 @@ db.exec(`
   );
 `);
 
-// Businesses table: create or migrate whatsapp_number to nullable
+// Businesses table: create or migrate to latest schema
 const wnCol = db.prepare("PRAGMA table_info(businesses)").all().find(c => c.name === 'whatsapp_number');
 if (!wnCol) {
   db.exec(`
@@ -42,6 +42,7 @@ if (!wnCol) {
       whatsapp_number TEXT UNIQUE,
       sales_examples  TEXT,
       survey_answers  TEXT,
+      style_profile   TEXT,
       response_mode   TEXT NOT NULL DEFAULT 'texto',
       created_at      TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -74,6 +75,12 @@ if (!wnCol) {
   db.pragma('foreign_keys = ON');
 }
 
+// Add style_profile column if missing (safe ALTER TABLE for new nullable column)
+const hasStyleProfile = db.prepare("PRAGMA table_info(businesses)").all().some(c => c.name === 'style_profile');
+if (!hasStyleProfile) {
+  db.exec('ALTER TABLE businesses ADD COLUMN style_profile TEXT');
+}
+
 // --- businesses ---
 
 function deserializeBusiness(row) {
@@ -81,7 +88,13 @@ function deserializeBusiness(row) {
     ...row,
     sales_examples: row.sales_examples ? JSON.parse(row.sales_examples) : null,
     survey_answers: row.survey_answers ? JSON.parse(row.survey_answers) : null,
+    style_profile: row.style_profile ? JSON.parse(row.style_profile) : null,
   };
+}
+
+function setStyleProfile(businessId, profile) {
+  db.prepare('UPDATE businesses SET style_profile = ? WHERE id = ?')
+    .run(JSON.stringify(profile), businessId);
 }
 
 const stmtGetBusinessById = db.prepare('SELECT * FROM businesses WHERE id = ?');
@@ -222,6 +235,7 @@ function getUserById(id) {
 }
 
 module.exports = {
+  setStyleProfile,
   createUser,
   getUserByEmail,
   getUserById,
