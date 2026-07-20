@@ -75,11 +75,13 @@ if (!wnCol) {
   db.pragma('foreign_keys = ON');
 }
 
-// Add style_profile column if missing (safe ALTER TABLE for new nullable column)
-const hasStyleProfile = db.prepare("PRAGMA table_info(businesses)").all().some(c => c.name === 'style_profile');
-if (!hasStyleProfile) {
-  db.exec('ALTER TABLE businesses ADD COLUMN style_profile TEXT');
-}
+// Add new nullable columns if missing — safe ALTER TABLE
+const businessCols = db.prepare("PRAGMA table_info(businesses)").all().map(c => c.name);
+if (!businessCols.includes('style_profile'))    db.exec('ALTER TABLE businesses ADD COLUMN style_profile TEXT');
+if (!businessCols.includes('voice_id'))         db.exec('ALTER TABLE businesses ADD COLUMN voice_id TEXT');
+if (!businessCols.includes('voice_consent_at')) db.exec('ALTER TABLE businesses ADD COLUMN voice_consent_at TEXT');
+if (!businessCols.includes('consent_text'))     db.exec('ALTER TABLE businesses ADD COLUMN consent_text TEXT');
+if (!businessCols.includes('consent_by'))       db.exec('ALTER TABLE businesses ADD COLUMN consent_by TEXT');
 
 // --- businesses ---
 
@@ -95,6 +97,14 @@ function deserializeBusiness(row) {
 function setStyleProfile(businessId, profile) {
   db.prepare('UPDATE businesses SET style_profile = ? WHERE id = ?')
     .run(JSON.stringify(profile), businessId);
+}
+
+function saveVoiceConsent(businessId, { voiceId, consentText, consentBy }) {
+  db.prepare(`
+    UPDATE businesses
+    SET voice_id = ?, voice_consent_at = datetime('now'), consent_text = ?, consent_by = ?
+    WHERE id = ?
+  `).run(voiceId, consentText, consentBy, businessId);
 }
 
 const stmtGetBusinessById = db.prepare('SELECT * FROM businesses WHERE id = ?');
@@ -236,6 +246,7 @@ function getUserById(id) {
 
 module.exports = {
   setStyleProfile,
+  saveVoiceConsent,
   createUser,
   getUserByEmail,
   getUserById,

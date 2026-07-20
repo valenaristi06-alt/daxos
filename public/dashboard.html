@@ -142,6 +142,42 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
 
       </section>
 
+      <hr class="divider" />
+
+      <!-- Voz -->
+      <section class="section" id="voice-section">
+        <div class="section-label"><span>Voz</span></div>
+
+        <div id="voice-status-saved" style="display:none" class="voice-cloned-badge">
+          <span class="voice-cloned-dot"></span>
+          Voz clonada activa
+        </div>
+
+        <div class="field">
+          <label class="consent-label">
+            <input type="checkbox" id="voice-consent" />
+            <span>Confirmo que esta es mi voz (o tengo autorización explícita de su dueño) y autorizo usarla para generar respuestas automáticas de este negocio.</span>
+          </label>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="voice-file">Archivo de audio</label>
+          <span class="field-hint">MP3 o WAV, entre 1 y 3 minutos de duración.</span>
+          <input type="file" id="voice-file" accept="audio/mp3,audio/mpeg,audio/wav" disabled />
+        </div>
+
+        <div class="voice-actions">
+          <button type="button" class="btn-voice-upload" id="btn-voice-upload" disabled>Subir y clonar voz</button>
+          <span class="voice-upload-status" id="voice-upload-status"></span>
+        </div>
+
+        <div class="voice-preview-area" id="voice-preview-area" style="display:none">
+          <button type="button" class="btn-voice-preview" id="btn-voice-preview">▶ Probar voz</button>
+          <audio id="voice-audio" controls style="display:none"></audio>
+          <span class="voice-preview-status" id="voice-preview-status"></span>
+        </div>
+      </section>
+
       <div class="actions">
         <span class="save-status" id="save-status"></span>
         <button type="submit" class="btn-save" id="btn-save">Guardar cambios</button>
@@ -229,6 +265,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       setRadio('largo_mensajes', s.largo_mensajes);
 
       renderStyleProfile(b.style_profile);
+      if (b.voice_id) showVoiceCloned(b.voice_id);
     }
 
     // ── Re-analyze button ──
@@ -301,6 +338,80 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         status.className = 'save-status error';
         status.textContent = data.error || 'Error al guardar';
       }
+    });
+
+    // ── Voice section ──
+    const consentBox   = document.getElementById('voice-consent');
+    const fileInput    = document.getElementById('voice-file');
+    const uploadBtn    = document.getElementById('btn-voice-upload');
+    const uploadStatus = document.getElementById('voice-upload-status');
+
+    consentBox.addEventListener('change', () => {
+      const ok = consentBox.checked;
+      fileInput.disabled = !ok;
+      uploadBtn.disabled = !ok;
+    });
+
+    uploadBtn.addEventListener('click', async () => {
+      if (!consentBox.checked) return;
+      if (!fileInput.files[0]) {
+        uploadStatus.textContent = 'Elegí un archivo primero.';
+        uploadStatus.className = 'voice-upload-status err';
+        return;
+      }
+
+      uploadBtn.disabled = true;
+      uploadStatus.className = 'voice-upload-status info';
+      uploadStatus.textContent = 'Subiendo y clonando…';
+
+      const form = new FormData();
+      form.append('audio', fileInput.files[0]);
+      form.append('consent', 'true');
+
+      const res = await fetch('/api/business/voice', { method: 'POST', body: form });
+      const data = await res.json();
+
+      if (res.ok) {
+        uploadStatus.className = 'voice-upload-status ok';
+        uploadStatus.textContent = '✓ Voz clonada correctamente';
+        showVoiceCloned(data.voice_id);
+      } else {
+        uploadStatus.className = 'voice-upload-status err';
+        uploadStatus.textContent = data.error || 'Error al clonar';
+        uploadBtn.disabled = false;
+      }
+    });
+
+    function showVoiceCloned() {
+      document.getElementById('voice-status-saved').style.display = 'flex';
+      document.getElementById('voice-preview-area').style.display = 'flex';
+    }
+
+    document.getElementById('btn-voice-preview').addEventListener('click', async () => {
+      const btn    = document.getElementById('btn-voice-preview');
+      const status = document.getElementById('voice-preview-status');
+      const audio  = document.getElementById('voice-audio');
+
+      btn.disabled = true;
+      status.textContent = 'Generando audio…';
+      status.className = 'voice-preview-status info';
+
+      const res = await fetch('/api/business/voice/preview', { method: 'POST' });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        status.textContent = data.error || 'Error al generar';
+        status.className = 'voice-preview-status err';
+        btn.disabled = false;
+        return;
+      }
+
+      const blob = await res.blob();
+      audio.src = URL.createObjectURL(blob);
+      audio.style.display = 'block';
+      audio.play();
+      status.textContent = '';
+      btn.disabled = false;
     });
   </script>
 

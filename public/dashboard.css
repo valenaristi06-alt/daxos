@@ -386,6 +386,135 @@ select option { background: #1a1a1a; }
   margin: 0 0 48px;
 }
 
+/* ── Voice section ── */
+
+.voice-cloned-badge {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  font-size: 12px;
+  font-family: var(--mono);
+  color: #4ade80;
+  letter-spacing: 0.04em;
+}
+
+.voice-cloned-dot {
+  width: 7px;
+  height: 7px;
+  background: #4ade80;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.consent-label {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  cursor: pointer;
+  padding: 14px;
+  border: 1px solid var(--border-2);
+  border-radius: 6px;
+  transition: border-color 0.15s;
+}
+
+.consent-label:hover { border-color: #444; }
+
+.consent-label input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  flex-shrink: 0;
+  margin-top: 2px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.consent-label span {
+  font-size: 13px;
+  color: var(--muted-2);
+  line-height: 1.55;
+}
+
+input[type="file"] {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 4px;
+  color: var(--muted-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+input[type="file"]:not(:disabled):hover { border-color: #444; }
+input[type="file"]:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.voice-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.btn-voice-upload {
+  padding: 10px 20px;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 4px;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.btn-voice-upload:hover:not(:disabled)  { background: var(--accent); color: #fff; }
+.btn-voice-upload:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.voice-upload-status, .voice-preview-status {
+  font-size: 12px;
+  font-family: var(--mono);
+}
+.voice-upload-status.ok, .voice-preview-status.ok { color: #4ade80; }
+.voice-upload-status.err, .voice-preview-status.err { color: #f87171; }
+.voice-upload-status.info, .voice-preview-status.info { color: var(--muted-2); }
+
+.voice-preview-area {
+  display: none;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.btn-voice-preview {
+  padding: 9px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  color: var(--text);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  white-space: nowrap;
+}
+
+.btn-voice-preview:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn-voice-preview:disabled { opacity: 0.4; cursor: not-allowed; }
+
+#voice-audio {
+  height: 32px;
+  filter: invert(1) hue-rotate(180deg);
+  opacity: 0.8;
+}
+
 /* ════════════════════════════════
    Conversations panel layout
    ════════════════════════════════ */

@@ -7,8 +7,20 @@ const bcrypt = require('bcryptjs');
 const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
-const { createUser, getUserByEmail, getUserById, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setStyleProfile, getConversationsByBusinessId, getConversationById, getOrCreateConversation, addMessage, getConversationHistory } = require('./db');
+const multer = require('multer');
+const { createUser, getUserByEmail, getUserById, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setStyleProfile, saveVoiceConsent, getConversationsByBusinessId, getConversationById, getOrCreateConversation, addMessage, getConversationHistory } = require('./db');
 const { generateReply, analyzeStyle } = require('./claude');
+const { cloneVoice, generatePreview } = require('./elevenlabs');
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/x-m4a', 'audio/mp4'];
+    if (!allowed.includes(file.mimetype)) return cb(new Error('Solo se permiten archivos MP3 o WAV'));
+    cb(null, true);
+  },
+});
 const { sendWhatsAppMessage } = require('./whatsapp');
 
 const app = express();
@@ -140,6 +152,62 @@ app.post('/api/business/analyze-style', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[style-analysis] failed:', err.message);
     res.status(500).json({ error: 'El análisis falló. Intentá de nuevo.' });
+  }
+});
+
+// Exact consent text — stored verbatim for legal record
+const CONSENT_TEXT = 'Confirmo que esta es mi voz (o tengo autorización explícita de su dueño) y autorizo usarla para generar respuestas automáticas de este negocio.';
+
+app.post('/api/business/voice', requireAuth, upload.single('audio'), async (req, res) => {
+  if (req.body.consent !== 'true') {
+    return res.status(400).json({ error: 'Se requiere consentimiento explícito para clonar la voz.' });
+  }
+  if (!req.file) {
+    return res.status(400).json({ error: 'Archivo de audio requerido.' });
+  }
+
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) {
+    return res.status(400).json({ error: 'Guardá el negocio antes de subir la voz.' });
+  }
+
+  const business = getBusinessById(user.business_id);
+
+  try {
+    const voiceId = await cloneVoice(business.name, req.file.buffer, req.file.mimetype);
+    saveVoiceConsent(business.id, {
+      voiceId,
+      consentText: CONSENT_TEXT,
+      consentBy: user.email,
+    });
+    res.json({ voice_id: voiceId });
+  } catch (err) {
+    console.error('[elevenlabs] clone error:', err.message);
+    res.status(502).json({ error: 'Error al clonar la voz: ' + err.message });
+  }
+});
+
+app.post('/api/business/voice/preview', requireAuth, async (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.status(400).json({ error: 'No tenés un negocio configurado.' });
+
+  const business = getBusinessById(user.business_id);
+  if (!business.voice_id) return res.status(400).json({ error: 'No hay voz clonada todavía.' });
+
+  try {
+    const upstream = await generatePreview(business.voice_id);
+    res.setHeader('Content-Type', 'audio/mpeg');
+    const reader = upstream.body.getReader();
+    const pump = async () => {
+      const { done, value } = await reader.read();
+      if (done) { res.end(); return; }
+      res.write(Buffer.from(value));
+      await pump();
+    };
+    await pump();
+  } catch (err) {
+    console.error('[elevenlabs] preview error:', err.message);
+    res.status(502).json({ error: 'Error al generar la preview: ' + err.message });
   }
 });
 
