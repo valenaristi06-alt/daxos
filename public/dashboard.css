@@ -311,3 +311,267 @@ select option { background: #1a1a1a; }
   border-top: 1px solid var(--border);
   margin: 0 0 48px;
 }
+
+/* ════════════════════════════════
+   Conversations panel layout
+   ════════════════════════════════ */
+
+.panel-layout {
+  display: flex;
+  height: 100vh;
+  padding-top: 52px; /* topbar height */
+}
+
+/* ── Sidebar ── */
+
+.conv-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-header {
+  padding: 32px 24px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-title {
+  font-family: var(--serif);
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin-top: 6px;
+}
+
+/* ── Nav links ── */
+
+.conv-nav {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 12px 0;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+
+.nav-link {
+  display: block;
+  padding: 7px 12px;
+  font-size: 13px;
+  color: var(--muted-2);
+  text-decoration: none;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+  font-family: var(--mono);
+  letter-spacing: 0.02em;
+}
+
+.nav-link:hover  { color: var(--text); background: var(--surface); }
+.nav-link.active { color: var(--accent); background: var(--accent-dim); }
+
+/* Also add nav to dashboard.html via shared .main-nav class */
+.main-nav {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 40px;
+}
+
+.main-nav .nav-link {
+  display: inline-block;
+}
+
+/* ── Conversation list ── */
+
+.conv-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.conv-loading {
+  padding: 24px;
+  font-size: 13px;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.conv-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 12px 24px;
+  background: none;
+  border: none;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.conv-item:hover  { background: var(--surface); }
+.conv-item.active { background: var(--surface); border-left-color: var(--accent); }
+
+.conv-number {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+.conv-date {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ── Empty state in sidebar ── */
+
+.no-convs {
+  padding: 32px 24px;
+}
+
+.no-convs-title {
+  font-size: 13px;
+  color: var(--muted-2);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.no-convs-sub {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* ── Main thread area ── */
+
+.conv-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Empty state in main ── */
+
+.conv-empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  opacity: 0.4;
+}
+
+.empty-terminal {
+  font-family: var(--mono);
+  font-size: 18px;
+  color: var(--accent);
+  animation: blink 1.2s step-end infinite;
+}
+
+@keyframes blink { 50% { opacity: 0; } }
+
+.empty-title {
+  font-size: 15px;
+  color: var(--text);
+}
+
+.empty-sub {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ── Thread ── */
+
+.thread {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.thread-header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 20px 32px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.thread-phone {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.thread-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.thread-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.thread-loading, .no-msgs {
+  font-size: 13px;
+  color: var(--muted);
+  font-family: var(--mono);
+  text-align: center;
+  padding: 32px;
+}
+
+/* ── Chat bubbles ── */
+
+.bubble-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.row-user { justify-content: flex-start; }
+.row-ai   { justify-content: flex-end; }
+
+.bubble {
+  max-width: 68%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.bubble-user {
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  color: var(--text);
+  border-bottom-left-radius: 3px;
+}
+
+.bubble-ai {
+  background: var(--accent-dim);
+  border: 1px solid rgba(196, 92, 26, 0.25);
+  color: var(--text);
+  border-bottom-right-radius: 3px;
+}
+
+.bubble-time {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 5px;
+  font-family: var(--mono);
+  letter-spacing: 0.03em;
+}

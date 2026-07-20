@@ -7,7 +7,7 @@ const bcrypt = require('bcryptjs');
 const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
-const { createUser, getUserByEmail, getUserById, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, getOrCreateConversation, addMessage, getConversationHistory } = require('./db');
+const { createUser, getUserByEmail, getUserById, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, getConversationsByBusinessId, getConversationById, getOrCreateConversation, addMessage, getConversationHistory } = require('./db');
 const { generateReply } = require('./claude');
 const { sendWhatsAppMessage } = require('./whatsapp');
 
@@ -114,6 +114,24 @@ app.put('/api/business', requireAuth, (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+app.get('/api/conversations', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.json([]);
+  const convs = getConversationsByBusinessId(user.business_id);
+  res.json(convs);
+});
+
+app.get('/api/conversations/:id/messages', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  const conv = getConversationById(Number(req.params.id));
+  if (!conv) return res.status(404).json({ error: 'Not found' });
+  if (!user.business_id || conv.business_id !== user.business_id) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  const messages = getConversationHistory(conv.id, 200);
+  res.json({ conversation: conv, messages });
 });
 
 app.post('/businesses', (req, res) => {

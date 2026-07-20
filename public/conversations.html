@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Conversaciones — Daxos</title>
+  <link rel="stylesheet" href="/dashboard.css" />
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="topbar-logo">DAXOS</div>
+    <div class="topbar-right">
+      <span class="topbar-email" id="user-email"></span>
+      <button class="btn-logout" id="btn-logout">Salir</button>
+    </div>
+  </header>
+
+  <div class="panel-layout">
+
+    <!-- Sidebar: conversation list -->
+    <aside class="conv-sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <p class="page-terminal">&gt; conversaciones</p>
+        <h1 class="sidebar-title">Chats</h1>
+      </div>
+      <nav class="conv-nav">
+        <a href="/dashboard.html" class="nav-link">Configuración</a>
+        <a href="/conversations.html" class="nav-link active">Conversaciones</a>
+      </nav>
+      <div class="conv-list" id="conv-list">
+        <div class="conv-loading">Cargando…</div>
+      </div>
+    </aside>
+
+    <!-- Main: message thread -->
+    <main class="conv-main" id="conv-main">
+      <div class="conv-empty-state" id="empty-state">
+        <p class="empty-terminal">&gt; _</p>
+        <p class="empty-title">Seleccioná una conversación</p>
+        <p class="empty-sub">o esperá a que tus clientes te escriban.</p>
+      </div>
+      <div class="thread" id="thread" style="display:none">
+        <div class="thread-header" id="thread-header"></div>
+        <div class="thread-messages" id="thread-messages"></div>
+      </div>
+    </main>
+
+  </div>
+
+  <script>
+    (async () => {
+      const res = await fetch('/auth/me');
+      if (!res.ok) { window.location.href = '/login.html'; return; }
+      const { email } = await res.json();
+      document.getElementById('user-email').textContent = email;
+    })();
+
+    document.getElementById('btn-logout').addEventListener('click', async () => {
+      await fetch('/auth/logout', { method: 'POST' });
+      window.location.href = '/login.html';
+    });
+
+    // ── Load conversation list ──
+    async function loadList() {
+      const res = await fetch('/api/conversations');
+      const convs = await res.json();
+      const list = document.getElementById('conv-list');
+
+      if (!convs.length) {
+        list.innerHTML = `
+          <div class="no-convs">
+            <p class="no-convs-title">Todavía no hay conversaciones.</p>
+            <p class="no-convs-sub">Cuando tus clientes te escriban,<br>van a aparecer acá.</p>
+          </div>`;
+        return;
+      }
+
+      list.innerHTML = convs.map(c => `
+        <button class="conv-item" data-id="${c.id}" onclick="openConv(${c.id}, this)">
+          <span class="conv-number">${formatPhone(c.customer_id)}</span>
+          <span class="conv-date">${formatDate(c.created_at)}</span>
+        </button>
+      `).join('');
+    }
+
+    // ── Open a conversation ──
+    async function openConv(id, el) {
+      document.querySelectorAll('.conv-item').forEach(b => b.classList.remove('active'));
+      el.classList.add('active');
+
+      document.getElementById('empty-state').style.display = 'none';
+      document.getElementById('thread').style.display = 'flex';
+      document.getElementById('thread-messages').innerHTML = '<div class="thread-loading">Cargando mensajes…</div>';
+
+      const res = await fetch(`/api/conversations/${id}/messages`);
+      if (!res.ok) { return; }
+      const { conversation, messages } = await res.json();
+
+      document.getElementById('thread-header').innerHTML = `
+        <span class="thread-phone">${formatPhone(conversation.customer_id)}</span>
+        <span class="thread-meta">${messages.length} mensaje${messages.length !== 1 ? 's' : ''} · iniciado ${formatDate(conversation.created_at)}</span>
+      `;
+
+      if (!messages.length) {
+        document.getElementById('thread-messages').innerHTML = '<p class="no-msgs">Sin mensajes aún.</p>';
+        return;
+      }
+
+      document.getElementById('thread-messages').innerHTML = messages.map(m => `
+        <div class="bubble-row ${m.role === 'user' ? 'row-user' : 'row-ai'}">
+          <div class="bubble ${m.role === 'user' ? 'bubble-user' : 'bubble-ai'}">
+            <p>${escapeHtml(m.content)}</p>
+            <span class="bubble-time">${formatTime(m.created_at)}</span>
+          </div>
+        </div>
+      `).join('');
+
+      // Scroll to bottom
+      const el2 = document.getElementById('thread-messages');
+      el2.scrollTop = el2.scrollHeight;
+    }
+
+    // ── Helpers ──
+    function formatPhone(raw) {
+      if (!raw) return 'Desconocido';
+      // Show last 6 digits with prefix for readability
+      if (raw.length > 8) return raw.slice(0, -6).replace(/./g, '·') + raw.slice(-6);
+      return raw;
+    }
+
+    function formatDate(dt) {
+      if (!dt) return '';
+      const d = new Date(dt.replace(' ', 'T') + 'Z');
+      return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
+    }
+
+    function formatTime(dt) {
+      if (!dt) return '';
+      const d = new Date(dt.replace(' ', 'T') + 'Z');
+      return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                .replace(/\n/g,'<br>');
+    }
+
+    loadList();
+  </script>
+
+</body>
+</html>

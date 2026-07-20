@@ -153,6 +153,20 @@ function setUserBusiness(userId, businessId) {
 
 // --- conversations ---
 
+const stmtGetConversationsByBusiness = db.prepare(`
+  SELECT * FROM conversations WHERE business_id = ? ORDER BY created_at DESC
+`);
+
+function getConversationsByBusinessId(businessId) {
+  return stmtGetConversationsByBusiness.all(businessId);
+}
+
+const stmtGetConversationById = db.prepare('SELECT * FROM conversations WHERE id = ?');
+
+function getConversationById(id) {
+  return stmtGetConversationById.get(id) || null;
+}
+
 const stmtGetConversation = db.prepare(`
   SELECT * FROM conversations WHERE business_id = ? AND customer_id = ? ORDER BY created_at DESC LIMIT 1
 `);
@@ -216,6 +230,8 @@ module.exports = {
   getBusinessByWhatsappNumber,
   getBusinessByUserId,
   setUserBusiness,
+  getConversationsByBusinessId,
+  getConversationById,
   getOrCreateConversation,
   addMessage,
   getConversationHistory,
