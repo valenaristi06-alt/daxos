@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panel — Daxos</title>
+  <link rel="stylesheet" href="/dashboard.css" />
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="topbar-logo">DAXOS</div>
+    <div class="topbar-right">
+      <span class="topbar-email" id="user-email"></span>
+      <button class="btn-logout" id="btn-logout">Salir</button>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <p class="page-terminal">&gt; negocio.config</p>
+    <h1 class="page-title">Configuración</h1>
+    <p class="page-subtitle">Así va a hablar tu asistente de WhatsApp.</p>
+
+    <form id="form" novalidate>
+
+      <!-- Identidad -->
+      <section class="section">
+        <div class="section-label"><span>Identidad</span></div>
+
+        <div class="field">
+          <label class="field-label" for="name">Nombre del negocio</label>
+          <input id="name" type="text" placeholder="Ej: Clínica Dental San Martín" required />
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="whatsapp_number">
+            Número de WhatsApp
+            <span class="tag-optional">Opcional</span>
+          </label>
+          <span class="field-hint">Podés conectarlo después desde el panel de Meta.</span>
+          <input id="whatsapp_number" type="text" placeholder="+54911XXXXXXXX" />
+        </div>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- Voz y estilo -->
+      <section class="section">
+        <div class="section-label"><span>Voz y estilo</span></div>
+
+        <div class="field">
+          <label class="field-label" for="sales_examples">Ejemplos de venta</label>
+          <span class="field-hint">Pegá mensajes reales que usás con tus clientes. Separá cada ejemplo con una línea en blanco. El asistente va a imitar este tono.</span>
+          <textarea id="sales_examples" rows="8" placeholder="Ej:
+
+¡Hola! Gracias por escribirnos. ¿En qué te puedo ayudar hoy?
+
+Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></textarea>
+        </div>
+      </section>
+
+      <hr class="divider" />
+
+      <!-- Comportamiento -->
+      <section class="section">
+        <div class="section-label"><span>Comportamiento</span></div>
+
+        <div class="field">
+          <label class="field-label" for="objeciones_precio">Manejo de objeciones de precio</label>
+          <span class="field-hint">¿Cómo responde tu negocio cuando el cliente dice que es caro?</span>
+          <textarea id="objeciones_precio" rows="3" placeholder="Ej: Explicamos el valor del servicio y ofrecemos cuotas sin interés si es necesario."></textarea>
+        </div>
+
+        <div class="field">
+          <label class="field-label">Prioridad al responder</label>
+          <div class="radio-group" id="prioridad-group">
+            <label class="radio-option" data-value="cerrar_rapido">
+              <input type="radio" name="prioridad" value="cerrar_rapido" />
+              <span class="radio-label">Cerrar rápido</span>
+              <span class="radio-desc">Ir directo al precio y agendar</span>
+            </label>
+            <label class="radio-option" data-value="generar_confianza">
+              <input type="radio" name="prioridad" value="generar_confianza" />
+              <span class="radio-label">Generar confianza primero</span>
+              <span class="radio-desc">Contestar dudas antes de ofrecer</span>
+            </label>
+            <label class="radio-option" data-value="equilibrado">
+              <input type="radio" name="prioridad" value="equilibrado" />
+              <span class="radio-label">Equilibrado</span>
+              <span class="radio-desc">Según cómo fluya la conversación</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="sin_respuesta">Si el cliente no responde</label>
+          <select id="sin_respuesta">
+            <option value="">Seleccioná una opción</option>
+            <option value="no_hacer_nada">No hacer nada, esperar</option>
+            <option value="recordatorio_24h">Mandar un recordatorio a las 24 hs</option>
+            <option value="dos_recordatorios">Dos recordatorios y cerrar</option>
+            <option value="seguir_insistiendo">Seguir insistiendo hasta recibir respuesta</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label class="field-label">Largo de mensajes</label>
+          <div class="radio-group" id="largo-group">
+            <label class="radio-option" data-value="corto">
+              <input type="radio" name="largo_mensajes" value="corto" />
+              <span class="radio-label">Corto</span>
+              <span class="radio-desc">1–2 líneas por mensaje</span>
+            </label>
+            <label class="radio-option" data-value="medio">
+              <input type="radio" name="largo_mensajes" value="medio" />
+              <span class="radio-label">Medio</span>
+              <span class="radio-desc">3–5 líneas</span>
+            </label>
+            <label class="radio-option" data-value="largo">
+              <input type="radio" name="largo_mensajes" value="largo" />
+              <span class="radio-label">Largo</span>
+              <span class="radio-desc">Párrafos completos con detalle</span>
+            </label>
+          </div>
+        </div>
+
+      </section>
+
+      <div class="actions">
+        <span class="save-status" id="save-status"></span>
+        <button type="submit" class="btn-save" id="btn-save">Guardar cambios</button>
+      </div>
+
+    </form>
+
+  </main>
+
+  <script>
+    // ── Redirect if not logged in ──
+    (async () => {
+      const res = await fetch('/auth/me');
+      if (!res.ok) { window.location.href = '/login.html'; return; }
+      const { email } = await res.json();
+      document.getElementById('user-email').textContent = email;
+      loadBusiness();
+    })();
+
+    document.getElementById('btn-logout').addEventListener('click', async () => {
+      await fetch('/auth/logout', { method: 'POST' });
+      window.location.href = '/login.html';
+    });
+
+    // ── Radio groups ──
+    function initRadioGroup(groupId) {
+      const group = document.getElementById(groupId);
+      group.querySelectorAll('.radio-option').forEach(option => {
+        const radio = option.querySelector('input[type="radio"]');
+        radio.addEventListener('change', () => {
+          group.querySelectorAll('.radio-option').forEach(o => o.classList.remove('selected'));
+          if (radio.checked) option.classList.add('selected');
+        });
+      });
+    }
+
+    function setRadio(name, value) {
+      if (!value) return;
+      const radio = document.querySelector(`input[name="${name}"][value="${value}"]`);
+      if (radio) {
+        radio.checked = true;
+        radio.closest('.radio-option').classList.add('selected');
+      }
+    }
+
+    initRadioGroup('prioridad-group');
+    initRadioGroup('largo-group');
+
+    // ── Load existing business data ──
+    async function loadBusiness() {
+      const res = await fetch('/api/business');
+      const b = await res.json();
+      if (!b) return;
+
+      document.getElementById('name').value = b.name || '';
+      document.getElementById('whatsapp_number').value = b.whatsapp_number || '';
+
+      if (Array.isArray(b.sales_examples)) {
+        document.getElementById('sales_examples').value = b.sales_examples.join('\n\n');
+      }
+
+      const s = b.survey_answers || {};
+      document.getElementById('objeciones_precio').value = s.objeciones_precio || '';
+      document.getElementById('sin_respuesta').value = s.sin_respuesta || '';
+      setRadio('prioridad', s.prioridad);
+      setRadio('largo_mensajes', s.largo_mensajes);
+    }
+
+    // ── Save ──
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btn-save');
+      const status = document.getElementById('save-status');
+
+      btn.disabled = true;
+      status.className = 'save-status saving';
+      status.textContent = 'Guardando…';
+
+      const rawExamples = document.getElementById('sales_examples').value.trim();
+      const sales_examples = rawExamples
+        ? rawExamples.split(/\n\n+/).map(s => s.trim()).filter(Boolean)
+        : [];
+
+      const prioridad = document.querySelector('input[name="prioridad"]:checked')?.value || '';
+      const largo_mensajes = document.querySelector('input[name="largo_mensajes"]:checked')?.value || '';
+
+      const payload = {
+        name: document.getElementById('name').value.trim(),
+        whatsapp_number: document.getElementById('whatsapp_number').value.trim() || null,
+        sales_examples,
+        survey_answers: {
+          objeciones_precio: document.getElementById('objeciones_precio').value.trim(),
+          prioridad,
+          sin_respuesta: document.getElementById('sin_respuesta').value,
+          largo_mensajes,
+        },
+      };
+
+      const res = await fetch('/api/business', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      btn.disabled = false;
+
+      if (res.ok) {
+        status.className = 'save-status ok';
+        status.textContent = '✓ Guardado';
+        setTimeout(() => { status.className = 'save-status'; }, 3000);
+      } else {
+        const data = await res.json();
+        status.className = 'save-status error';
+        status.textContent = data.error || 'Error al guardar';
+      }
+    });
+  </script>
+
+</body>
+</html>
