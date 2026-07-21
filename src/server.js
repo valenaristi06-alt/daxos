@@ -14,10 +14,10 @@ const { cloneVoice, generatePreview } = require('./elevenlabs');
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowed = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/x-m4a', 'audio/mp4'];
-    if (!allowed.includes(file.mimetype)) return cb(new Error('Solo se permiten archivos MP3 o WAV'));
+    // Accept any audio/* type — backend converts everything to MP3 before ElevenLabs
+    if (!file.mimetype.startsWith('audio/')) return cb(new Error('El archivo debe ser de audio'));
     cb(null, true);
   },
 });
@@ -174,7 +174,7 @@ app.post('/api/business/voice', requireAuth, upload.single('audio'), async (req,
   const business = getBusinessById(user.business_id);
 
   try {
-    const voiceId = await cloneVoice(business.name, req.file.buffer, req.file.mimetype);
+    const voiceId = await cloneVoice(business.name, req.file.buffer);
     saveVoiceConsent(business.id, {
       voiceId,
       consentText: CONSENT_TEXT,

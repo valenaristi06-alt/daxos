@@ -153,6 +153,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           Voz clonada activa
         </div>
 
+        <!-- Consentimiento -->
         <div class="field">
           <label class="consent-label">
             <input type="checkbox" id="voice-consent" />
@@ -160,17 +161,58 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           </label>
         </div>
 
-        <div class="field">
-          <label class="field-label" for="voice-file">Archivo de audio</label>
-          <span class="field-hint">MP3 o WAV, entre 1 y 3 minutos de duración.</span>
-          <input type="file" id="voice-file" accept="audio/mp3,audio/mpeg,audio/wav" disabled />
+        <!-- Selector de modo -->
+        <div class="voice-mode-tabs" id="voice-mode-tabs">
+          <button type="button" class="voice-tab active" data-mode="record">Grabar ahora</button>
+          <button type="button" class="voice-tab" data-mode="upload">Subir archivo</button>
         </div>
 
+        <!-- Panel: Grabar -->
+        <div class="voice-panel" id="panel-record">
+          <div class="record-idle" id="record-idle">
+            <p class="field-hint">Grabá entre 1 y 3 minutos hablando con naturalidad — como si le hablaras a un cliente.</p>
+            <button type="button" class="btn-record-start" id="btn-record-start" disabled>
+              <span class="rec-dot"></span> Grabar
+            </button>
+          </div>
+          <div class="record-active" id="record-active" style="display:none">
+            <span class="rec-dot pulsing"></span>
+            <span class="rec-timer" id="rec-timer">0:00</span>
+            <button type="button" class="btn-record-stop" id="btn-record-stop">■ Detener</button>
+          </div>
+          <div class="record-preview" id="record-preview" style="display:none">
+            <audio id="rec-playback" controls></audio>
+            <div class="record-preview-actions">
+              <button type="button" class="btn-retry" id="btn-retry">↺ Volver a grabar</button>
+              <button type="button" class="btn-use-recording" id="btn-use-recording" disabled>Usar esta grabación →</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel: Subir archivo -->
+        <div class="voice-panel" id="panel-upload" style="display:none">
+          <div class="dropzone" id="dropzone">
+            <input type="file" id="voice-file" accept="audio/*" class="dropzone-input" />
+            <div class="dropzone-content" id="dropzone-content">
+              <p class="dropzone-icon">↑</p>
+              <p class="dropzone-text">Arrastrá tu archivo acá</p>
+              <p class="dropzone-sub">o <label for="voice-file" class="dropzone-browse">explorá tu dispositivo</label></p>
+              <p class="dropzone-hint">MP3, WAV, WebM · 1 a 3 min</p>
+            </div>
+            <div class="dropzone-selected" id="dropzone-selected" style="display:none">
+              <p class="dropzone-filename" id="dropzone-filename"></p>
+              <button type="button" class="btn-clear-file" id="btn-clear-file">✕</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Subir -->
         <div class="voice-actions">
           <button type="button" class="btn-voice-upload" id="btn-voice-upload" disabled>Subir y clonar voz</button>
           <span class="voice-upload-status" id="voice-upload-status"></span>
         </div>
 
+        <!-- Probar voz clonada -->
         <div class="voice-preview-area" id="voice-preview-area" style="display:none">
           <button type="button" class="btn-voice-preview" id="btn-voice-preview">▶ Probar voz</button>
           <audio id="voice-audio" controls style="display:none"></audio>
@@ -341,52 +383,179 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
     });
 
     // ── Voice section ──
+
     const consentBox   = document.getElementById('voice-consent');
-    const fileInput    = document.getElementById('voice-file');
     const uploadBtn    = document.getElementById('btn-voice-upload');
     const uploadStatus = document.getElementById('voice-upload-status');
 
-    consentBox.addEventListener('change', () => {
-      const ok = consentBox.checked;
-      fileInput.disabled = !ok;
-      uploadBtn.disabled = !ok;
+    let pendingAudioBlob = null;  // set by recorder OR file picker/drop
+    let currentMode = 'record';
+
+    function refreshUploadBtn() {
+      uploadBtn.disabled = !(consentBox.checked && pendingAudioBlob);
+    }
+
+    consentBox.addEventListener('change', refreshUploadBtn);
+
+    // ── Mode tabs ──
+    document.querySelectorAll('.voice-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.voice-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        currentMode = tab.dataset.mode;
+        document.getElementById('panel-record').style.display = currentMode === 'record' ? 'block' : 'none';
+        document.getElementById('panel-upload').style.display = currentMode === 'upload' ? 'block' : 'none';
+        pendingAudioBlob = null;
+        refreshUploadBtn();
+      });
     });
 
-    uploadBtn.addEventListener('click', async () => {
-      if (!consentBox.checked) return;
-      if (!fileInput.files[0]) {
-        uploadStatus.textContent = 'Elegí un archivo primero.';
-        uploadStatus.className = 'voice-upload-status err';
+    // ── MediaRecorder ──
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let timerInterval = null;
+    let recordStart = 0;
+
+    // Enable record button only after consent
+    consentBox.addEventListener('change', () => {
+      document.getElementById('btn-record-start').disabled = !consentBox.checked;
+    });
+
+    document.getElementById('btn-record-start').addEventListener('click', async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        recordedChunks = [];
+
+        const mimeTypes = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/ogg','audio/mp4'];
+        const mimeType  = mimeTypes.find(t => MediaRecorder.isTypeSupported(t)) || '';
+        mediaRecorder   = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+
+        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+        mediaRecorder.onstop = () => {
+          stream.getTracks().forEach(t => t.stop());
+          clearInterval(timerInterval);
+          const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+          showRecordPreview(blob);
+        };
+
+        mediaRecorder.start(250);
+        recordStart = Date.now();
+
+        timerInterval = setInterval(() => {
+          const s = Math.floor((Date.now() - recordStart) / 1000);
+          document.getElementById('rec-timer').textContent =
+            `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+        }, 500);
+
+        document.getElementById('record-idle').style.display   = 'none';
+        document.getElementById('record-active').style.display = 'flex';
+        document.getElementById('record-preview').style.display = 'none';
+      } catch (err) {
+        alert('No se pudo acceder al micrófono: ' + err.message);
+      }
+    });
+
+    document.getElementById('btn-record-stop').addEventListener('click', () => {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    });
+
+    function showRecordPreview(blob) {
+      pendingAudioBlob = blob;
+      const url = URL.createObjectURL(blob);
+      const playback = document.getElementById('rec-playback');
+      playback.src = url;
+      document.getElementById('record-idle').style.display    = 'none';
+      document.getElementById('record-active').style.display  = 'none';
+      document.getElementById('record-preview').style.display = 'block';
+      document.getElementById('btn-use-recording').disabled   = !consentBox.checked;
+      refreshUploadBtn();
+    }
+
+    document.getElementById('btn-retry').addEventListener('click', () => {
+      pendingAudioBlob = null;
+      document.getElementById('rec-playback').src = '';
+      document.getElementById('record-idle').style.display    = 'flex';
+      document.getElementById('record-active').style.display  = 'none';
+      document.getElementById('record-preview').style.display = 'none';
+      document.getElementById('rec-timer').textContent = '0:00';
+      refreshUploadBtn();
+    });
+
+    document.getElementById('btn-use-recording').addEventListener('click', () => {
+      if (pendingAudioBlob && consentBox.checked) submitVoice();
+    });
+
+    // ── Drag and drop + file input ──
+    const dropzone   = document.getElementById('dropzone');
+    const fileInput  = document.getElementById('voice-file');
+    const dzContent  = document.getElementById('dropzone-content');
+    const dzSelected = document.getElementById('dropzone-selected');
+
+    function setDropFile(file) {
+      if (!file || !file.type.startsWith('audio/')) {
+        alert('Solo se permiten archivos de audio.');
         return;
       }
+      pendingAudioBlob = file;
+      document.getElementById('dropzone-filename').textContent = file.name;
+      dzContent.style.display  = 'none';
+      dzSelected.style.display = 'flex';
+      refreshUploadBtn();
+    }
+
+    fileInput.addEventListener('change', () => { if (fileInput.files[0]) setDropFile(fileInput.files[0]); });
+
+    document.getElementById('btn-clear-file').addEventListener('click', () => {
+      pendingAudioBlob = null;
+      fileInput.value = '';
+      dzContent.style.display  = 'flex';
+      dzSelected.style.display = 'none';
+      refreshUploadBtn();
+    });
+
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) setDropFile(file);
+    });
+
+    // ── Submit voice ──
+    async function submitVoice() {
+      if (!consentBox.checked || !pendingAudioBlob) return;
 
       uploadBtn.disabled = true;
       uploadStatus.className = 'voice-upload-status info';
-      uploadStatus.textContent = 'Subiendo y clonando…';
+      uploadStatus.textContent = 'Convirtiendo y clonando… puede tardar unos segundos.';
 
       const form = new FormData();
-      form.append('audio', fileInput.files[0]);
+      form.append('audio', pendingAudioBlob, 'voice.audio');
       form.append('consent', 'true');
 
-      const res = await fetch('/api/business/voice', { method: 'POST', body: form });
+      const res  = await fetch('/api/business/voice', { method: 'POST', body: form });
       const data = await res.json();
 
       if (res.ok) {
         uploadStatus.className = 'voice-upload-status ok';
         uploadStatus.textContent = '✓ Voz clonada correctamente';
-        showVoiceCloned(data.voice_id);
+        showVoiceCloned();
       } else {
         uploadStatus.className = 'voice-upload-status err';
         uploadStatus.textContent = data.error || 'Error al clonar';
         uploadBtn.disabled = false;
       }
-    });
+    }
+
+    uploadBtn.addEventListener('click', submitVoice);
 
     function showVoiceCloned() {
       document.getElementById('voice-status-saved').style.display = 'flex';
       document.getElementById('voice-preview-area').style.display = 'flex';
     }
 
+    // ── Test cloned voice ──
     document.getElementById('btn-voice-preview').addEventListener('click', async () => {
       const btn    = document.getElementById('btn-voice-preview');
       const status = document.getElementById('voice-preview-status');
@@ -397,10 +566,9 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       status.className = 'voice-preview-status info';
 
       const res = await fetch('/api/business/voice/preview', { method: 'POST' });
-
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        status.textContent = data.error || 'Error al generar';
+        const d = await res.json().catch(() => ({}));
+        status.textContent = d.error || 'Error al generar';
         status.className = 'voice-preview-status err';
         btn.disabled = false;
         return;

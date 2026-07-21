@@ -1,5 +1,7 @@
 require('dotenv').config({ path: '.env.local' });
 
+const { convertToMp3 } = require('./audio');
+
 const API_KEY = process.env.ELEVENLABS_API_KEY;
 const BASE = 'https://api.elevenlabs.io/v1';
 
@@ -7,13 +9,16 @@ function requireKey() {
   if (!API_KEY) throw new Error('ELEVENLABS_API_KEY not set in .env.local');
 }
 
-async function cloneVoice(name, fileBuffer, mimeType) {
+async function cloneVoice(name, fileBuffer) {
   requireKey();
+
+  // Always convert to MP3 — ElevenLabs format support is not documented explicitly
+  const mp3Buffer = await convertToMp3(fileBuffer);
 
   const form = new FormData();
   form.append('name', name);
   form.append('description', `Voz clonada para negocio: ${name}`);
-  form.append('files', new Blob([fileBuffer], { type: mimeType }), 'voice-sample.mp3');
+  form.append('files', new Blob([mp3Buffer], { type: 'audio/mpeg' }), 'voice-sample.mp3');
 
   const res = await fetch(`${BASE}/voices/add`, {
     method: 'POST',
