@@ -262,16 +262,27 @@ app.post('/test/simulate', async (req, res) => {
     const conversation = getOrCreateConversation(business_id, customer_id);
     const history = getConversationHistory(conversation.id, 20);
 
+    await maybeSendDisclosure(business, conversation.id, history, null);
+
     const reply = await generateReply(business, history, message);
 
     addMessage(conversation.id, 'user', message);
     addMessage(conversation.id, 'assistant', reply);
 
-    res.json({ reply, conversation_id: conversation.id });
+    res.json({ reply, conversation_id: conversation.id, first_contact: history.length === 0 });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Sends the first-contact disclosure required by Meta policy.
+// Always plain text, always saved to history. No-op if history already exists.
+async function maybeSendDisclosure(business, conversationId, history, recipientPhone) {
+  if (history.length > 0) return;
+  const notice = `Hola! Soy el asistente automático de ${business.name} 🤖. Te ayudo con consultas, precios y turnos.`;
+  if (recipientPhone) await sendWhatsAppMessage(recipientPhone, notice);
+  addMessage(conversationId, 'assistant', notice);
+}
 
 // --- WhatsApp webhook ---
 
@@ -319,6 +330,8 @@ app.post('/webhook', async (req, res) => {
 
           const conversation = getOrCreateConversation(business.id, customerPhone);
           const history = getConversationHistory(conversation.id, 20);
+
+          await maybeSendDisclosure(business, conversation.id, history, customerPhone);
 
           const reply = await generateReply(business, history, text);
 
