@@ -148,73 +148,71 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       <section class="section" id="voice-section">
         <div class="section-label"><span>Voz</span></div>
 
+        <p class="voice-section-desc">Clonamos tu voz para que las respuestas por audio suenen como vos, no como un asistente genérico. Es opcional — si preferís, podés dejar todo en texto.</p>
+
         <div id="voice-status-saved" style="display:none" class="voice-cloned-badge">
           <span class="voice-cloned-dot"></span>
           Voz clonada activa
         </div>
 
-        <!-- Consentimiento -->
-        <div class="field">
-          <label class="consent-label">
-            <input type="checkbox" id="voice-consent" />
-            <span>Confirmo que esta es mi voz (o tengo autorización explícita de su dueño) y autorizo usarla para generar respuestas automáticas de este negocio.</span>
-          </label>
-        </div>
-
-        <!-- Selector de modo -->
-        <div class="voice-mode-tabs" id="voice-mode-tabs">
-          <button type="button" class="voice-tab active" data-mode="record">Grabar ahora</button>
-          <button type="button" class="voice-tab" data-mode="upload">Subir archivo</button>
-        </div>
-
-        <!-- Panel: Grabar -->
-        <div class="voice-panel" id="panel-record">
-          <div class="record-idle" id="record-idle">
-            <p class="field-hint">Grabá entre 1 y 3 minutos hablando con naturalidad — como si le hablaras a un cliente.</p>
-            <button type="button" class="btn-record-start" id="btn-record-start" disabled>
-              <span class="rec-dot"></span> Grabar
-            </button>
+        <!-- Paso 1: consentimiento + grabación o subida -->
+        <div id="voice-input">
+          <button type="button" class="btn-voice-cancel" id="btn-voice-cancel" style="display:none">← Volver a mi voz activa</button>
+          <div class="field">
+            <label class="consent-label">
+              <input type="checkbox" id="voice-consent" />
+              <span>Confirmo que esta es mi voz (o tengo autorización explícita de su dueño) y autorizo usarla para generar respuestas automáticas de este negocio.</span>
+            </label>
           </div>
-          <div class="record-active" id="record-active" style="display:none">
-            <span class="rec-dot pulsing"></span>
-            <span class="rec-timer" id="rec-timer">0:00</span>
-            <button type="button" class="btn-record-stop" id="btn-record-stop">■ Detener</button>
+
+          <p class="voice-tip"><span class="voice-tip-label">&gt; tip</span> 2–3 min, lugar silencioso, hablá natural — como le responderías a un cliente. Cuanto más variado, mejor resultado.</p>
+
+          <div class="voice-mode-tabs" id="voice-mode-tabs">
+            <button type="button" class="voice-tab active" data-mode="record">Grabar ahora</button>
+            <button type="button" class="voice-tab" data-mode="upload">Subir archivo</button>
           </div>
-          <div class="record-preview" id="record-preview" style="display:none">
-            <audio id="rec-playback" controls></audio>
-            <div class="record-preview-actions">
-              <button type="button" class="btn-retry" id="btn-retry">↺ Volver a grabar</button>
-              <button type="button" class="btn-use-recording" id="btn-use-recording" disabled>Usar esta grabación →</button>
+
+          <div class="voice-panel" id="panel-record">
+            <div class="record-idle" id="record-idle">
+              <p class="field-hint">Grabá entre 1 y 3 minutos hablando con naturalidad — como si le hablaras a un cliente.</p>
+              <button type="button" class="btn-record-start" id="btn-record-start">
+                <span class="rec-dot"></span> Grabar
+              </button>
+            </div>
+            <div class="record-active" id="record-active" style="display:none">
+              <span class="rec-dot pulsing"></span>
+              <span class="rec-timer" id="rec-timer">0:00</span>
+              <button type="button" class="btn-record-stop" id="btn-record-stop">■ Detener</button>
+            </div>
+          </div>
+
+          <div class="voice-panel" id="panel-upload" style="display:none">
+            <div class="dropzone" id="dropzone">
+              <input type="file" id="voice-file" accept="audio/*" class="dropzone-input" />
+              <div class="dropzone-content" id="dropzone-content">
+                <p class="dropzone-icon">↑</p>
+                <p class="dropzone-text">Arrastrá tu archivo acá</p>
+                <p class="dropzone-sub">o <label for="voice-file" class="dropzone-browse">explorá tu dispositivo</label></p>
+                <p class="dropzone-hint">MP3, WAV, WebM · 1 a 3 min</p>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Panel: Subir archivo -->
-        <div class="voice-panel" id="panel-upload" style="display:none">
-          <div class="dropzone" id="dropzone">
-            <input type="file" id="voice-file" accept="audio/*" class="dropzone-input" />
-            <div class="dropzone-content" id="dropzone-content">
-              <p class="dropzone-icon">↑</p>
-              <p class="dropzone-text">Arrastrá tu archivo acá</p>
-              <p class="dropzone-sub">o <label for="voice-file" class="dropzone-browse">explorá tu dispositivo</label></p>
-              <p class="dropzone-hint">MP3, WAV, WebM · 1 a 3 min</p>
-            </div>
-            <div class="dropzone-selected" id="dropzone-selected" style="display:none">
-              <p class="dropzone-filename" id="dropzone-filename"></p>
-              <button type="button" class="btn-clear-file" id="btn-clear-file">✕</button>
-            </div>
+        <!-- Paso 2: escuchar y confirmar -->
+        <div id="voice-confirm" style="display:none">
+          <audio id="rec-playback" controls></audio>
+          <div class="voice-confirm-actions">
+            <button type="button" class="btn-retry" id="btn-retry">↺ Volver a intentar</button>
+            <button type="button" class="btn-voice-upload" id="btn-voice-upload">Confirmar y clonar voz</button>
           </div>
-        </div>
-
-        <!-- Subir -->
-        <div class="voice-actions">
-          <button type="button" class="btn-voice-upload" id="btn-voice-upload" disabled>Subir y clonar voz</button>
           <span class="voice-upload-status" id="voice-upload-status"></span>
         </div>
 
-        <!-- Probar voz clonada -->
+        <!-- Paso 3: probar la voz clonada (aparece solo tras clonar) -->
         <div class="voice-preview-area" id="voice-preview-area" style="display:none">
           <button type="button" class="btn-voice-preview" id="btn-voice-preview">▶ Probar voz</button>
+          <button type="button" class="btn-recreate-voice" id="btn-recreate-voice">↺ Recrear voz</button>
           <audio id="voice-audio" controls style="display:none"></audio>
           <span class="voice-preview-status" id="voice-preview-status"></span>
         </div>
@@ -228,6 +226,18 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
     </form>
 
   </main>
+
+  <!-- Diálogo: ¿qué hacemos con la voz anterior? -->
+  <div id="voice-recreate-dialog" class="voice-dialog-overlay" style="display:none">
+    <div class="voice-dialog">
+      <p class="voice-dialog-title">¿Qué hacemos con la voz anterior?</p>
+      <p class="voice-dialog-body">Tu plan permite hasta 10 voces guardadas. ¿Querés liberar un lugar eliminando la voz anterior, o conservar las dos?</p>
+      <div class="voice-dialog-actions">
+        <button type="button" class="btn-dialog-delete" id="btn-dialog-delete">Eliminar la anterior</button>
+        <button type="button" class="btn-dialog-keep" id="btn-dialog-keep">Conservar ambas</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     // ── Redirect if not logged in ──
@@ -307,7 +317,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       setRadio('largo_mensajes', s.largo_mensajes);
 
       renderStyleProfile(b.style_profile);
-      if (b.voice_id) showVoiceCloned(b.voice_id);
+      if (b.voice_id) showVoiceCloned();
     }
 
     // ── Re-analyze button ──
@@ -384,18 +394,10 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
 
     // ── Voice section ──
 
-    const consentBox   = document.getElementById('voice-consent');
-    const uploadBtn    = document.getElementById('btn-voice-upload');
-    const uploadStatus = document.getElementById('voice-upload-status');
-
-    let pendingAudioBlob = null;  // set by recorder OR file picker/drop
+    const consentBox = document.getElementById('voice-consent');
+    let pendingAudioBlob = null;
     let currentMode = 'record';
-
-    function refreshUploadBtn() {
-      uploadBtn.disabled = !(consentBox.checked && pendingAudioBlob);
-    }
-
-    consentBox.addEventListener('change', refreshUploadBtn);
+    let hasExistingVoice = false;
 
     // ── Mode tabs ──
     document.querySelectorAll('.voice-tab').forEach(tab => {
@@ -405,9 +407,76 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         currentMode = tab.dataset.mode;
         document.getElementById('panel-record').style.display = currentMode === 'record' ? 'block' : 'none';
         document.getElementById('panel-upload').style.display = currentMode === 'upload' ? 'block' : 'none';
-        pendingAudioBlob = null;
-        refreshUploadBtn();
       });
+    });
+
+    // ── State transitions ──
+    function showVoiceInput() {
+      document.getElementById('voice-input').style.display = 'block';
+      document.getElementById('voice-confirm').style.display = 'none';
+      pendingAudioBlob = null;
+      const status = document.getElementById('voice-upload-status');
+      status.textContent = '';
+      status.className = 'voice-upload-status';
+      // Reset record state
+      document.getElementById('record-idle').style.display = 'flex';
+      document.getElementById('record-active').style.display = 'none';
+      document.getElementById('rec-timer').textContent = '0:00';
+      // Reset upload state
+      document.getElementById('voice-file').value = '';
+    }
+
+    function showVoiceConfirm(blob) {
+      pendingAudioBlob = blob;
+      const playback = document.getElementById('rec-playback');
+      playback.src = URL.createObjectURL(blob);
+      document.getElementById('voice-input').style.display = 'none';
+      document.getElementById('voice-confirm').style.display = 'block';
+      document.getElementById('btn-voice-upload').disabled = false;
+      const status = document.getElementById('voice-upload-status');
+      status.textContent = '';
+      status.className = 'voice-upload-status';
+    }
+
+    function showVoiceCloned() {
+      hasExistingVoice = true;
+      document.getElementById('btn-voice-cancel').style.display = 'none';
+      document.getElementById('voice-status-saved').style.display = 'flex';
+      document.getElementById('voice-input').style.display = 'none';
+      document.getElementById('voice-confirm').style.display = 'none';
+      document.getElementById('voice-preview-area').style.display = 'flex';
+      document.getElementById('voice-audio').style.display = 'none';
+    }
+
+    // ── Recrear voz ──
+    document.getElementById('btn-recreate-voice').addEventListener('click', () => {
+      document.getElementById('btn-voice-cancel').style.display = 'block';
+      document.getElementById('voice-preview-area').style.display = 'none';
+      showVoiceInput();
+    });
+
+    document.getElementById('btn-voice-cancel').addEventListener('click', () => {
+      showVoiceCloned();
+    });
+
+    // ── Dialog: eliminar o conservar voz anterior ──
+    let resolveDialogChoice = null;
+
+    function showRecreateDialog() {
+      return new Promise(resolve => {
+        resolveDialogChoice = resolve;
+        document.getElementById('voice-recreate-dialog').style.display = 'flex';
+      });
+    }
+
+    document.getElementById('btn-dialog-delete').addEventListener('click', () => {
+      document.getElementById('voice-recreate-dialog').style.display = 'none';
+      resolveDialogChoice('delete');
+    });
+
+    document.getElementById('btn-dialog-keep').addEventListener('click', () => {
+      document.getElementById('voice-recreate-dialog').style.display = 'none';
+      resolveDialogChoice('keep');
     });
 
     // ── MediaRecorder ──
@@ -416,12 +485,14 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
     let timerInterval = null;
     let recordStart = 0;
 
-    // Enable record button only after consent
-    consentBox.addEventListener('change', () => {
-      document.getElementById('btn-record-start').disabled = !consentBox.checked;
-    });
-
     document.getElementById('btn-record-start').addEventListener('click', async () => {
+      if (!consentBox.checked) {
+        const label = consentBox.closest('.consent-label');
+        label.style.outline = '2px solid var(--accent)';
+        label.style.outlineOffset = '2px';
+        setTimeout(() => { label.style.outline = ''; label.style.outlineOffset = ''; }, 2000);
+        return;
+      }
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         recordedChunks = [];
@@ -435,7 +506,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           stream.getTracks().forEach(t => t.stop());
           clearInterval(timerInterval);
           const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
-          showRecordPreview(blob);
+          showVoiceConfirm(blob);
         };
 
         mediaRecorder.start(250);
@@ -449,7 +520,6 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
 
         document.getElementById('record-idle').style.display   = 'none';
         document.getElementById('record-active').style.display = 'flex';
-        document.getElementById('record-preview').style.display = 'none';
       } catch (err) {
         alert('No se pudo acceder al micrófono: ' + err.message);
       }
@@ -459,59 +529,19 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
     });
 
-    function showRecordPreview(blob) {
-      pendingAudioBlob = blob;
-      const url = URL.createObjectURL(blob);
-      const playback = document.getElementById('rec-playback');
-      playback.src = url;
-      document.getElementById('record-idle').style.display    = 'none';
-      document.getElementById('record-active').style.display  = 'none';
-      document.getElementById('record-preview').style.display = 'block';
-      document.getElementById('btn-use-recording').disabled   = !consentBox.checked;
-      refreshUploadBtn();
-    }
-
-    document.getElementById('btn-retry').addEventListener('click', () => {
-      pendingAudioBlob = null;
-      document.getElementById('rec-playback').src = '';
-      document.getElementById('record-idle').style.display    = 'flex';
-      document.getElementById('record-active').style.display  = 'none';
-      document.getElementById('record-preview').style.display = 'none';
-      document.getElementById('rec-timer').textContent = '0:00';
-      refreshUploadBtn();
-    });
-
-    document.getElementById('btn-use-recording').addEventListener('click', () => {
-      if (pendingAudioBlob && consentBox.checked) submitVoice();
-    });
-
-    // ── Drag and drop + file input ──
-    const dropzone   = document.getElementById('dropzone');
-    const fileInput  = document.getElementById('voice-file');
-    const dzContent  = document.getElementById('dropzone-content');
-    const dzSelected = document.getElementById('dropzone-selected');
+    // ── File input + drag and drop ──
+    const fileInput = document.getElementById('voice-file');
+    const dropzone  = document.getElementById('dropzone');
 
     function setDropFile(file) {
       if (!file || !file.type.startsWith('audio/')) {
         alert('Solo se permiten archivos de audio.');
         return;
       }
-      pendingAudioBlob = file;
-      document.getElementById('dropzone-filename').textContent = file.name;
-      dzContent.style.display  = 'none';
-      dzSelected.style.display = 'flex';
-      refreshUploadBtn();
+      showVoiceConfirm(file);
     }
 
     fileInput.addEventListener('change', () => { if (fileInput.files[0]) setDropFile(fileInput.files[0]); });
-
-    document.getElementById('btn-clear-file').addEventListener('click', () => {
-      pendingAudioBlob = null;
-      fileInput.value = '';
-      dzContent.style.display  = 'flex';
-      dzSelected.style.display = 'none';
-      refreshUploadBtn();
-    });
 
     dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
     dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
@@ -522,17 +552,41 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       if (file) setDropFile(file);
     });
 
-    // ── Submit voice ──
-    async function submitVoice() {
-      if (!consentBox.checked || !pendingAudioBlob) return;
+    // ── Confirm step ──
+    document.getElementById('btn-retry').addEventListener('click', showVoiceInput);
 
-      uploadBtn.disabled = true;
+    document.getElementById('btn-voice-upload').addEventListener('click', () => {
+      if (!consentBox.checked) {
+        const status = document.getElementById('voice-upload-status');
+        status.className = 'voice-upload-status err';
+        status.textContent = 'Aceptá el consentimiento antes de continuar.';
+        return;
+      }
+      submitVoice();
+    });
+
+    async function submitVoice() {
+      if (!pendingAudioBlob) return;
+
+      const btn = document.getElementById('btn-voice-upload');
+      const uploadStatus = document.getElementById('voice-upload-status');
+
+      let deleteOld = false;
+      if (hasExistingVoice) {
+        const choice = await showRecreateDialog();
+        deleteOld = choice === 'delete';
+      }
+
+      btn.disabled = true;
       uploadStatus.className = 'voice-upload-status info';
-      uploadStatus.textContent = 'Convirtiendo y clonando… puede tardar unos segundos.';
+      uploadStatus.textContent = deleteOld
+        ? 'Eliminando voz anterior y clonando la nueva…'
+        : 'Convirtiendo y clonando… puede tardar unos segundos.';
 
       const form = new FormData();
       form.append('audio', pendingAudioBlob, 'voice.audio');
       form.append('consent', 'true');
+      if (deleteOld) form.append('delete_old', 'true');
 
       const res  = await fetch('/api/business/voice', { method: 'POST', body: form });
       const data = await res.json();
@@ -540,19 +594,12 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       if (res.ok) {
         uploadStatus.className = 'voice-upload-status ok';
         uploadStatus.textContent = '✓ Voz clonada correctamente';
-        showVoiceCloned();
+        setTimeout(showVoiceCloned, 800);
       } else {
         uploadStatus.className = 'voice-upload-status err';
         uploadStatus.textContent = data.error || 'Error al clonar';
-        uploadBtn.disabled = false;
+        btn.disabled = false;
       }
-    }
-
-    uploadBtn.addEventListener('click', submitVoice);
-
-    function showVoiceCloned() {
-      document.getElementById('voice-status-saved').style.display = 'flex';
-      document.getElementById('voice-preview-area').style.display = 'flex';
     }
 
     // ── Test cloned voice ──

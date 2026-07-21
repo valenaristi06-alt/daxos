@@ -388,6 +388,13 @@ select option { background: #1a1a1a; }
 
 /* ── Voice section ── */
 
+.voice-section-desc {
+  font-size: 13px;
+  color: var(--muted-2);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
 .voice-cloned-badge {
   display: none;
   align-items: center;
@@ -435,6 +442,23 @@ select option { background: #1a1a1a; }
   font-size: 13px;
   color: var(--muted-2);
   line-height: 1.55;
+}
+
+.voice-tip {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.55;
+  margin-bottom: 16px;
+  padding-left: 2px;
+}
+
+.voice-tip-label {
+  font-family: var(--mono);
+  color: var(--accent);
+  opacity: 0.6;
+  margin-right: 6px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
 }
 
 /* Mode tabs */
@@ -553,6 +577,14 @@ select option { background: #1a1a1a; }
   display: flex;
   gap: 10px;
   align-items: center;
+}
+
+.voice-confirm-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+  margin-bottom: 8px;
 }
 
 .btn-retry {
@@ -709,6 +741,109 @@ select option { background: #1a1a1a; }
 .voice-upload-status.ok,   .voice-preview-status.ok   { color: #4ade80; }
 .voice-upload-status.err,  .voice-preview-status.err  { color: #f87171; }
 .voice-upload-status.info, .voice-preview-status.info { color: var(--muted-2); }
+
+/* Recrear voz button */
+
+.btn-recreate-voice {
+  padding: 9px 16px;
+  background: none;
+  border: 1px solid var(--border-2);
+  color: var(--muted-2);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.btn-recreate-voice:hover { border-color: #444; color: var(--text); }
+
+/* Cancel recreate */
+
+.btn-voice-cancel {
+  display: block;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 20px;
+  transition: color 0.15s;
+}
+.btn-voice-cancel:hover { color: var(--text); }
+
+/* Recreate dialog overlay */
+
+.voice-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.voice-dialog {
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  padding: 28px 32px;
+  max-width: 420px;
+  width: calc(100% - 48px);
+}
+
+.voice-dialog-title {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+
+.voice-dialog-body {
+  font-size: 13px;
+  color: var(--muted-2);
+  line-height: 1.65;
+  margin-bottom: 24px;
+}
+
+.voice-dialog-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn-dialog-delete {
+  padding: 10px 18px;
+  background: none;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  border-radius: 4px;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-dialog-delete:hover { background: var(--danger); color: #fff; }
+
+.btn-dialog-keep {
+  padding: 10px 18px;
+  background: var(--accent);
+  border: none;
+  color: #fff;
+  border-radius: 4px;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.btn-dialog-keep:hover { opacity: 0.85; }
 
 /* Preview cloned voice */
 

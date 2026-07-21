@@ -10,7 +10,7 @@ const Database = require('better-sqlite3');
 const multer = require('multer');
 const { createUser, getUserByEmail, getUserById, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setStyleProfile, saveVoiceConsent, getConversationsByBusinessId, getConversationById, getOrCreateConversation, addMessage, getConversationHistory } = require('./db');
 const { generateReply, analyzeStyle } = require('./claude');
-const { cloneVoice, generatePreview } = require('./elevenlabs');
+const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -21,7 +21,9 @@ const upload = multer({
     cb(null, true);
   },
 });
-const { sendWhatsAppMessage } = require('./whatsapp');
+const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio } = require('./whatsapp');
+const { generateAudioBuffer } = require('./elevenlabs');
+const { convertToOgg } = require('./audio');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -173,7 +175,12 @@ app.post('/api/business/voice', requireAuth, upload.single('audio'), async (req,
 
   const business = getBusinessById(user.business_id);
 
+  const shouldDeleteOld = req.body.delete_old === 'true' && business.voice_id;
+
   try {
+    if (shouldDeleteOld) {
+      await deleteVoice(business.voice_id);
+    }
     const voiceId = await cloneVoice(business.name, req.file.buffer);
     saveVoiceConsent(business.id, {
       voiceId,
@@ -182,8 +189,8 @@ app.post('/api/business/voice', requireAuth, upload.single('audio'), async (req,
     });
     res.json({ voice_id: voiceId });
   } catch (err) {
-    console.error('[elevenlabs] clone error:', err.message);
-    res.status(502).json({ error: 'Error al clonar la voz: ' + err.message });
+    console.error('[elevenlabs] voice error:', err.message);
+    res.status(502).json({ error: 'Error al procesar la voz: ' + err.message });
   }
 });
 
@@ -318,7 +325,19 @@ app.post('/webhook', async (req, res) => {
           addMessage(conversation.id, 'user', text);
           addMessage(conversation.id, 'assistant', reply);
 
-          await sendWhatsAppMessage(customerPhone, reply);
+          if (business.response_mode === 'audio' && business.voice_id) {
+            try {
+              const mp3 = await generateAudioBuffer(business.voice_id, reply);
+              const ogg = await convertToOgg(mp3);
+              const mediaId = await uploadMedia(ogg, 'reply.ogg', 'audio/ogg');
+              await sendWhatsAppAudio(customerPhone, mediaId);
+            } catch (audioErr) {
+              console.error('[audio-reply] failed, falling back to text:', audioErr.message);
+              await sendWhatsAppMessage(customerPhone, reply);
+            }
+          } else {
+            await sendWhatsAppMessage(customerPhone, reply);
+          }
         }
       }
     }
