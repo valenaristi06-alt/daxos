@@ -82,6 +82,8 @@ if (!businessCols.includes('voice_id'))         db.exec('ALTER TABLE businesses 
 if (!businessCols.includes('voice_consent_at')) db.exec('ALTER TABLE businesses ADD COLUMN voice_consent_at TEXT');
 if (!businessCols.includes('consent_text'))     db.exec('ALTER TABLE businesses ADD COLUMN consent_text TEXT');
 if (!businessCols.includes('consent_by'))       db.exec('ALTER TABLE businesses ADD COLUMN consent_by TEXT');
+if (!businessCols.includes('plan'))             db.exec("ALTER TABLE businesses ADD COLUMN plan TEXT NOT NULL DEFAULT 'arranque'");
+if (!businessCols.includes('trial_ends_at'))    db.exec('ALTER TABLE businesses ADD COLUMN trial_ends_at TEXT');
 
 // --- businesses ---
 
@@ -135,8 +137,8 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
 
   if (whatsapp_number) {
     const result = db.prepare(`
-      INSERT INTO businesses (name, whatsapp_number, sales_examples, survey_answers, response_mode)
-      VALUES (@name, @whatsapp_number, @sales_examples, @survey_answers, @response_mode)
+      INSERT INTO businesses (name, whatsapp_number, sales_examples, survey_answers, response_mode, trial_ends_at)
+      VALUES (@name, @whatsapp_number, @sales_examples, @survey_answers, @response_mode, datetime('now', '+14 days'))
       ON CONFLICT(whatsapp_number) DO UPDATE SET
         name=excluded.name, sales_examples=excluded.sales_examples,
         survey_answers=excluded.survey_answers, response_mode=excluded.response_mode
@@ -146,8 +148,8 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
   }
 
   const result = db.prepare(`
-    INSERT INTO businesses (name, sales_examples, survey_answers, response_mode)
-    VALUES (@name, @sales_examples, @survey_answers, @response_mode)
+    INSERT INTO businesses (name, sales_examples, survey_answers, response_mode, trial_ends_at)
+    VALUES (@name, @sales_examples, @survey_answers, @response_mode, datetime('now', '+14 days'))
   `).run(serialized);
   return getBusinessById(result.lastInsertRowid);
 }

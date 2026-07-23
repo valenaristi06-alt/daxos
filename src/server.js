@@ -175,6 +175,10 @@ app.post('/api/business/voice', requireAuth, upload.single('audio'), async (req,
 
   const business = getBusinessById(user.business_id);
 
+  if (!['crecimiento', 'a_medida'].includes(business.plan)) {
+    return res.status(403).json({ error: 'La clonación de voz es parte del plan Crecimiento. Actualizá tu plan para usar esta función.' });
+  }
+
   const shouldDeleteOld = req.body.delete_old === 'true' && business.voice_id;
 
   try {
@@ -275,6 +279,12 @@ app.post('/test/simulate', async (req, res) => {
   }
 });
 
+function isTrialExpired(business) {
+  if (business.plan !== 'arranque') return false;
+  if (!business.trial_ends_at) return false;
+  return new Date(business.trial_ends_at) < new Date();
+}
+
 // Sends the first-contact disclosure required by Meta policy.
 // Always plain text, always saved to history. No-op if history already exists.
 async function maybeSendDisclosure(business, conversationId, history, recipientPhone) {
@@ -328,6 +338,13 @@ app.post('/webhook', async (req, res) => {
           const text = msg.text?.body;
           if (!text) continue;
 
+          if (isTrialExpired(business)) {
+            await sendWhatsAppMessage(customerPhone,
+              `Hola! El período de prueba de ${business.name} terminó. Para seguir recibiendo respuestas automáticas, el negocio necesita activar su plan.`
+            );
+            continue;
+          }
+
           const conversation = getOrCreateConversation(business.id, customerPhone);
           const history = getConversationHistory(conversation.id, 20);
 
@@ -338,7 +355,8 @@ app.post('/webhook', async (req, res) => {
           addMessage(conversation.id, 'user', text);
           addMessage(conversation.id, 'assistant', reply);
 
-          if (business.response_mode === 'audio' && business.voice_id) {
+          const planAllowsAudio = ['crecimiento', 'a_medida'].includes(business.plan);
+          if (business.response_mode === 'audio' && business.voice_id && planAllowsAudio) {
             try {
               const mp3 = await generateAudioBuffer(business.voice_id, reply);
               const ogg = await convertToOgg(mp3);

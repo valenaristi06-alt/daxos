@@ -281,6 +281,15 @@ html, body {
   letter-spacing: 0.02em;
 }
 
+.card-trial {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  margin-bottom: 14px;
+  opacity: 0.8;
+}
+
 .card-desc {
   font-size: 13px;
   color: var(--muted-2);

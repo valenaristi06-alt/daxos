@@ -11,6 +11,7 @@
   <header class="topbar">
     <div class="topbar-logo">DAXOS</div>
     <div class="topbar-right">
+      <span class="plan-badge" id="plan-badge" style="display:none"></span>
       <span class="topbar-email" id="user-email"></span>
       <button class="btn-logout" id="btn-logout">Salir</button>
     </div>
@@ -24,6 +25,8 @@
       <a href="/dashboard.html" class="nav-link active">Configuración</a>
       <a href="/conversations.html" class="nav-link">Conversaciones</a>
     </nav>
+
+    <div id="trial-banner" style="display:none"></div>
 
     <form id="form" novalidate>
 
@@ -149,6 +152,12 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         <div class="section-label"><span>Voz</span></div>
 
         <p class="voice-section-desc">Clonamos tu voz para que las respuestas por audio suenen como vos, no como un asistente genérico. Es opcional — si preferís, podés dejar todo en texto.</p>
+
+        <!-- Bloqueo para plan Arranque -->
+        <div id="voice-plan-lock" style="display:none" class="voice-plan-lock">
+          <p class="voice-lock-msg">Esta función es parte del plan Crecimiento.</p>
+          <a href="https://wa.me/59892052508?text=Hola%2C%20quiero%20actualizar%20mi%20plan%20a%20Crecimiento" target="_blank" rel="noopener" class="voice-lock-link">Escribinos para actualizar tu plan →</a>
+        </div>
 
         <div id="voice-status-saved" style="display:none" class="voice-cloned-badge">
           <span class="voice-cloned-dot"></span>
@@ -301,7 +310,33 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
     async function loadBusiness() {
       const res = await fetch('/api/business');
       const b = await res.json();
-      if (!b) return;
+
+      // Trial banner — runs even if no business saved yet
+      const banner = document.getElementById('trial-banner');
+      if (!b) {
+        // New user: no business saved yet, trial hasn't started
+        banner.className = 'trial-banner trial-banner--active';
+        banner.innerHTML = '<span class="trial-msg">Tenés 14 días de prueba gratis. Completá tu configuración para empezar.</span>';
+        banner.style.display = 'flex';
+        return;
+      }
+
+      if (b.plan === 'arranque' && b.trial_ends_at) {
+        const endsAt = new Date(b.trial_ends_at);
+        const now = new Date();
+        if (endsAt < now) {
+          banner.className = 'trial-banner trial-banner--expired';
+          banner.innerHTML = `
+            <span class="trial-msg">Tu prueba gratuita terminó.</span>
+            <a href="https://wa.me/59892052508?text=Hola%2C%20quiero%20activar%20el%20plan%20Arranque" target="_blank" rel="noopener" class="trial-action">Activá tu plan para seguir usando Daxos →</a>
+          `;
+        } else {
+          const daysLeft = Math.ceil((endsAt - now) / (1000 * 60 * 60 * 24));
+          banner.className = 'trial-banner trial-banner--active';
+          banner.innerHTML = `<span class="trial-msg">Te ${daysLeft === 1 ? 'queda 1 día' : `quedan ${daysLeft} días`} de prueba gratis.</span>`;
+        }
+        banner.style.display = 'flex';
+      }
 
       document.getElementById('name').value = b.name || '';
       document.getElementById('whatsapp_number').value = b.whatsapp_number || '';
@@ -317,7 +352,20 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       setRadio('largo_mensajes', s.largo_mensajes);
 
       renderStyleProfile(b.style_profile);
-      if (b.voice_id) showVoiceCloned();
+
+      // Plan badge
+      const PLAN_LABELS = { arranque: 'Arranque', crecimiento: 'Crecimiento', a_medida: 'A medida' };
+      const planBadge = document.getElementById('plan-badge');
+      planBadge.textContent = PLAN_LABELS[b.plan] || b.plan;
+      planBadge.style.display = 'inline-block';
+
+      // Voice section: lock if plan is 'arranque'
+      const planAllowsVoice = b.plan === 'crecimiento' || b.plan === 'a_medida';
+      document.getElementById('voice-plan-lock').style.display = planAllowsVoice ? 'none' : 'block';
+      document.getElementById('voice-input').style.display    = planAllowsVoice ? 'block' : 'none';
+      document.getElementById('voice-confirm').style.display  = 'none';
+
+      if (planAllowsVoice && b.voice_id) showVoiceCloned();
     }
 
     // ── Re-analyze button ──
