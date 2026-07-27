@@ -22,6 +22,23 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── Scroll animations ── */
+
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+
+  .anim {
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity 0.38s ease-out, transform 0.38s ease-out;
+  }
+
+  .anim.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ── Header ── */
 
 .land-header {
@@ -35,12 +52,22 @@ html, body {
 }
 
 .land-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-family: var(--mono);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--accent);
+  text-decoration: none;
+}
+
+.logo-img {
+  height: 26px;
+  width: auto;
+  display: block;
 }
 
 /* ── Hero ── */
@@ -51,13 +78,20 @@ html, body {
   align-items: center;
   justify-content: flex-start;
   padding: 100px 40px 80px;
-  max-width: 1100px;
-  margin: 0 auto;
+  background-image:
+    linear-gradient(to right, rgba(5,5,5,0.92) 32%, rgba(5,5,5,0.55) 58%, rgba(5,5,5,0.0) 80%),
+    url('/conversacionapp.png');
+  background-size: cover;
+  background-position: center;
 }
 
 .hero-inner {
-  max-width: 680px;
+  max-width: 580px;
   width: 100%;
+}
+
+.hero-visual {
+  display: none;
 }
 
 .hero-terminal {
@@ -136,6 +170,46 @@ html, body {
 
 .hero-secondary-link:hover { color: var(--text); }
 
+/* ── How-track ── */
+
+.how-track {
+  position: relative;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  margin-bottom: 48px;
+}
+
+.how-track-line {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(245, 240, 232, 0.18) 18%,
+    rgba(245, 240, 232, 0.18) 82%,
+    transparent
+  );
+}
+
+.how-track-dot {
+  position: absolute;
+  left: 12%;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(196, 92, 26, 0.55), 0 0 24px rgba(196, 92, 26, 0.2);
+  transform: translateX(-50%);
+  will-change: left;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .how-track { display: none; }
+}
+
 /* ── Cómo funciona ── */
 
 .how-section {
@@ -169,6 +243,12 @@ html, body {
   gap: 20px;
 }
 
+.how-icon {
+  display: block;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
 .how-number {
   font-family: var(--mono);
   font-size: 11px;
@@ -187,6 +267,87 @@ html, body {
   letter-spacing: -0.01em;
 }
 
+/* ── Empleado cero ── */
+
+.pitch-section {
+  position: relative;
+  border-top: 1px solid #1a1a1a;
+  min-height: 620px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  background-image:
+    linear-gradient(rgba(5,5,5,0.68), rgba(5,5,5,0.68)),
+    url('/oficinaapp.png');
+  background-size: cover;
+  background-position: center;
+  padding: 72px 40px 88px;
+}
+
+.pitch-text {
+  position: relative;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.pitch-tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 20px;
+}
+
+.pitch-title {
+  font-family: var(--serif);
+  font-size: clamp(42px, 7vw, 80px);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  color: #F5F0E8;
+  margin-bottom: 36px;
+}
+
+.pitch-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.pitch-list li {
+  font-size: 15px;
+  color: rgba(245, 240, 232, 0.8);
+  line-height: 1.5;
+}
+
+.pitch-closing {
+  font-size: 15px;
+  color: rgba(245, 240, 232, 0.68);
+  line-height: 1.72;
+  margin-bottom: 36px;
+  font-style: italic;
+  max-width: 480px;
+}
+
+.pitch-fine {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: rgba(245, 240, 232, 0.36);
+  letter-spacing: 0.04em;
+  margin-top: 14px;
+}
+
+@media (max-width: 600px) {
+  .pitch-section { padding: 56px 24px 72px; }
+  .pitch-title { font-size: clamp(28px, 8vw, 40px); }
+}
+
 /* ── Planes / Precios ── */
 
 .pricing-section {
@@ -203,7 +364,7 @@ html, body {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 24px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .pricing-card {
@@ -336,6 +497,7 @@ html, body {
   font-weight: 600;
   letter-spacing: 0.01em;
   transition: border-color 0.15s, color 0.15s;
+  margin-top: auto;
 }
 
 .card-cta:hover { border-color: var(--accent); color: var(--accent); }
@@ -348,11 +510,141 @@ html, body {
 
 .card-cta--featured:hover { opacity: 0.88; color: #fff; }
 
+/* ── FAQ ── */
+
+.faq-section {
+  border-top: 1px solid #1a1a1a;
+  padding: 96px 40px 112px;
+}
+
+.faq-inner {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.faq-item {
+  border-bottom: 1px solid #1e1e1e;
+}
+
+.faq-item:first-of-type {
+  border-top: 1px solid #1e1e1e;
+}
+
+.faq-question {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  padding: 22px 0;
+  font-family: var(--serif);
+  font-size: clamp(16px, 1.8vw, 19px);
+  font-weight: 400;
+  color: var(--text);
+  cursor: pointer;
+  list-style: none;
+  line-height: 1.35;
+  transition: color 0.15s;
+}
+
+.faq-question::-webkit-details-marker { display: none; }
+
+.faq-question::after {
+  content: '+';
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--accent);
+  flex-shrink: 0;
+  transition: transform 0.22s ease-out;
+  line-height: 1;
+}
+
+details[open] .faq-question::after {
+  transform: rotate(45deg);
+}
+
+.faq-question:hover { color: var(--accent); }
+
+.faq-answer {
+  font-size: 14px;
+  color: var(--muted-2);
+  line-height: 1.72;
+  padding-bottom: 22px;
+  max-width: 620px;
+}
+
+@media (max-width: 600px) {
+  .faq-section { padding: 72px 24px 88px; }
+}
+
+/* ── Footer ── */
+
+.land-footer {
+  border-top: 1px solid #1a1a1a;
+  padding: 40px 40px 48px;
+}
+
+.land-footer-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.footer-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.footer-legal {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  line-height: 1.6;
+  max-width: 400px;
+}
+
+.footer-copy {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+}
+
+.footer-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.footer-link {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  text-decoration: none;
+  letter-spacing: 0.04em;
+  transition: color 0.15s;
+}
+
+.footer-link:hover { color: var(--accent); }
+
+@media (max-width: 600px) {
+  .land-footer { padding: 36px 24px 40px; }
+  .footer-links { align-items: flex-start; }
+}
+
 /* ── Sección de cierre ── */
 
 .closing-section {
   border-top: 1px solid #1a1a1a;
-  padding: 120px 40px 128px;
+  padding: 72px 40px 80px;
   text-align: center;
 }
 
@@ -384,6 +676,15 @@ html, body {
 @media (max-width: 768px) {
   .how-grid { grid-template-columns: 1fr; gap: 40px; }
   .how-section { padding: 72px 24px 88px; }
+}
+
+@media (max-width: 860px) {
+  .hero {
+    background-image:
+      linear-gradient(rgba(5,5,5,0.78), rgba(5,5,5,0.78)),
+      url('/conversacionapp.png');
+  }
+  .hero-inner { max-width: 100%; }
 }
 
 @media (max-width: 600px) {

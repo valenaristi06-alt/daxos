@@ -86,4 +86,31 @@ async function sendWhatsAppAudio(to, mediaId) {
   return data;
 }
 
-module.exports = { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio };
+async function sendWhatsAppDocument(to, mediaId, filename) {
+  if (!PHONE_NUMBER_ID || !ACCESS_TOKEN) {
+    throw new Error('WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN must be set in .env.local');
+  }
+
+  const body = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to,
+    type: 'document',
+    document: { id: mediaId, filename },
+  };
+
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${ACCESS_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(`WhatsApp API error ${res.status}: ${JSON.stringify(data)}`);
+  return data;
+}
+
+module.exports = { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument };

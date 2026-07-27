@@ -8,7 +8,7 @@
 </head>
 <body>
   <div class="card">
-    <div class="logo">Daxos</div>
+    <div class="logo"><img src="/logodaxosnaranjanofondo.png" alt="" class="logo-img">Daxos</div>
     <h1>Bienvenido</h1>
     <p class="subtitle">Ingresá con tu email y contraseña.</p>
 
@@ -48,7 +48,7 @@
 
       const data = await res.json();
       if (res.ok) {
-        window.location.href = '/dashboard.html';
+        window.location.href = '/inicio.html';
       } else {
         errorEl.textContent = data.error;
         errorEl.classList.add('visible');

@@ -4,7 +4,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-function buildSystemPrompt(business) {
+function buildSystemPrompt(business, label) {
   const lines = [
     `Sos el asistente de ventas de "${business.name}".`,
     `Respondé siempre en el idioma que usa el cliente.`,
@@ -37,13 +37,27 @@ function buildSystemPrompt(business) {
     }
   }
 
+  if (label) {
+    const labelCtx = {
+      cliente:        'Este contacto ya es cliente. Priorizá soporte, fidelización y atención post-venta. No hagas venta agresiva.',
+      prospecto:      'Este contacto es un prospecto interesado. Guialo con información, generá confianza y acompañalo hacia la decisión de compra.',
+      no_interesado:  'Este contacto indicó que no está interesado. Sé cordial, no presiones, dejá la puerta abierta sin insistir.',
+    };
+    if (labelCtx[label]) lines.push(`\nContexto del contacto: ${labelCtx[label]}`);
+  }
+
+  if (business.document_name) {
+    lines.push(`\nDocumento disponible: el negocio tiene un archivo "${business.document_name}" (catálogo / lista de precios / información del negocio). Si el cliente pide explícitamente ese documento, su catálogo, lista de precios o algo similar, iniciá tu respuesta con [SEND_DOC] en una línea separada y luego continuá con tu mensaje. Solo usá [SEND_DOC] cuando el pedido sea claro y directo — no lo uses por las dudas.`);
+  }
+
   lines.push('\nSé breve, amable y enfocado en ayudar al cliente a comprar o consultar.');
+  lines.push('\nFORMATO OBLIGATORIO: Nunca uses markdown. Sin asteriscos, sin negritas, sin cursivas, sin guiones de lista, sin numeración, sin títulos con #. Escribí en texto plano, como un mensaje real de WhatsApp.');
 
   return lines.join('\n');
 }
 
-async function generateReply(business, history, newMessage) {
-  const systemPrompt = buildSystemPrompt(business);
+async function generateReply(business, history, newMessage, label = null) {
+  const systemPrompt = buildSystemPrompt(business, label);
 
   const messages = [
     ...history.map((msg) => ({
@@ -64,11 +78,20 @@ async function generateReply(business, history, newMessage) {
 }
 
 async function analyzeStyle(examples) {
+  const joined = examples.join('\n---\n');
+  const emojiRegex = /\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu;
+  const emojiCount = (joined.match(emojiRegex) || []).length;
+  const emojiHint = emojiCount === 0
+    ? 'Los ejemplos no contienen ningún emoji — el valor DEBE ser "ninguno".'
+    : emojiCount <= 3
+    ? `Los ejemplos contienen ${emojiCount} emoji(s) en total — el valor debe ser "moderado".`
+    : `Los ejemplos contienen ${emojiCount} emojis — el valor debe ser "frecuente".`;
+
   const prompt = `Vas a analizar el estilo de comunicación de un negocio a partir de ejemplos reales de mensajes de venta. Devolvé ÚNICAMENTE un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones.
 
 Ejemplos de mensajes:
 ---
-${examples.join('\n---\n')}
+${joined}
 ---
 
 Analizá el estilo y devolvé este JSON con exactamente estas claves:
@@ -83,6 +106,7 @@ Analizá el estilo y devolvé este JSON con exactamente estas claves:
 
 Reglas:
 - Solo los valores de las opciones listadas, sin inventar otros.
+- CRÍTICO para uso_emojis: ${emojiHint}
 - "caracteristicas" es un array de exactamente 3 strings cortos que describen rasgos distintivos del estilo.
 - No agregues comentarios, markdown ni texto fuera del JSON.`;
 

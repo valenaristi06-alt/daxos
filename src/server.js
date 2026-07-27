@@ -1,5 +1,6 @@
 require('dotenv').config({ path: '.env.local' });
 
+const crypto = require('crypto');
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
@@ -8,9 +9,10 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setStyleProfile, saveVoiceConsent, getConversationsByBusinessId, getConversationById, getOrCreateConversation, addMessage, getConversationHistory } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setStyleProfile, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, getDailyConversationStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, savePendingPayment, getPendingPayments } = require('./db');
 const { generateReply, analyzeStyle } = require('./claude');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
+const { sendPauseEmail, sendUnmatchedPaymentAlert } = require('./email');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -21,9 +23,22 @@ const upload = multer({
     cb(null, true);
   },
 });
-const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio } = require('./whatsapp');
+
+const documentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype !== 'application/pdf') return cb(new Error('Solo se aceptan archivos PDF'));
+    cb(null, true);
+  },
+});
+
+const fs = require('fs');
+const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument } = require('./whatsapp');
 const { generateAudioBuffer } = require('./elevenlabs');
 const { convertToOgg } = require('./audio');
+
+fs.mkdirSync(path.join(__dirname, '../data/uploads'), { recursive: true });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -110,7 +125,7 @@ app.get('/api/business', requireAuth, (req, res) => {
 });
 
 app.put('/api/business', requireAuth, async (req, res) => {
-  const { name, whatsapp_number, sales_examples, survey_answers, response_mode } = req.body;
+  const { name, whatsapp_number, sales_examples, survey_answers, response_mode, pause_keywords } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'El nombre del negocio es requerido' });
 
   try {
@@ -122,6 +137,7 @@ app.put('/api/business', requireAuth, async (req, res) => {
       sales_examples,
       survey_answers,
       response_mode,
+      pause_keywords: pause_keywords ? pause_keywords.trim() : null,
     });
     if (!user.business_id) setUserBusiness(user.id, business.id);
 
@@ -240,6 +256,20 @@ app.get('/api/conversations/:id/messages', requireAuth, (req, res) => {
   res.json({ conversation: conv, messages });
 });
 
+app.get('/api/stats', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.json({ conversation_count: 0, last_message: null });
+  const conversation_count = getConversationCountByBusinessId(user.business_id);
+  const last_message = getLastCustomerMessage(user.business_id);
+  res.json({ conversation_count, last_message });
+});
+
+app.get('/api/stats/daily', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.json([]);
+  res.json(getDailyConversationStats(user.business_id));
+});
+
 app.post('/businesses', (req, res) => {
   const { name, whatsapp_number, sales_examples, survey_answers, response_mode } = req.body;
   if (!name || !whatsapp_number) {
@@ -248,6 +278,74 @@ app.post('/businesses', (req, res) => {
   try {
     const business = upsertBusiness({ name, whatsapp_number, sales_examples, survey_answers, response_mode });
     res.json(business);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/api/conversations/:id/label', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+
+  const conv = getConversationById(parseInt(req.params.id));
+  if (!conv || conv.business_id !== user.business_id) return res.status(404).json({ error: 'Conversación no encontrada.' });
+
+  const { label } = req.body;
+  const allowed = ['cliente', 'prospecto', 'no_interesado', null, ''];
+  if (!allowed.includes(label)) return res.status(400).json({ error: 'Etiqueta inválida.' });
+
+  setConversationLabel(conv.id, label || null);
+  res.json({ ok: true });
+});
+
+app.post('/api/business/document', requireAuth, documentUpload.single('document'), async (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
+  if (!req.file) return res.status(400).json({ error: 'No se recibió ningún archivo.' });
+
+  const destPath = path.join(__dirname, '../data/uploads', `doc-${user.business_id}.pdf`);
+
+  const existing = getBusinessById(user.business_id);
+  if (existing?.document_path && fs.existsSync(existing.document_path)) {
+    fs.unlinkSync(existing.document_path);
+  }
+
+  fs.writeFileSync(destPath, req.file.buffer);
+  setBusinessDocument(user.business_id, destPath, req.file.originalname);
+  res.json({ ok: true, document_name: req.file.originalname });
+});
+
+app.delete('/api/business/document', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+
+  const business = getBusinessById(user.business_id);
+  if (business?.document_path && fs.existsSync(business.document_path)) {
+    fs.unlinkSync(business.document_path);
+  }
+  clearBusinessDocument(user.business_id);
+  res.json({ ok: true });
+});
+
+app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
+
+  const business = getBusinessById(user.business_id);
+  if (!business) return res.status(404).json({ error: 'Negocio no encontrado.' });
+
+  const { message, history = [] } = req.body;
+  if (!message || !message.trim()) return res.status(400).json({ error: 'Mensaje vacío.' });
+
+  try {
+    const rawReply = await generateReply(business, history, message.trim());
+    let sent_doc = false;
+    let reply = rawReply;
+    if (rawReply.startsWith('[SEND_DOC]')) {
+      sent_doc = true;
+      reply = rawReply.replace(/^\[SEND_DOC\]\s*/m, '').trim();
+    }
+    res.json({ reply, sent_doc });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -350,10 +448,52 @@ app.post('/webhook', async (req, res) => {
 
           await maybeSendDisclosure(business, conversation.id, history, customerPhone);
 
-          const reply = await generateReply(business, history, text);
+          // Pause keyword check — runs before AI reply
+          if (business.pause_keywords) {
+            const keywords = business.pause_keywords
+              .split(',')
+              .map(k => k.trim().toLowerCase())
+              .filter(Boolean);
+            const lowerText = text.toLowerCase();
+            const matched = keywords.find(k => lowerText.includes(k));
+            if (matched) {
+              addMessage(conversation.id, 'user', text);
+              markConversationPaused(conversation.id);
+              const owner = getUserByBusinessId(business.id);
+              if (owner) {
+                sendPauseEmail({
+                  to: owner.email,
+                  businessName: business.name,
+                  customerPhone,
+                  messageText: text,
+                  conversationId: conversation.id,
+                }).catch(err => console.error('[resend]', err.message));
+              }
+              continue;
+            }
+          }
+
+          const rawReply = await generateReply(business, history, text, conversation.label || null);
+
+          let sendDoc = false;
+          let reply = rawReply;
+          if (rawReply.startsWith('[SEND_DOC]')) {
+            sendDoc = true;
+            reply = rawReply.replace(/^\[SEND_DOC\]\s*/m, '').trim();
+          }
 
           addMessage(conversation.id, 'user', text);
           addMessage(conversation.id, 'assistant', reply);
+
+          if (sendDoc && business.document_path && fs.existsSync(business.document_path)) {
+            try {
+              const docBuffer = fs.readFileSync(business.document_path);
+              const docMediaId = await uploadMedia(docBuffer, business.document_name, 'application/pdf');
+              await sendWhatsAppDocument(customerPhone, docMediaId, business.document_name);
+            } catch (docErr) {
+              console.error('[doc-send] failed:', docErr.message);
+            }
+          }
 
           const planAllowsAudio = ['crecimiento', 'a_medida'].includes(business.plan);
           if (business.response_mode === 'audio' && business.voice_id && planAllowsAudio) {
@@ -374,6 +514,111 @@ app.post('/webhook', async (req, res) => {
     }
   } catch (err) {
     console.error('Webhook processing error:', err.message);
+  }
+});
+
+// --- Mercado Pago webhook ---
+
+app.post('/webhook/mercadopago', async (req, res) => {
+  // Validate HMAC signature before processing anything
+  const webhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
+  if (webhookSecret) {
+    const xSignature = req.headers['x-signature'] || '';
+    const xRequestId = req.headers['x-request-id'] || '';
+    const paymentId  = req.query?.['data.id'] || req.body?.data?.id || '';
+
+    const tsMatch = xSignature.match(/ts=([^,]+)/);
+    const v1Match = xSignature.match(/v1=([^,]+)/);
+
+    if (!tsMatch || !v1Match) {
+      console.warn('[mp-webhook] Missing or malformed x-signature header — rejected');
+      return res.status(200).send('OK'); // 200 so MP doesn't retry; we reject silently
+    }
+
+    const ts       = tsMatch[1];
+    const received = v1Match[1];
+    const manifest = `id:${paymentId};request-id:${xRequestId};ts:${ts};`;
+    const expected = crypto.createHmac('sha256', webhookSecret).update(manifest).digest('hex');
+
+    if (!crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected))) {
+      console.warn('[mp-webhook] Invalid HMAC signature — rejected');
+      return res.status(200).send('OK');
+    }
+  } else {
+    console.warn('[mp-webhook] MERCADOPAGO_WEBHOOK_SECRET not set — skipping signature check');
+  }
+
+  // Respond 200 immediately — MP retries on non-2xx
+  res.status(200).send('OK');
+
+  try {
+    const { type, data } = req.body || {};
+    if (type !== 'payment' || !data?.id) return;
+
+    const mpToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+    if (!mpToken) {
+      console.error('[mp-webhook] MERCADOPAGO_ACCESS_TOKEN not set');
+      return;
+    }
+
+    // Verify payment directly with MP API — never trust notification body alone
+    const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${data.id}`, {
+      headers: { 'Authorization': `Bearer ${mpToken}` },
+    });
+
+    if (!mpRes.ok) {
+      console.error(`[mp-webhook] MP API returned ${mpRes.status} for payment ${data.id}`);
+      return;
+    }
+
+    const payment = await mpRes.json();
+
+    if (payment.status !== 'approved') {
+      console.log(`[mp-webhook] Payment ${data.id} status=${payment.status}, ignoring`);
+      return;
+    }
+
+    const payerEmail = payment.payer?.email?.toLowerCase().trim();
+    if (!payerEmail) {
+      console.warn(`[mp-webhook] No payer email in payment ${data.id}`);
+      return;
+    }
+
+    const paidAt = payment.date_approved || payment.date_created || new Date().toISOString();
+    const expiresAt = new Date(new Date(paidAt).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Match payer email to a registered user
+    const user = getUserByEmail(payerEmail);
+    if (user && user.business_id) {
+      upgradePlan(user.business_id, 'crecimiento', paidAt, expiresAt);
+      console.log(`[mp-webhook] Upgraded business ${user.business_id} to crecimiento (payment ${data.id})`);
+      return;
+    }
+
+    // No match — save for manual review and alert admin
+    savePendingPayment({
+      mpPaymentId: String(data.id),
+      payerEmail,
+      amount: payment.transaction_amount,
+      currency: payment.currency_id,
+      paidAt,
+      rawJson: JSON.stringify(payment),
+    });
+
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (adminEmail) {
+      sendUnmatchedPaymentAlert({
+        adminEmail,
+        payerEmail,
+        amount: payment.transaction_amount,
+        currency: payment.currency_id,
+        mpPaymentId: data.id,
+      }).catch(err => console.error('[mp-webhook] alert email failed:', err.message));
+    }
+
+    console.warn(`[mp-webhook] No business found for payer ${payerEmail}, payment ${data.id} saved as pending`);
+  } catch (err) {
+    console.error('[mp-webhook] Error processing payment:', err.message);
   }
 });
 

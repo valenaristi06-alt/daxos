@@ -5,34 +5,77 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Panel — Daxos</title>
   <link rel="stylesheet" href="/dashboard.css" />
+  <script src="/toast.js"></script>
 </head>
 <body>
 
-  <header class="topbar">
-    <div class="topbar-logo">DAXOS</div>
-    <div class="topbar-right">
+  <div class="app-layout">
+
+  <aside class="app-sidebar">
+    <a href="/inicio.html" class="sidebar-logo">
+      <img src="/logodaxosnaranjanofondo.png" alt="" class="logo-img">DAXOS
+    </a>
+    <div class="sidebar-divider"></div>
+    <nav class="sidebar-nav">
+      <a href="/inicio.html" class="sidebar-link">
+        <svg class="sidebar-link-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M2 8L8 2L14 8V14H10V10H6V14H2V8Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+        </svg>
+        Inicio
+      </a>
+      <a href="/dashboard.html" class="sidebar-link active">
+        <svg class="sidebar-link-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <line x1="2" y1="4" x2="14" y2="4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <line x1="2" y1="8" x2="14" y2="8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <line x1="2" y1="12" x2="14" y2="12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <circle cx="5" cy="4" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+          <circle cx="10" cy="8" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+          <circle cx="6" cy="12" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+        </svg>
+        Configuración
+      </a>
+      <a href="/conversations.html" class="sidebar-link">
+        <svg class="sidebar-link-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M2 3C2 2 3 1 4 1H12C13 1 14 2 14 3V9C14 10 13 11 12 11H7L4 14V11C3 11 2 10 2 9V3Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+        </svg>
+        Conversaciones
+      </a>
+    </nav>
+    <div class="sidebar-bottom">
       <span class="plan-badge" id="plan-badge" style="display:none"></span>
-      <span class="topbar-email" id="user-email"></span>
+      <span class="sidebar-email" id="user-email"></span>
       <button class="btn-logout" id="btn-logout">Salir</button>
     </div>
-  </header>
+  </aside>
 
-  <main class="main">
+  <main class="app-main">
 
     <p class="page-terminal">&gt; negocio.config</p>
     <h1 class="page-title">Configuración</h1>
-    <nav class="main-nav">
-      <a href="/dashboard.html" class="nav-link active">Configuración</a>
-      <a href="/conversations.html" class="nav-link">Conversaciones</a>
-    </nav>
 
     <div id="trial-banner" style="display:none"></div>
 
-    <form id="form" novalidate>
+    <div id="form-skeleton" style="display:flex;flex-direction:column;gap:24px;margin-bottom:32px;">
+      <div class="skeleton skeleton-line skeleton-line--mid" style="height:18px"></div>
+      <div class="skeleton skeleton-line skeleton-line--full" style="height:44px"></div>
+      <div class="skeleton skeleton-line skeleton-line--full" style="height:44px"></div>
+      <div class="skeleton skeleton-line skeleton-line--short" style="height:18px;margin-top:8px"></div>
+      <div class="skeleton skeleton-line skeleton-line--full" style="height:120px"></div>
+    </div>
+
+    <form id="form" novalidate style="display:none">
 
       <!-- Identidad -->
       <section class="section">
-        <div class="section-label"><span>Identidad</span></div>
+        <div class="section-label">
+          <svg class="section-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="1" y="3" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.4"/>
+            <circle cx="5" cy="8.5" r="2" stroke="currentColor" stroke-width="1.4"/>
+            <line x1="9" y1="7.5" x2="14" y2="7.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <line x1="9" y1="10.5" x2="13" y2="10.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          <span>Identidad</span>
+        </div>
 
         <div class="field">
           <label class="field-label" for="name">Nombre del negocio</label>
@@ -47,13 +90,36 @@
           <span class="field-hint">Podés conectarlo después desde el panel de Meta.</span>
           <input id="whatsapp_number" type="text" placeholder="+54911XXXXXXXX" />
         </div>
+        <div class="field">
+          <label class="field-label">
+            Documento adjunto
+            <span class="tag-optional">Opcional</span>
+          </label>
+          <span class="field-hint">Catálogo, lista de precios o info clave. Cuando el cliente lo pida, el asistente lo enviará automáticamente.</span>
+          <div class="doc-upload-area" id="doc-upload-area">
+            <div id="doc-current" style="display:none" class="doc-current">
+              <span class="doc-current-name" id="doc-name"></span>
+              <button class="doc-delete-btn" id="doc-delete-btn" title="Eliminar documento">✕</button>
+            </div>
+            <label class="doc-upload-label" id="doc-upload-label">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1v10M4 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+              Subir PDF
+              <input type="file" id="doc-file-input" accept=".pdf,application/pdf" style="display:none">
+            </label>
+          </div>
+        </div>
       </section>
 
       <hr class="divider" />
 
       <!-- Voz y estilo -->
       <section class="section">
-        <div class="section-label"><span>Voz y estilo</span></div>
+        <div class="section-label">
+          <svg class="section-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 3C2 2 3 1 4 1H12C13 1 14 2 14 3V9C14 10 13 11 12 11H7L4 14V11C3 11 2 10 2 9V3Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+          </svg>
+          <span>Voz y estilo</span>
+        </div>
 
         <div class="field">
           <label class="field-label" for="sales_examples">Ejemplos de venta</label>
@@ -82,7 +148,17 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
 
       <!-- Comportamiento -->
       <section class="section">
-        <div class="section-label"><span>Comportamiento</span></div>
+        <div class="section-label">
+          <svg class="section-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <line x1="2" y1="4" x2="14" y2="4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <line x1="2" y1="8" x2="14" y2="8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <line x1="2" y1="12" x2="14" y2="12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <circle cx="5" cy="4" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+            <circle cx="10" cy="8" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+            <circle cx="6" cy="12" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+          </svg>
+          <span>Comportamiento</span>
+        </div>
 
         <div class="field">
           <label class="field-label" for="objeciones_precio">Manejo de objeciones de precio</label>
@@ -143,13 +219,27 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           </div>
         </div>
 
+        <div class="field">
+          <label class="field-label" for="pause_keywords">Palabras clave de pausa</label>
+          <span class="field-hint">Si el cliente escribe alguna de estas palabras, el asistente se detiene y te avisa por email. Separalas con comas. Ej: <code>hablar con una persona, urgente, cancelar</code></span>
+          <input id="pause_keywords" type="text" placeholder="Ej: hablar con una persona, urgente, cancelar" />
+        </div>
+
       </section>
 
       <hr class="divider" />
 
       <!-- Voz -->
       <section class="section" id="voice-section">
-        <div class="section-label"><span>Voz</span></div>
+        <div class="section-label">
+          <svg class="section-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="5" y="1" width="6" height="8" rx="3" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M3 8C3 11.5 13 11.5 13 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <line x1="8" y1="11.5" x2="8" y2="14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <line x1="5.5" y1="14" x2="10.5" y2="14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          <span>Voz</span>
+        </div>
 
         <p class="voice-section-desc">Clonamos tu voz para que las respuestas por audio suenen como vos, no como un asistente genérico. Es opcional — si preferís, podés dejar todo en texto.</p>
 
@@ -227,6 +317,41 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         </div>
       </section>
 
+      <!-- Probador de asistente -->
+      <div class="preview-chat">
+        <p class="preview-chat-terminal">&gt; asistente.test</p>
+        <div class="preview-chat-header">
+          <svg class="section-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 3C2 2 3 1 4 1H12C13 1 14 2 14 3V9C14 10 13 11 12 11H7L4 14V11C3 11 2 10 2 9V3Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+          </svg>
+          <h2 class="preview-chat-title">Probador de asistente</h2>
+        </div>
+        <p class="preview-chat-desc">Escribí como si fueras un cliente. El asistente responde con tu configuración actual — este historial no se guarda.</p>
+        <div class="preview-chat-box">
+          <div class="preview-chat-messages" id="preview-messages">
+            <div class="preview-chat-empty" id="preview-empty">
+              <p>Escribí un mensaje para empezar la prueba.</p>
+            </div>
+          </div>
+          <div class="preview-chat-footer">
+            <textarea
+              class="preview-chat-input"
+              id="preview-input"
+              placeholder="Ej: Hola, ¿cuánto sale una consulta?"
+              rows="1"
+            ></textarea>
+            <button class="preview-chat-send" id="preview-send" title="Enviar">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M2 14L14 8 2 2v4.5l8 1.5-8 1.5V14Z" fill="currentColor"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="preview-chat-reset">
+          <button class="btn-preview-reset" id="preview-reset">↺ Limpiar conversación</button>
+        </div>
+      </div>
+
       <div class="actions">
         <span class="save-status" id="save-status"></span>
         <button type="submit" class="btn-save" id="btn-save">Guardar cambios</button>
@@ -235,6 +360,41 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
     </form>
 
   </main>
+  </div><!-- /app-layout -->
+
+  <nav class="mobile-nav" aria-label="Navegación principal">
+    <a href="/inicio.html" class="mobile-nav-item">
+      <svg class="mobile-nav-icon" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M2 8L8 2L14 8V14H10V10H6V14H2V8Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+      </svg>
+      Inicio
+    </a>
+    <a href="/dashboard.html" class="mobile-nav-item active">
+      <svg class="mobile-nav-icon" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <line x1="2" y1="4" x2="14" y2="4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        <line x1="2" y1="8" x2="14" y2="8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        <line x1="2" y1="12" x2="14" y2="12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        <circle cx="5" cy="4" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+        <circle cx="10" cy="8" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+        <circle cx="6" cy="12" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+      </svg>
+      Config
+    </a>
+    <a href="/conversations.html" class="mobile-nav-item">
+      <svg class="mobile-nav-icon" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M2 3C2 2 3 1 4 1H12C13 1 14 2 14 3V9C14 10 13 11 12 11H7L4 14V11C3 11 2 10 2 9V3Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+      </svg>
+      Convs
+    </a>
+    <button class="mobile-nav-item" id="btn-logout-mobile">
+      <svg class="mobile-nav-icon" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M6 2H3C2.4 2 2 2.4 2 3V13C2 13.6 2.4 14 3 14H6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        <path d="M10 5L14 8L10 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="14" y1="8" x2="6" y2="8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+      Salir
+    </button>
+  </nav>
 
   <!-- Diálogo: ¿qué hacemos con la voz anterior? -->
   <div id="voice-recreate-dialog" class="voice-dialog-overlay" style="display:none">
@@ -258,10 +418,12 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       loadBusiness();
     })();
 
-    document.getElementById('btn-logout').addEventListener('click', async () => {
+    async function doLogout() {
       await fetch('/auth/logout', { method: 'POST' });
       window.location.href = '/login.html';
-    });
+    }
+    document.getElementById('btn-logout').addEventListener('click', doLogout);
+    document.getElementById('btn-logout-mobile').addEventListener('click', doLogout);
 
     // ── Radio groups ──
     function initRadioGroup(groupId) {
@@ -310,6 +472,8 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
     async function loadBusiness() {
       const res = await fetch('/api/business');
       const b = await res.json();
+      document.getElementById('form-skeleton').style.display = 'none';
+      document.getElementById('form').style.display = '';
 
       // Trial banner — runs even if no business saved yet
       const banner = document.getElementById('trial-banner');
@@ -350,8 +514,18 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       document.getElementById('sin_respuesta').value = s.sin_respuesta || '';
       setRadio('prioridad', s.prioridad);
       setRadio('largo_mensajes', s.largo_mensajes);
+      document.getElementById('pause_keywords').value = b.pause_keywords || '';
 
       renderStyleProfile(b.style_profile);
+
+      if (b.document_name) {
+        document.getElementById('doc-name').textContent = b.document_name;
+        document.getElementById('doc-current').style.display = 'flex';
+        document.getElementById('doc-upload-label').style.display = 'none';
+      } else {
+        document.getElementById('doc-current').style.display = 'none';
+        document.getElementById('doc-upload-label').style.display = 'inline-flex';
+      }
 
       // Plan badge
       const PLAN_LABELS = { arranque: 'Arranque', crecimiento: 'Crecimiento', a_medida: 'A medida' };
@@ -393,6 +567,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       btn.disabled = true;
       status.className = 'save-status saving';
       status.textContent = 'Guardando…';
+      toast('Guardando…', 'info');
 
       const rawExamples = document.getElementById('sales_examples').value.trim();
       const sales_examples = rawExamples
@@ -412,6 +587,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           sin_respuesta: document.getElementById('sin_respuesta').value,
           largo_mensajes,
         },
+        pause_keywords: document.getElementById('pause_keywords').value.trim() || null,
       };
 
       const res = await fetch('/api/business', {
@@ -423,11 +599,9 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       btn.disabled = false;
 
       if (res.ok) {
-        const saved = await res.json();
-        status.className = 'save-status ok';
-        status.textContent = '✓ Guardado';
-        setTimeout(() => { status.className = 'save-status'; }, 3000);
-        // Re-fetch to get style_profile once analysis completes (fires async on server)
+        await res.json();
+        status.className = 'save-status';
+        toast('Cambios guardados', 'ok');
         setTimeout(async () => {
           const fresh = await fetch('/api/business');
           const b = await fresh.json();
@@ -437,6 +611,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         const data = await res.json();
         status.className = 'save-status error';
         status.textContent = data.error || 'Error al guardar';
+        toast(data.error || 'Error al guardar', 'err');
       }
     });
 
@@ -649,6 +824,143 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         btn.disabled = false;
       }
     }
+
+    // ── Preview chat tester ──
+
+    const previewHistory = [];
+
+    function previewAddBubble(role, text) {
+      const empty = document.getElementById('preview-empty');
+      if (empty) empty.remove();
+
+      const messages = document.getElementById('preview-messages');
+      const row = document.createElement('div');
+      row.className = `preview-bubble-row preview-bubble-row--${role === 'user' ? 'user' : 'ai'}`;
+      const bubble = document.createElement('div');
+      bubble.className = `preview-bubble preview-bubble--${role === 'user' ? 'user' : 'ai'}`;
+      bubble.textContent = text;
+      row.appendChild(bubble);
+      messages.appendChild(row);
+      messages.scrollTop = messages.scrollHeight;
+      return row;
+    }
+
+    function previewAddThinking() {
+      const empty = document.getElementById('preview-empty');
+      if (empty) empty.remove();
+
+      const messages = document.getElementById('preview-messages');
+      const row = document.createElement('div');
+      row.className = 'preview-bubble-row preview-bubble-row--ai';
+      row.innerHTML = `<div class="preview-bubble preview-bubble--thinking">
+        <span class="thinking-dot"></span>
+        <span class="thinking-dot"></span>
+        <span class="thinking-dot"></span>
+      </div>`;
+      messages.appendChild(row);
+      messages.scrollTop = messages.scrollHeight;
+      return row;
+    }
+
+    async function previewSend() {
+      const input = document.getElementById('preview-input');
+      const sendBtn = document.getElementById('preview-send');
+      const message = input.value.trim();
+      if (!message || sendBtn.disabled) return;
+
+      input.value = '';
+      input.style.height = '';
+      sendBtn.disabled = true;
+
+      previewAddBubble('user', message);
+      const thinkingRow = previewAddThinking();
+
+      try {
+        const res = await fetch('/api/business/preview-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, history: previewHistory }),
+        });
+        const data = await res.json();
+        thinkingRow.remove();
+
+        if (res.ok) {
+          previewHistory.push({ role: 'user', content: message });
+          previewHistory.push({ role: 'assistant', content: data.reply });
+          previewAddBubble('assistant', data.reply);
+          if (data.sent_doc) {
+            previewAddBubble('assistant', '📎 [El asistente enviaría tu documento adjunto aquí]');
+          }
+        } else {
+          previewAddBubble('assistant', `⚠ ${data.error || 'Error al generar respuesta.'}`);
+        }
+      } catch {
+        thinkingRow.remove();
+        previewAddBubble('assistant', '⚠ Error de conexión.');
+      } finally {
+        sendBtn.disabled = false;
+        input.focus();
+      }
+    }
+
+    document.getElementById('preview-send').addEventListener('click', previewSend);
+
+    document.getElementById('preview-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        previewSend();
+      }
+    });
+
+    document.getElementById('preview-input').addEventListener('input', function () {
+      this.style.height = '';
+      this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+
+    document.getElementById('preview-reset').addEventListener('click', () => {
+      previewHistory.length = 0;
+      const messages = document.getElementById('preview-messages');
+      messages.innerHTML = `<div class="preview-chat-empty" id="preview-empty"><p>Escribí un mensaje para empezar la prueba.</p></div>`;
+    });
+
+    // ── Document upload ──
+    document.getElementById('doc-file-input').addEventListener('change', async function () {
+      const file = this.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('document', file);
+      try {
+        const res = await fetch('/api/business/document', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (res.ok) {
+          document.getElementById('doc-name').textContent = data.document_name;
+          document.getElementById('doc-current').style.display = 'flex';
+          document.getElementById('doc-upload-label').style.display = 'none';
+          toast('Documento guardado', 'ok');
+        } else {
+          toast(data.error || 'Error al subir documento', 'err');
+        }
+      } catch {
+        toast('Error de conexión al subir documento', 'err');
+      }
+      this.value = '';
+    });
+
+    document.getElementById('doc-delete-btn').addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/business/document', { method: 'DELETE' });
+        if (res.ok) {
+          document.getElementById('doc-current').style.display = 'none';
+          document.getElementById('doc-upload-label').style.display = 'inline-flex';
+          toast('Documento eliminado', 'ok');
+        } else {
+          const d = await res.json().catch(() => ({}));
+          toast(d.error || 'Error al eliminar', 'err');
+        }
+      } catch {
+        toast('Error de conexión', 'err');
+      }
+    });
 
     // ── Test cloned voice ──
     document.getElementById('btn-voice-preview').addEventListener('click', async () => {

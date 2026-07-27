@@ -84,6 +84,30 @@ if (!businessCols.includes('consent_text'))     db.exec('ALTER TABLE businesses 
 if (!businessCols.includes('consent_by'))       db.exec('ALTER TABLE businesses ADD COLUMN consent_by TEXT');
 if (!businessCols.includes('plan'))             db.exec("ALTER TABLE businesses ADD COLUMN plan TEXT NOT NULL DEFAULT 'arranque'");
 if (!businessCols.includes('trial_ends_at'))    db.exec('ALTER TABLE businesses ADD COLUMN trial_ends_at TEXT');
+if (!businessCols.includes('pause_keywords'))   db.exec('ALTER TABLE businesses ADD COLUMN pause_keywords TEXT');
+
+const convCols = db.prepare("PRAGMA table_info(conversations)").all().map(c => c.name);
+if (!convCols.includes('needs_attention'))      db.exec('ALTER TABLE conversations ADD COLUMN needs_attention INTEGER NOT NULL DEFAULT 0');
+if (!convCols.includes('label'))                db.exec('ALTER TABLE conversations ADD COLUMN label TEXT');
+
+const bizCols = db.prepare("PRAGMA table_info(businesses)").all().map(c => c.name);
+if (!bizCols.includes('document_path'))         db.exec('ALTER TABLE businesses ADD COLUMN document_path TEXT');
+if (!bizCols.includes('document_name'))         db.exec('ALTER TABLE businesses ADD COLUMN document_name TEXT');
+if (!bizCols.includes('plan_expires_at'))       db.exec('ALTER TABLE businesses ADD COLUMN plan_expires_at TEXT');
+if (!bizCols.includes('plan_paid_at'))          db.exec('ALTER TABLE businesses ADD COLUMN plan_paid_at TEXT');
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS pending_payments (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    mp_payment_id   TEXT NOT NULL UNIQUE,
+    payer_email     TEXT NOT NULL,
+    amount          REAL,
+    currency        TEXT,
+    paid_at         TEXT,
+    raw_json        TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
 
 // --- businesses ---
 
@@ -117,19 +141,25 @@ function getBusinessById(id) {
   return deserializeBusiness(row);
 }
 
-function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = null, survey_answers = null, response_mode = 'texto' }) {
+function markConversationPaused(conversationId) {
+  db.prepare('UPDATE conversations SET needs_attention = 1 WHERE id = ?').run(conversationId);
+}
+
+function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = null, survey_answers = null, response_mode = 'texto', pause_keywords = null }) {
   const serialized = {
     name,
     whatsapp_number: whatsapp_number || null,
     sales_examples: sales_examples != null ? JSON.stringify(sales_examples) : null,
     survey_answers: survey_answers != null ? JSON.stringify(survey_answers) : null,
     response_mode,
+    pause_keywords: pause_keywords || null,
   };
 
   if (id) {
     db.prepare(`
       UPDATE businesses SET name=@name, whatsapp_number=@whatsapp_number,
-        sales_examples=@sales_examples, survey_answers=@survey_answers, response_mode=@response_mode
+        sales_examples=@sales_examples, survey_answers=@survey_answers,
+        response_mode=@response_mode, pause_keywords=@pause_keywords
       WHERE id=@id
     `).run({ ...serialized, id });
     return getBusinessById(id);
@@ -176,6 +206,10 @@ function setUserBusiness(userId, businessId) {
   db.prepare('UPDATE users SET business_id = ? WHERE id = ?').run(businessId, userId);
 }
 
+function getUserByBusinessId(businessId) {
+  return db.prepare('SELECT * FROM users WHERE business_id = ?').get(businessId) || null;
+}
+
 // --- conversations ---
 
 const stmtGetConversationsByBusiness = db.prepare(`
@@ -206,6 +240,23 @@ function getOrCreateConversation(business_id, customer_id) {
   return { id: result.lastInsertRowid, business_id, customer_id };
 }
 
+function getConversationCountByBusinessId(businessId) {
+  return db.prepare('SELECT COUNT(*) as count FROM conversations WHERE business_id = ?').get(businessId).count;
+}
+
+const stmtLastCustomerMsg = db.prepare(`
+  SELECT c.customer_id, m.content, m.created_at as msg_at
+  FROM messages m
+  JOIN conversations c ON c.id = m.conversation_id
+  WHERE c.business_id = ? AND m.role = 'user'
+  ORDER BY m.created_at DESC
+  LIMIT 1
+`);
+
+function getLastCustomerMessage(businessId) {
+  return stmtLastCustomerMsg.get(businessId) || null;
+}
+
 // --- messages ---
 
 const stmtAddMessage = db.prepare(`
@@ -223,6 +274,43 @@ const stmtGetHistory = db.prepare(`
 
 function getConversationHistory(conversation_id, limit = 50) {
   return stmtGetHistory.all(conversation_id, limit);
+}
+
+function setConversationLabel(conversationId, label) {
+  db.prepare('UPDATE conversations SET label = ? WHERE id = ?').run(label || null, conversationId);
+}
+
+function setBusinessDocument(businessId, documentPath, documentName) {
+  db.prepare('UPDATE businesses SET document_path = ?, document_name = ? WHERE id = ?')
+    .run(documentPath, documentName, businessId);
+}
+
+function clearBusinessDocument(businessId) {
+  db.prepare('UPDATE businesses SET document_path = NULL, document_name = NULL WHERE id = ?')
+    .run(businessId);
+}
+
+function getDailyConversationStats(businessId) {
+  const rows = db.prepare(`
+    SELECT date(created_at) as day, COUNT(*) as count
+    FROM conversations
+    WHERE business_id = ?
+      AND created_at >= date('now', '-6 days')
+    GROUP BY date(created_at)
+    ORDER BY day ASC
+  `).all(businessId);
+
+  const map = {};
+  rows.forEach(r => { map[r.day] = r.count; });
+
+  const result = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - i);
+    const day = d.toISOString().slice(0, 10);
+    result.push({ day, count: map[day] || 0 });
+  }
+  return result;
 }
 
 // --- users ---
@@ -246,20 +334,49 @@ function getUserById(id) {
   return stmtGetUserById.get(id) || null;
 }
 
+function upgradePlan(businessId, plan, paidAt, expiresAt) {
+  db.prepare(`
+    UPDATE businesses SET plan = ?, plan_paid_at = ?, plan_expires_at = ? WHERE id = ?
+  `).run(plan, paidAt, expiresAt, businessId);
+}
+
+function savePendingPayment({ mpPaymentId, payerEmail, amount, currency, paidAt, rawJson }) {
+  db.prepare(`
+    INSERT OR IGNORE INTO pending_payments
+      (mp_payment_id, payer_email, amount, currency, paid_at, raw_json)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(mpPaymentId, payerEmail, amount ?? null, currency ?? null, paidAt ?? null, rawJson ?? null);
+}
+
+function getPendingPayments() {
+  return db.prepare('SELECT * FROM pending_payments ORDER BY created_at DESC').all();
+}
+
 module.exports = {
   setStyleProfile,
   saveVoiceConsent,
   createUser,
   getUserByEmail,
   getUserById,
+  getUserByBusinessId,
   upsertBusiness,
   getBusinessById,
   getBusinessByWhatsappNumber,
   getBusinessByUserId,
   setUserBusiness,
   getConversationsByBusinessId,
+  getConversationCountByBusinessId,
+  getLastCustomerMessage,
   getConversationById,
   getOrCreateConversation,
   addMessage,
   getConversationHistory,
+  markConversationPaused,
+  getDailyConversationStats,
+  setConversationLabel,
+  setBusinessDocument,
+  clearBusinessDocument,
+  upgradePlan,
+  savePendingPayment,
+  getPendingPayments,
 };

@@ -9,7 +9,7 @@
 <body>
 
   <header class="land-header">
-    <div class="land-logo">DAXOS</div>
+    <a href="#" class="land-logo"><img src="/logodaxosnaranjanofondo.png" alt="" class="logo-img">DAXOS</a>
   </header>
 
   <main class="hero">
@@ -22,24 +22,69 @@
         <a href="/login.html" class="hero-secondary-link">Ya tengo cuenta</a>
       </div>
     </div>
+    <div class="hero-visual" aria-hidden="true">
+      <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" style="max-width:320px;width:100%;height:auto;">
+        <rect x="120" y="40" width="160" height="320" rx="28" fill="none" stroke="#F5F0E8" stroke-width="3"/>
+        <rect x="135" y="70" width="130" height="230" rx="4" fill="none" stroke="#F5F0E8" stroke-width="2" opacity="0.5"/>
+        <path d="M60 140 Q40 140 40 165 L40 210 Q40 235 60 235 L75 235 L70 260 L105 235 L150 235 Q170 235 170 210 L170 165 Q170 140 150 140 Z" fill="#D9722E"/>
+        <circle cx="80" cy="187" r="6" fill="#0B0B0B"/>
+        <circle cx="105" cy="187" r="6" fill="#0B0B0B"/>
+        <circle cx="130" cy="187" r="6" fill="#0B0B0B"/>
+        <path d="M250 100 L215 175 L245 175 L225 240 L275 155 L245 155 Z" fill="#F5F0E8"/>
+        <circle cx="340" cy="90" r="3" fill="#D9722E" opacity="0.6"/>
+        <circle cx="355" cy="110" r="2" fill="#D9722E" opacity="0.4"/>
+        <circle cx="330" cy="120" r="2.5" fill="#D9722E" opacity="0.5"/>
+      </svg>
+    </div>
   </main>
+
+  <section class="pitch-section">
+    <div class="pitch-text">
+      <h2 class="pitch-title">El empleado que nunca duerme.</h2>
+      <ul class="pitch-list">
+        <li>Responde en segundos.</li>
+        <li>No se enferma.</li>
+        <li>No llega tarde.</li>
+        <li>No deja clientes esperando.</li>
+        <li>Siempre responde con tu tono.</li>
+      </ul>
+      <p class="pitch-closing">Mientras pensás en contratar a alguien para atender WhatsApp, tu próximo cliente ya le está escribiendo a otro.</p>
+      <a href="/register.html" class="btn-hero-primary">Empezá gratis</a>
+      <p class="pitch-fine">14 días de prueba · Sin tarjeta · Cancelás cuando querés.</p>
+    </div>
+  </section>
 
   <section class="how-section">
     <div class="how-inner">
       <p class="how-label">&gt; cómo funciona</p>
+
+      <div class="how-track" aria-hidden="true">
+        <div class="how-track-line"></div>
+        <div class="how-track-dot" id="how-dot"></div>
+      </div>
+
       <div class="how-grid">
 
         <div class="how-step">
+          <svg class="how-icon" width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M6 8 Q6 4 10 4 L30 4 Q34 4 34 8 L34 22 Q34 26 30 26 L16 26 L10 32 L10 26 Q6 26 6 22 Z" stroke="#F5F0E8" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
           <span class="how-number">01</span>
           <p class="how-text">Tu cliente te escribe por WhatsApp — como siempre lo hace.</p>
         </div>
 
         <div class="how-step">
+          <svg class="how-icon" width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M24 4 L14 22 L20 22 L16 36 L26 18 L20 18 Z" stroke="#D9722E" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+          </svg>
           <span class="how-number">02</span>
           <p class="how-text">Daxos contesta en segundos, con tu tono — tan parecido a vos que tus clientes van a sentir que les escribiste personalmente.</p>
         </div>
 
         <div class="how-step">
+          <svg class="how-icon" width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M8 20 L16 28 L32 12" stroke="#F5F0E8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
           <span class="how-number">03</span>
           <p class="how-text">Entrás cuando podés, ves la conversación completa, y cerrás la venta.</p>
         </div>
@@ -106,12 +151,133 @@
     </div>
   </section>
 
+  <section class="faq-section">
+    <div class="faq-inner">
+      <p class="how-label">&gt; preguntas frecuentes</p>
+
+      <details class="faq-item">
+        <summary class="faq-question">¿Necesito saber de tecnología para usar esto?</summary>
+        <p class="faq-answer">No, te registrás, cargás cómo vendés (algunos ejemplos de mensajes) y listo. Nosotros nos encargamos del resto.</p>
+      </details>
+
+      <details class="faq-item">
+        <summary class="faq-question">¿Mis clientes se dan cuenta de que es un asistente automático?</summary>
+        <p class="faq-answer">Por política de WhatsApp, el primer mensaje de cada conversación nueva aclara que es un asistente automático. Después, la conversación sigue con tu tono real.</p>
+      </details>
+
+      <details class="faq-item">
+        <summary class="faq-question">¿Qué pasa si el asistente no sabe responder algo puntual?</summary>
+        <p class="faq-answer">No inventa datos que no tiene — si no sabe algo específico, lo dice y podés entrar vos a la conversación en cualquier momento para resolverlo directamente.</p>
+      </details>
+
+      <details class="faq-item">
+        <summary class="faq-question">¿Qué pasa con la información de mis conversaciones?</summary>
+        <p class="faq-answer">Queda guardada de forma privada en tu cuenta — solo vos podés verla desde tu panel.</p>
+      </details>
+
+      <details class="faq-item">
+        <summary class="faq-question">¿Puedo cancelar cuando quiera?</summary>
+        <p class="faq-answer">Sí, no hay contrato ni permanencia mínima.</p>
+      </details>
+
+    </div>
+  </section>
+
   <section class="closing-section">
     <div class="closing-inner">
       <h2 class="closing-title">El próximo mensaje que te llegue,<br>ya está contestado.</h2>
       <a href="/register.html" class="btn-hero-primary">Empezar</a>
     </div>
   </section>
+
+  <footer class="land-footer">
+    <div class="land-footer-inner">
+      <div class="footer-brand">
+        <span class="land-logo">DAXOS</span>
+        <p class="footer-legal">Daxos es un producto de Aristimuño Arrivillaga Valentín — RUT 220949880016</p>
+        <p class="footer-copy">© 2026 Daxos</p>
+      </div>
+      <nav class="footer-links">
+        <a href="/terms.html" class="footer-link">Términos de servicio</a>
+        <a href="/privacy.html" class="footer-link">Política de privacidad</a>
+        <a href="https://wa.me/59892052508" target="_blank" rel="noopener" class="footer-link">WhatsApp</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+      const STAGGER = 70; // ms between elements in same group
+
+      function markGroup(items) {
+        const els = items.flatMap(item =>
+          typeof item === 'string' ? Array.from(document.querySelectorAll(item)) : [item]
+        );
+        els.forEach((el, i) => {
+          el.style.transitionDelay = i * STAGGER + 'ms';
+          el.classList.add('anim');
+        });
+      }
+
+      markGroup(['.hero-terminal', '.hero-title', '.hero-subtitle', '.hero-actions']);
+      markGroup(['.pitch-title', '.pitch-list', '.pitch-closing', '.pitch-section .btn-hero-primary', '.pitch-fine']);
+      markGroup(['.how-section .how-label', ...Array.from(document.querySelectorAll('.how-step'))]);
+      markGroup(['.pricing-section .how-label', ...Array.from(document.querySelectorAll('.pricing-card'))]);
+      markGroup(['.closing-title', '.closing-section .btn-hero-primary']);
+
+      const observer = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            e.target.classList.add('is-visible');
+            observer.unobserve(e.target);
+          }
+        });
+      }, { threshold: 0.08, rootMargin: '0px 0px -32px 0px' });
+
+      // Double rAF: let first paint happen before observing, avoids FOIC for above-fold elements
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        document.querySelectorAll('.anim').forEach(el => observer.observe(el));
+      }));
+
+      // Parallax — background images lag 12% behind scroll speed
+      const hero       = document.querySelector('.hero');
+      const pitch      = document.querySelector('.pitch-section');
+      const howSection = document.querySelector('.how-section');
+      const howDot     = document.getElementById('how-dot');
+      let ticking = false;
+
+      function parallax() {
+        if (hero) {
+          const r = hero.getBoundingClientRect();
+          if (r.bottom > 0) {
+            hero.style.backgroundPositionY = 'calc(50% + ' + (-r.top * 0.12) + 'px)';
+          }
+        }
+        if (pitch) {
+          const r = pitch.getBoundingClientRect();
+          if (r.top < window.innerHeight && r.bottom > 0) {
+            pitch.style.backgroundPositionY = 'calc(50% + ' + (-r.top * 0.12) + 'px)';
+          }
+        }
+        if (howSection && howDot) {
+          const r = howSection.getBoundingClientRect();
+          const progress = Math.max(0, Math.min(1,
+            (window.innerHeight - r.top) / (window.innerHeight + r.height)
+          ));
+          howDot.style.left = (12 + progress * 76) + '%';
+        }
+        ticking = false;
+      }
+
+      window.addEventListener('scroll', () => {
+        if (!ticking) { requestAnimationFrame(parallax); ticking = true; }
+      }, { passive: true });
+
+      parallax();
+    })();
+  </script>
 
 </body>
 </html>

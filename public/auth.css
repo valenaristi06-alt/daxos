@@ -28,12 +28,21 @@ body {
 }
 
 .logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
   margin-bottom: 48px;
+}
+
+.logo-img {
+  height: 24px;
+  width: auto;
+  display: block;
 }
 
 h1 {
