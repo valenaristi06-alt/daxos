@@ -84,7 +84,8 @@ if (!businessCols.includes('consent_text'))     db.exec('ALTER TABLE businesses 
 if (!businessCols.includes('consent_by'))       db.exec('ALTER TABLE businesses ADD COLUMN consent_by TEXT');
 if (!businessCols.includes('plan'))             db.exec("ALTER TABLE businesses ADD COLUMN plan TEXT NOT NULL DEFAULT 'arranque'");
 if (!businessCols.includes('trial_ends_at'))    db.exec('ALTER TABLE businesses ADD COLUMN trial_ends_at TEXT');
-if (!businessCols.includes('pause_keywords'))   db.exec('ALTER TABLE businesses ADD COLUMN pause_keywords TEXT');
+if (!businessCols.includes('pause_keywords'))    db.exec('ALTER TABLE businesses ADD COLUMN pause_keywords TEXT');
+if (!businessCols.includes('response_delay'))    db.exec('ALTER TABLE businesses ADD COLUMN response_delay INTEGER NOT NULL DEFAULT 5');
 
 const convCols = db.prepare("PRAGMA table_info(conversations)").all().map(c => c.name);
 if (!convCols.includes('needs_attention'))      db.exec('ALTER TABLE conversations ADD COLUMN needs_attention INTEGER NOT NULL DEFAULT 0');
@@ -93,8 +94,9 @@ if (!convCols.includes('label'))                db.exec('ALTER TABLE conversatio
 const bizCols = db.prepare("PRAGMA table_info(businesses)").all().map(c => c.name);
 if (!bizCols.includes('document_path'))         db.exec('ALTER TABLE businesses ADD COLUMN document_path TEXT');
 if (!bizCols.includes('document_name'))         db.exec('ALTER TABLE businesses ADD COLUMN document_name TEXT');
-if (!bizCols.includes('plan_expires_at'))       db.exec('ALTER TABLE businesses ADD COLUMN plan_expires_at TEXT');
-if (!bizCols.includes('plan_paid_at'))          db.exec('ALTER TABLE businesses ADD COLUMN plan_paid_at TEXT');
+if (!bizCols.includes('plan_expires_at'))        db.exec('ALTER TABLE businesses ADD COLUMN plan_expires_at TEXT');
+if (!bizCols.includes('plan_paid_at'))           db.exec('ALTER TABLE businesses ADD COLUMN plan_paid_at TEXT');
+if (!bizCols.includes('subscription_status'))    db.exec("ALTER TABLE businesses ADD COLUMN subscription_status TEXT NOT NULL DEFAULT 'active'");
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS pending_payments (
@@ -145,7 +147,7 @@ function markConversationPaused(conversationId) {
   db.prepare('UPDATE conversations SET needs_attention = 1 WHERE id = ?').run(conversationId);
 }
 
-function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = null, survey_answers = null, response_mode = 'texto', pause_keywords = null }) {
+function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = null, survey_answers = null, response_mode = 'texto', pause_keywords = null, response_delay = 5 }) {
   const serialized = {
     name,
     whatsapp_number: whatsapp_number || null,
@@ -153,13 +155,15 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
     survey_answers: survey_answers != null ? JSON.stringify(survey_answers) : null,
     response_mode,
     pause_keywords: pause_keywords || null,
+    response_delay: Number(response_delay) || 5,
   };
 
   if (id) {
     db.prepare(`
       UPDATE businesses SET name=@name, whatsapp_number=@whatsapp_number,
         sales_examples=@sales_examples, survey_answers=@survey_answers,
-        response_mode=@response_mode, pause_keywords=@pause_keywords
+        response_mode=@response_mode, pause_keywords=@pause_keywords,
+        response_delay=@response_delay
       WHERE id=@id
     `).run({ ...serialized, id });
     return getBusinessById(id);
@@ -167,19 +171,20 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
 
   if (whatsapp_number) {
     const result = db.prepare(`
-      INSERT INTO businesses (name, whatsapp_number, sales_examples, survey_answers, response_mode, trial_ends_at)
-      VALUES (@name, @whatsapp_number, @sales_examples, @survey_answers, @response_mode, datetime('now', '+14 days'))
+      INSERT INTO businesses (name, whatsapp_number, sales_examples, survey_answers, response_mode, response_delay, trial_ends_at)
+      VALUES (@name, @whatsapp_number, @sales_examples, @survey_answers, @response_mode, @response_delay, datetime('now', '+14 days'))
       ON CONFLICT(whatsapp_number) DO UPDATE SET
         name=excluded.name, sales_examples=excluded.sales_examples,
-        survey_answers=excluded.survey_answers, response_mode=excluded.response_mode
+        survey_answers=excluded.survey_answers, response_mode=excluded.response_mode,
+        response_delay=excluded.response_delay
     `).run(serialized);
     const rowId = result.lastInsertRowid || db.prepare('SELECT id FROM businesses WHERE whatsapp_number = ?').get(whatsapp_number).id;
     return getBusinessById(rowId);
   }
 
   const result = db.prepare(`
-    INSERT INTO businesses (name, sales_examples, survey_answers, response_mode, trial_ends_at)
-    VALUES (@name, @sales_examples, @survey_answers, @response_mode, datetime('now', '+14 days'))
+    INSERT INTO businesses (name, sales_examples, survey_answers, response_mode, response_delay, trial_ends_at)
+    VALUES (@name, @sales_examples, @survey_answers, @response_mode, @response_delay, datetime('now', '+14 days'))
   `).run(serialized);
   return getBusinessById(result.lastInsertRowid);
 }
@@ -336,8 +341,12 @@ function getUserById(id) {
 
 function upgradePlan(businessId, plan, paidAt, expiresAt) {
   db.prepare(`
-    UPDATE businesses SET plan = ?, plan_paid_at = ?, plan_expires_at = ? WHERE id = ?
+    UPDATE businesses SET plan = ?, plan_paid_at = ?, plan_expires_at = ?, subscription_status = 'active' WHERE id = ?
   `).run(plan, paidAt, expiresAt, businessId);
+}
+
+function setSubscriptionStatus(businessId, status) {
+  db.prepare('UPDATE businesses SET subscription_status = ? WHERE id = ?').run(status, businessId);
 }
 
 function savePendingPayment({ mpPaymentId, payerEmail, amount, currency, paidAt, rawJson }) {
@@ -377,6 +386,7 @@ module.exports = {
   setBusinessDocument,
   clearBusinessDocument,
   upgradePlan,
+  setSubscriptionStatus,
   savePendingPayment,
   getPendingPayments,
 };

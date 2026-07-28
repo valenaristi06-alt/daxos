@@ -5,18 +5,158 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Política de privacidad — Daxos</title>
   <link rel="stylesheet" href="/landing.css" />
+  <style>
+    .legal-wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 120px 40px 100px;
+    }
+    .legal-updated {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      margin-bottom: 32px;
+    }
+    .legal-terminal {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+      margin-bottom: 14px;
+    }
+    .legal-title {
+      font-family: var(--serif);
+      font-size: clamp(28px, 4vw, 46px);
+      font-weight: 400;
+      line-height: 1.15;
+      margin-bottom: 48px;
+      color: var(--text);
+    }
+    .legal-section {
+      margin-bottom: 44px;
+    }
+    .legal-section h2 {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 14px;
+    }
+    .legal-section p,
+    .legal-section li {
+      font-size: 15px;
+      line-height: 1.78;
+      color: #c8c4be;
+    }
+    .legal-section ul {
+      list-style: none;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .legal-section ul li::before {
+      content: '—';
+      color: var(--muted);
+      margin-right: 10px;
+    }
+    .legal-divider {
+      border: none;
+      border-top: 1px solid #1e1e1e;
+      margin: 0 0 44px;
+    }
+    .legal-back {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted-2);
+      text-decoration: none;
+      letter-spacing: 0.04em;
+      margin-bottom: 48px;
+      transition: color 0.15s;
+    }
+    .legal-back:hover { color: var(--text); }
+    @media (max-width: 600px) {
+      .legal-wrap { padding: 100px 24px 80px; }
+    }
+  </style>
 </head>
 <body>
 
   <header class="land-header">
-    <a href="/" class="land-logo">DAXOS</a>
+    <a href="/" class="land-logo">
+      <img src="/logodaxosnaranjanofondo.png" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:3px;">
+      DAXOS
+    </a>
   </header>
 
-  <main style="max-width:720px;margin:0 auto;padding:140px 40px 80px;">
-    <p class="hero-terminal">&gt; privacidad.md</p>
-    <h1 class="hero-title" style="font-size:clamp(28px,4vw,46px);margin-bottom:32px;">Política de privacidad</h1>
-    <!-- TODO: redactar política de privacidad -->
-    <p style="color:var(--muted-2);font-size:14px;line-height:1.72;">Contenido próximamente.</p>
+  <main class="legal-wrap">
+
+    <a href="/" class="legal-back">← volver al inicio</a>
+
+    <p class="legal-terminal">&gt; privacidad.md</p>
+    <h1 class="legal-title">Política de privacidad</h1>
+    <p class="legal-updated">Última actualización: 27 de julio de 2026</p>
+
+    <hr class="legal-divider">
+
+    <div class="legal-section">
+      <h2>1. Responsable del tratamiento</h2>
+      <p>Aristimuño Arrivillaga Valentín, RUT 220949880016, con domicilio en la República Oriental del Uruguay. Contacto: <a href="mailto:valenaristi06@gmail.com" style="color:var(--accent);text-decoration:none;">valenaristi06@gmail.com</a></p>
+    </div>
+
+    <div class="legal-section">
+      <h2>2. Qué datos recolectamos</h2>
+      <ul>
+        <li><strong style="color:var(--text)">Datos de registro:</strong> dirección de email y contraseña (almacenada encriptada, nunca en texto plano).</li>
+        <li><strong style="color:var(--text)">Configuración del negocio:</strong> nombre, ejemplos de mensajes de venta, respuestas a la encuesta de comportamiento comercial.</li>
+        <li><strong style="color:var(--text)">Historial de conversaciones:</strong> mensajes intercambiados entre el asistente y los clientes finales de tu negocio.</li>
+        <li><strong style="color:var(--text)">Datos de voz:</strong> solo si activás la función de clonación de voz, con tu consentimiento explícito registrado con fecha y texto.</li>
+        <li><strong style="color:var(--text)">Datos de pago:</strong> procesados directamente por Mercado Pago. Daxos únicamente recibe confirmación del estado del pago (aprobado/rechazado) y el email del pagador — nunca almacenamos números de tarjeta ni datos financieros sensibles.</li>
+      </ul>
+    </div>
+
+    <div class="legal-section">
+      <h2>3. Para qué usamos tus datos</h2>
+      <ul>
+        <li>Generar respuestas automáticas con el tono y estilo de tu negocio.</li>
+        <li>Mejorar la calidad del servicio y detectar errores.</li>
+        <li>Comunicarnos con vos sobre tu cuenta, cambios en el servicio o en estos términos.</li>
+        <li>Activar y gestionar tu plan de suscripción.</li>
+      </ul>
+    </div>
+
+    <div class="legal-section">
+      <h2>4. Con quién compartimos tus datos</h2>
+      <p style="margin-bottom:14px;">Daxos no vende tus datos. Los compartimos únicamente con los proveedores técnicos necesarios para el funcionamiento del servicio, cada uno con sus propias políticas de privacidad:</p>
+      <ul>
+        <li><strong style="color:var(--text)">Anthropic</strong> — motor de inteligencia artificial (servidores en EE.UU.).</li>
+        <li><strong style="color:var(--text)">Meta (WhatsApp Cloud API)</strong> — entrega de mensajes a través de WhatsApp.</li>
+        <li><strong style="color:var(--text)">ElevenLabs</strong> — clonación y síntesis de voz (solo si activás esa función).</li>
+        <li><strong style="color:var(--text)">Mercado Pago</strong> — procesamiento de pagos.</li>
+        <li><strong style="color:var(--text)">Resend</strong> — envío de notificaciones por email.</li>
+      </ul>
+      <p style="margin-top:14px;">Algunos de estos proveedores operan con servidores fuera de Uruguay. Al usar Daxos aceptás esa transferencia internacional, necesaria para el funcionamiento del servicio.</p>
+    </div>
+
+    <div class="legal-section">
+      <h2>5. Tus derechos</h2>
+      <p>De acuerdo con la Ley 18.331 de Protección de Datos Personales de Uruguay, tenés derecho a acceder, rectificar y solicitar la eliminación de tus datos en cualquier momento. Para ejercer estos derechos, escribinos a <a href="mailto:valenaristi06@gmail.com" style="color:var(--accent);text-decoration:none;">valenaristi06@gmail.com</a> y respondemos en un plazo de 15 días hábiles.</p>
+    </div>
+
+    <div class="legal-section">
+      <h2>6. Seguridad</h2>
+      <p>Las contraseñas se almacenan con hash bcrypt. Las credenciales de servicios externos se mantienen en variables de entorno protegidas, fuera del código. El acceso a los datos de cada negocio está restringido al usuario titular de esa cuenta.</p>
+    </div>
+
+    <div class="legal-section">
+      <h2>7. Cambios a esta política</h2>
+      <p>Si realizamos cambios relevantes, lo comunicaremos por email al menos 15 días antes de que entren en vigor. El uso continuado del servicio después de esa fecha implica aceptación de los cambios.</p>
+    </div>
+
   </main>
 
 </body>

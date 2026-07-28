@@ -5,18 +5,159 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Términos de servicio — Daxos</title>
   <link rel="stylesheet" href="/landing.css" />
+  <style>
+    .legal-wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 120px 40px 100px;
+    }
+    .legal-updated {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      margin-bottom: 32px;
+    }
+    .legal-terminal {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+      margin-bottom: 14px;
+    }
+    .legal-title {
+      font-family: var(--serif);
+      font-size: clamp(28px, 4vw, 46px);
+      font-weight: 400;
+      line-height: 1.15;
+      margin-bottom: 48px;
+      color: var(--text);
+    }
+    .legal-section {
+      margin-bottom: 44px;
+    }
+    .legal-section h2 {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 14px;
+    }
+    .legal-section p,
+    .legal-section li {
+      font-size: 15px;
+      line-height: 1.78;
+      color: #c8c4be;
+    }
+    .legal-section ul {
+      list-style: none;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .legal-section ul li::before {
+      content: '—';
+      color: var(--muted);
+      margin-right: 10px;
+    }
+    .legal-divider {
+      border: none;
+      border-top: 1px solid #1e1e1e;
+      margin: 0 0 44px;
+    }
+    .legal-back {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted-2);
+      text-decoration: none;
+      letter-spacing: 0.04em;
+      margin-bottom: 48px;
+      transition: color 0.15s;
+    }
+    .legal-back:hover { color: var(--text); }
+    @media (max-width: 600px) {
+      .legal-wrap { padding: 100px 24px 80px; }
+    }
+  </style>
 </head>
 <body>
 
   <header class="land-header">
-    <a href="/" class="land-logo">DAXOS</a>
+    <a href="/" class="land-logo">
+      <img src="/logodaxosnaranjanofondo.png" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:3px;">
+      DAXOS
+    </a>
   </header>
 
-  <main style="max-width:720px;margin:0 auto;padding:140px 40px 80px;">
-    <p class="hero-terminal">&gt; términos.md</p>
-    <h1 class="hero-title" style="font-size:clamp(28px,4vw,46px);margin-bottom:32px;">Términos de servicio</h1>
-    <!-- TODO: redactar términos de servicio -->
-    <p style="color:var(--muted-2);font-size:14px;line-height:1.72;">Contenido próximamente.</p>
+  <main class="legal-wrap">
+
+    <a href="/" class="legal-back">← volver al inicio</a>
+
+    <p class="legal-terminal">&gt; términos.md</p>
+    <h1 class="legal-title">Términos de servicio</h1>
+    <p class="legal-updated">Última actualización: 27 de julio de 2026</p>
+
+    <hr class="legal-divider">
+
+    <div class="legal-section">
+      <h2>1. Qué es Daxos</h2>
+      <p>Daxos es un asistente automatizado de WhatsApp con inteligencia artificial que responde a los clientes de tu negocio según la configuración que vos mismo cargás: ejemplos de mensajes, tono, información del negocio y reglas de comportamiento. El servicio es prestado por Aristimuño Arrivillaga Valentín (RUT 220949880016, Uruguay).</p>
+    </div>
+
+    <div class="legal-section">
+      <h2>2. Planes y pagos</h2>
+      <ul>
+        <li>Todos los planes nuevos incluyen un período de prueba gratuito de 14 días, sin requerir datos de tarjeta.</li>
+        <li>Una vez vencida la prueba, el servicio se suspende automáticamente hasta que activés un plan pago.</li>
+        <li>Los pagos se procesan a través de Mercado Pago. Daxos no almacena datos financieros.</li>
+        <li>No hay permanencia mínima. Podés cancelar en cualquier momento desde tu panel o escribiéndonos.</li>
+        <li>Los precios pueden actualizarse con previo aviso de al menos 30 días por email.</li>
+      </ul>
+    </div>
+
+    <div class="legal-section">
+      <h2>3. Responsabilidad del usuario</h2>
+      <ul>
+        <li>El contenido que cargás en Daxos (ejemplos de venta, instrucciones, información del negocio) es de tu exclusiva responsabilidad.</li>
+        <li>Está prohibido usar el servicio para enviar spam, mensajes engañosos, contenido ilegal o suplantar la identidad de otra persona o empresa.</li>
+        <li>El usuario es responsable de cumplir con las políticas de uso de WhatsApp Business de Meta, incluyendo las normas de consentimiento para mensajes automatizados.</li>
+        <li>En caso de incumplimiento, Daxos puede suspender la cuenta sin previo aviso.</li>
+      </ul>
+    </div>
+
+    <div class="legal-section">
+      <h2>4. Limitación de responsabilidad</h2>
+      <p>Daxos genera respuestas automatizadas mediante inteligencia artificial. No garantizamos resultados de venta específicos ni que todas las respuestas sean exactas o apropiadas para cada situación. El asistente puede cometer errores — es tu responsabilidad revisar las conversaciones y intervenir manualmente cuando lo considerés necesario. Daxos no se hace responsable por pérdidas comerciales derivadas del uso del servicio.</p>
+    </div>
+
+    <div class="legal-section">
+      <h2>5. Propiedad de los datos</h2>
+      <p>Tu negocio conserva la propiedad de todos los datos que cargás: ejemplos de venta, configuración, historial de conversaciones. Daxos no usa ese contenido para entrenar modelos de inteligencia artificial de terceros, ni lo comparte con fines comerciales propios. Al eliminar tu cuenta, tus datos se borran de nuestros servidores en un plazo de 30 días.</p>
+    </div>
+
+    <div class="legal-section">
+      <h2>6. Suspensión y cancelación</h2>
+      <ul>
+        <li>Daxos puede suspender o cancelar cuentas que incumplan estos términos, sin derecho a reembolso en caso de incumplimiento grave.</li>
+        <li>El usuario puede cancelar su cuenta en cualquier momento escribiendo a <a href="mailto:valenaristi06@gmail.com" style="color:var(--accent);text-decoration:none;">valenaristi06@gmail.com</a>.</li>
+        <li>Si cancelás antes del vencimiento de un período pago, el servicio seguirá activo hasta el final de ese período.</li>
+      </ul>
+    </div>
+
+    <div class="legal-section">
+      <h2>7. Modificaciones al servicio</h2>
+      <p>Podemos modificar, suspender o discontinuar funcionalidades del servicio con aviso previo. Para cambios mayores, notificaremos por email con al menos 15 días de anticipación.</p>
+    </div>
+
+    <div class="legal-section">
+      <h2>8. Ley aplicable</h2>
+      <p>Estos términos se rigen por las leyes de la República Oriental del Uruguay. Cualquier conflicto que no pueda resolverse de forma amistosa se someterá a los tribunales competentes de Uruguay.</p>
+    </div>
+
   </main>
 
 </body>

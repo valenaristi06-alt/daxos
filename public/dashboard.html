@@ -166,7 +166,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           <textarea id="objeciones_precio" rows="3" placeholder="Ej: Explicamos el valor del servicio y ofrecemos cuotas sin interés si es necesario."></textarea>
         </div>
 
-        <div class="field">
+        <div class="field subsection">
           <label class="field-label">Prioridad al responder</label>
           <div class="radio-group" id="prioridad-group">
             <label class="radio-option" data-value="cerrar_rapido">
@@ -187,7 +187,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           </div>
         </div>
 
-        <div class="field">
+        <div class="field subsection">
           <label class="field-label" for="sin_respuesta">Si el cliente no responde</label>
           <select id="sin_respuesta">
             <option value="">Seleccioná una opción</option>
@@ -198,7 +198,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           </select>
         </div>
 
-        <div class="field">
+        <div class="field subsection">
           <label class="field-label">Largo de mensajes</label>
           <div class="radio-group" id="largo-group">
             <label class="radio-option" data-value="corto">
@@ -219,13 +219,64 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           </div>
         </div>
 
-        <div class="field">
+        <div class="field subsection">
           <label class="field-label" for="pause_keywords">Palabras clave de pausa</label>
           <span class="field-hint">Si el cliente escribe alguna de estas palabras, el asistente se detiene y te avisa por email. Separalas con comas. Ej: <code>hablar con una persona, urgente, cancelar</code></span>
           <input id="pause_keywords" type="text" placeholder="Ej: hablar con una persona, urgente, cancelar" />
         </div>
 
+        <div class="field subsection">
+          <label class="field-label" for="response_delay">Velocidad de respuesta</label>
+          <span class="field-hint">Cuánto espera el asistente antes de responder. 0 = instantáneo. 20 = respuesta más pausada.</span>
+          <div class="delay-slider-wrap">
+            <span class="delay-label">Instantáneo</span>
+            <input type="range" id="response_delay" min="0" max="20" step="1" value="5" class="delay-slider" />
+            <span class="delay-label">Como una persona real</span>
+          </div>
+          <p class="delay-value-display">Espera: <strong id="delay-display">5</strong> segundos</p>
+        </div>
+
       </section>
+
+      <!-- Probador de asistente -->
+      <div class="preview-chat">
+        <p class="preview-chat-terminal">&gt; asistente.test</p>
+        <div class="preview-chat-header">
+          <svg class="section-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 3C2 2 3 1 4 1H12C13 1 14 2 14 3V9C14 10 13 11 12 11H7L4 14V11C3 11 2 10 2 9V3Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+          </svg>
+          <h2 class="preview-chat-title">Probador de asistente</h2>
+        </div>
+        <p class="preview-chat-desc">Escribí como si fueras un cliente. El asistente responde con tu configuración actual — este historial no se guarda.</p>
+        <div class="preview-chat-box">
+          <div class="preview-chat-messages" id="preview-messages">
+            <div class="preview-chat-empty" id="preview-empty">
+              <p>Escribí un mensaje para empezar la prueba.</p>
+            </div>
+          </div>
+          <div class="preview-chat-footer">
+            <textarea
+              class="preview-chat-input"
+              id="preview-input"
+              placeholder="Ej: Hola, ¿cuánto sale una consulta?"
+              rows="1"
+            ></textarea>
+            <button class="preview-chat-send" id="preview-send" title="Enviar">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M2 14L14 8 2 2v4.5l8 1.5-8 1.5V14Z" fill="currentColor"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="preview-chat-reset">
+          <button class="btn-preview-reset" id="preview-reset">↺ Limpiar conversación</button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <span class="save-status" id="save-status"></span>
+        <button type="submit" class="btn-save" id="btn-save">Guardar cambios</button>
+      </div>
 
       <hr class="divider" />
 
@@ -316,46 +367,6 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           <span class="voice-preview-status" id="voice-preview-status"></span>
         </div>
       </section>
-
-      <!-- Probador de asistente -->
-      <div class="preview-chat">
-        <p class="preview-chat-terminal">&gt; asistente.test</p>
-        <div class="preview-chat-header">
-          <svg class="section-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M2 3C2 2 3 1 4 1H12C13 1 14 2 14 3V9C14 10 13 11 12 11H7L4 14V11C3 11 2 10 2 9V3Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
-          </svg>
-          <h2 class="preview-chat-title">Probador de asistente</h2>
-        </div>
-        <p class="preview-chat-desc">Escribí como si fueras un cliente. El asistente responde con tu configuración actual — este historial no se guarda.</p>
-        <div class="preview-chat-box">
-          <div class="preview-chat-messages" id="preview-messages">
-            <div class="preview-chat-empty" id="preview-empty">
-              <p>Escribí un mensaje para empezar la prueba.</p>
-            </div>
-          </div>
-          <div class="preview-chat-footer">
-            <textarea
-              class="preview-chat-input"
-              id="preview-input"
-              placeholder="Ej: Hola, ¿cuánto sale una consulta?"
-              rows="1"
-            ></textarea>
-            <button class="preview-chat-send" id="preview-send" title="Enviar">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M2 14L14 8 2 2v4.5l8 1.5-8 1.5V14Z" fill="currentColor"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-        <div class="preview-chat-reset">
-          <button class="btn-preview-reset" id="preview-reset">↺ Limpiar conversación</button>
-        </div>
-      </div>
-
-      <div class="actions">
-        <span class="save-status" id="save-status"></span>
-        <button type="submit" class="btn-save" id="btn-save">Guardar cambios</button>
-      </div>
 
     </form>
 
@@ -516,6 +527,10 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       setRadio('largo_mensajes', s.largo_mensajes);
       document.getElementById('pause_keywords').value = b.pause_keywords || '';
 
+      const delayVal = b.response_delay ?? 5;
+      document.getElementById('response_delay').value = delayVal;
+      document.getElementById('delay-display').textContent = delayVal;
+
       renderStyleProfile(b.style_profile);
 
       if (b.document_name) {
@@ -588,6 +603,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           largo_mensajes,
         },
         pause_keywords: document.getElementById('pause_keywords').value.trim() || null,
+        response_delay: parseInt(document.getElementById('response_delay').value, 10),
       };
 
       const res = await fetch('/api/business', {
@@ -921,6 +937,11 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       previewHistory.length = 0;
       const messages = document.getElementById('preview-messages');
       messages.innerHTML = `<div class="preview-chat-empty" id="preview-empty"><p>Escribí un mensaje para empezar la prueba.</p></div>`;
+    });
+
+    // ── Delay slider live display ──
+    document.getElementById('response_delay').addEventListener('input', function () {
+      document.getElementById('delay-display').textContent = this.value;
     });
 
     // ── Document upload ──

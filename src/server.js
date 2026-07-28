@@ -9,7 +9,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setStyleProfile, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, getDailyConversationStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, savePendingPayment, getPendingPayments } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setStyleProfile, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, getDailyConversationStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments } = require('./db');
 const { generateReply, analyzeStyle } = require('./claude');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
 const { sendPauseEmail, sendUnmatchedPaymentAlert } = require('./email');
@@ -34,7 +34,7 @@ const documentUpload = multer({
 });
 
 const fs = require('fs');
-const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument } = require('./whatsapp');
+const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, markAsRead, sendTypingIndicator } = require('./whatsapp');
 const { generateAudioBuffer } = require('./elevenlabs');
 const { convertToOgg } = require('./audio');
 
@@ -125,7 +125,7 @@ app.get('/api/business', requireAuth, (req, res) => {
 });
 
 app.put('/api/business', requireAuth, async (req, res) => {
-  const { name, whatsapp_number, sales_examples, survey_answers, response_mode, pause_keywords } = req.body;
+  const { name, whatsapp_number, sales_examples, survey_answers, response_mode, pause_keywords, response_delay } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'El nombre del negocio es requerido' });
 
   try {
@@ -138,6 +138,7 @@ app.put('/api/business', requireAuth, async (req, res) => {
       survey_answers,
       response_mode,
       pause_keywords: pause_keywords ? pause_keywords.trim() : null,
+      response_delay: response_delay != null ? Math.min(20, Math.max(0, parseInt(response_delay, 10) || 5)) : 5,
     });
     if (!user.business_id) setUserBusiness(user.id, business.id);
 
@@ -473,7 +474,17 @@ app.post('/webhook', async (req, res) => {
             }
           }
 
-          const rawReply = await generateReply(business, history, text, conversation.label || null);
+          // Mark as read + show typing indicator immediately
+          markAsRead(msg.id).catch(() => {});
+          sendTypingIndicator(customerPhone).catch(() => {});
+
+          // Generate reply and enforce minimum delay in parallel
+          const delayMs = (business.response_delay ?? 5) * 1000;
+          const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+          const [rawReply] = await Promise.all([
+            generateReply(business, history, text, conversation.label || null),
+            sleep(delayMs),
+          ]);
 
           let sendDoc = false;
           let reply = rawReply;
@@ -553,13 +564,42 @@ app.post('/webhook/mercadopago', async (req, res) => {
 
   try {
     const { type, data } = req.body || {};
-    if (type !== 'payment' || !data?.id) return;
+    if (!type || !data?.id) return;
 
     const mpToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
     if (!mpToken) {
       console.error('[mp-webhook] MERCADOPAGO_ACCESS_TOKEN not set');
       return;
     }
+
+    // ── Subscription cancelled / paused ──
+    if (type === 'subscription_preapproval') {
+      const subRes = await fetch(`https://api.mercadopago.com/preapproval/${data.id}`, {
+        headers: { 'Authorization': `Bearer ${mpToken}` },
+      });
+      if (!subRes.ok) {
+        console.error(`[mp-webhook] MP preapproval API ${subRes.status} for ${data.id}`);
+        return;
+      }
+      const sub = await subRes.json();
+      const subStatus = sub.status; // 'authorized' | 'paused' | 'cancelled' | 'pending'
+
+      if (subStatus === 'cancelled' || subStatus === 'paused') {
+        const payerEmail = sub.payer_email?.toLowerCase().trim();
+        if (!payerEmail) return;
+        const user = getUserByEmail(payerEmail);
+        if (user?.business_id) {
+          setSubscriptionStatus(user.business_id, subStatus);
+          console.log(`[mp-webhook] Subscription ${data.id} ${subStatus} — business ${user.business_id} marked, access until plan_expires_at`);
+        } else {
+          console.warn(`[mp-webhook] Subscription ${subStatus} but no business for ${payerEmail}`);
+        }
+      }
+      return;
+    }
+
+    // ── Payment (alta + renovaciones mensuales) ──
+    if (type !== 'payment') return;
 
     // Verify payment directly with MP API — never trust notification body alone
     const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${data.id}`, {

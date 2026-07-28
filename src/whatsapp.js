@@ -113,4 +113,38 @@ async function sendWhatsAppDocument(to, mediaId, filename) {
   return data;
 }
 
-module.exports = { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument };
+async function markAsRead(messageId) {
+  if (!PHONE_NUMBER_ID || !ACCESS_TOKEN) return;
+  await fetch(API_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${ACCESS_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      status: 'read',
+      message_id: messageId,
+    }),
+  }).catch(() => {});
+}
+
+async function sendTypingIndicator(to) {
+  if (!PHONE_NUMBER_ID || !ACCESS_TOKEN) return;
+  await fetch(API_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${ACCESS_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to,
+      type: 'action',
+      action: { action_type: 'SHOW_TYPING' },
+    }),
+  }).catch(() => {});
+}
+
+module.exports = { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, markAsRead, sendTypingIndicator };

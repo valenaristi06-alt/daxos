@@ -57,9 +57,9 @@
 
     <div class="inicio-grid" id="inicio-grid">
 
-      <!-- WhatsApp status -->
+      <!-- Integraciones -->
       <div class="icard" id="card-whatsapp">
-        <p class="icard-label">WhatsApp</p>
+        <p class="icard-label">Integraciones</p>
         <div class="icard-skeleton">
           <div class="skeleton skeleton-line skeleton-line--mid"></div>
         </div>
@@ -167,7 +167,7 @@
         if (endsAt < now) {
           banner.className = 'trial-banner trial-banner--expired';
           banner.innerHTML = `<span class="trial-msg">Tu prueba gratuita terminó.</span>
-            <a href="https://wa.me/59892052508?text=Hola%2C%20quiero%20activar%20el%20plan%20Arranque" class="trial-action" target="_blank" rel="noopener">Activá tu plan →</a>`;
+            <a href="https://mpago.la/1PDxazc" class="trial-action" target="_blank" rel="noopener">Activá tu plan →</a>`;
           banner.style.display = 'flex';
         } else {
           const daysLeft = Math.ceil((endsAt - now) / (1000 * 60 * 60 * 24));
@@ -177,17 +177,22 @@
         }
       }
 
-      // WhatsApp status card (replace skeleton)
+      // Integraciones card (replace skeleton)
       const waCard = document.getElementById('card-whatsapp');
-      const waStatus = document.createElement('p');
+      const waRow = document.createElement('p');
       if (b?.whatsapp_number) {
-        waStatus.className = 'icard-status-ok';
-        waStatus.textContent = 'Conectado ✓';
+        waRow.className = 'icard-status-ok';
+        waRow.textContent = 'WhatsApp: Conectado ✓';
       } else {
-        waStatus.className = 'icard-status-warn';
-        waStatus.innerHTML = 'Todavía no conectaste tu WhatsApp. <a href="/dashboard.html">Configurarlo →</a>';
+        waRow.className = 'icard-status-warn';
+        waRow.innerHTML = 'WhatsApp: <a href="/dashboard.html">No conectado</a>';
       }
-      waCard.querySelector('.icard-skeleton').replaceWith(waStatus);
+      const igRow = document.createElement('p');
+      igRow.className = 'icard-status-soon';
+      igRow.textContent = 'Instagram: Próximamente';
+      const wrap = document.createElement('div');
+      wrap.append(waRow, igRow);
+      waCard.querySelector('.icard-skeleton').replaceWith(wrap);
 
       // Trial card (prominent days remaining — only for arranque with active trial)
       const trialCard = document.getElementById('card-trial');
