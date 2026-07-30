@@ -10,6 +10,14 @@ function buildSystemPrompt(business, label) {
     `Respondé siempre en el idioma que usa el cliente.`,
   ];
 
+  if (business.business_context) {
+    lines.push(`\nContexto del negocio: ${business.business_context}`);
+  }
+
+  if (business.website_summary) {
+    lines.push(`\nInformación extraída automáticamente del sitio web del negocio (puede estar desactualizada — priorizá lo que el dueño escribió a mano): ${business.website_summary}`);
+  }
+
   if (business.sales_examples && business.sales_examples.length > 0) {
     lines.push(
       '\nTono y estilo — estos son ejemplos de cómo habla el negocio. Imitá ese tono en cada respuesta:',
@@ -51,6 +59,7 @@ function buildSystemPrompt(business, label) {
   }
 
   lines.push('\nSé breve, amable y enfocado en ayudar al cliente a comprar o consultar.');
+  lines.push('\nDERIVACIÓN: Si el cliente pregunta algo que requiere información específica que no está en el contexto del negocio (precios exactos, disponibilidad, datos de contacto, condiciones particulares, etc.) y no podés dar una respuesta útil y confiable, iniciá tu respuesta con [NEEDS_HUMAN] en una línea separada, seguido de un mensaje amable al cliente indicando que vas a derivarlo con una persona. Solo usá [NEEDS_HUMAN] cuando realmente no tenés los datos necesarios — no lo uses por dudas menores o cuando puedas dar una respuesta útil aunque sea parcial.');
   lines.push('\nFORMATO OBLIGATORIO: Nunca uses markdown. Sin asteriscos, sin negritas, sin cursivas, sin guiones de lista, sin numeración, sin títulos con #. Escribí en texto plano, como un mensaje real de WhatsApp.');
 
   return lines.join('\n');
@@ -129,4 +138,16 @@ Reglas:
   return profile;
 }
 
-module.exports = { generateReply, analyzeStyle };
+async function summarizeWebsite(text) {
+  const response = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 256,
+    messages: [{
+      role: 'user',
+      content: `Resumí en 2-3 líneas qué hace o vende este negocio, basándote en el texto extraído de su sitio web. Solo el resumen, sin introducción:\n\n${text.slice(0, 4000)}`,
+    }],
+  });
+  return response.content[0].text.trim();
+}
+
+module.exports = { generateReply, analyzeStyle, summarizeWebsite };

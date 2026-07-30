@@ -1,4 +1,4 @@
-async function sendPauseEmail({ to, businessName, customerPhone, messageText, conversationId }) {
+async function sendPauseEmail({ to, businessName, contactId, messageText, conversationId }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     console.warn('[resend] RESEND_API_KEY not set, skipping email');
@@ -11,13 +11,13 @@ async function sendPauseEmail({ to, businessName, customerPhone, messageText, co
     subject: `Nueva conversación pausada — ${businessName}`,
     html: `
       <p>Hola,</p>
-      <p>Un cliente usó una <strong>palabra clave de pausa</strong> en tu asistente de <strong>${escapeHtml(businessName)}</strong>.</p>
+      <p>Un cliente necesita atención humana en tu asistente de <strong>${escapeHtml(businessName)}</strong>.</p>
       <table style="border-collapse:collapse;margin:16px 0">
-        <tr><td style="padding:4px 12px 4px 0;color:#666">Teléfono</td><td>${escapeHtml(customerPhone)}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;color:#666">Contacto</td><td>${escapeHtml(contactId)}</td></tr>
         <tr><td style="padding:4px 12px 4px 0;color:#666">Mensaje</td><td style="max-width:400px">${escapeHtml(messageText)}</td></tr>
         <tr><td style="padding:4px 12px 4px 0;color:#666">Conversación</td><td>#${conversationId}</td></tr>
       </table>
-      <p>El asistente <strong>no respondió</strong> este mensaje. Revisá la conversación en tu panel de Daxos y respondé vos directamente si es necesario.</p>
+      <p>El asistente pausó la conversación. Revisá tu panel de Daxos y respondé vos directamente si es necesario.</p>
     `,
   };
 

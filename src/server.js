@@ -9,8 +9,8 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setStyleProfile, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, getDailyConversationStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments } = require('./db');
-const { generateReply, analyzeStyle } = require('./claude');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, getDailyConversationStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments } = require('./db');
+const { generateReply, analyzeStyle, summarizeWebsite } = require('./claude');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
 const { sendPauseEmail, sendUnmatchedPaymentAlert } = require('./email');
 
@@ -114,7 +114,14 @@ app.post('/auth/logout', (req, res) => {
 app.get('/auth/me', requireAuth, (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user) return res.status(401).json({ error: 'Sesión inválida' });
-  res.json({ id: user.id, email: user.email });
+  res.json({ id: user.id, email: user.email, phone: user.phone || null });
+});
+
+app.put('/auth/me', requireAuth, (req, res) => {
+  const { phone } = req.body;
+  setUserPhone(req.session.userId, phone ? phone.trim() : null);
+  const user = getUserById(req.session.userId);
+  res.json({ id: user.id, email: user.email, phone: user.phone || null });
 });
 
 // --- Panel API ---
@@ -124,18 +131,42 @@ app.get('/api/business', requireAuth, (req, res) => {
   res.json(business || null);
 });
 
+async function fetchAndSummarizeWebsite(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    const html = await res.text();
+    const text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return await summarizeWebsite(text);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 app.put('/api/business', requireAuth, async (req, res) => {
-  const { name, whatsapp_number, sales_examples, survey_answers, response_mode, pause_keywords, response_delay } = req.body;
+  const { name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, response_delay } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'El nombre del negocio es requerido' });
 
   try {
     const user = getUserById(req.session.userId);
+
+    const prevWebsiteUrl = user.business_id ? (getBusinessById(user.business_id)?.website_url ?? null) : null;
+    const newUrl = website_url ? website_url.trim() : null;
+
     const business = upsertBusiness({
       id: user.business_id || undefined,
       name: name.trim(),
       whatsapp_number: whatsapp_number ? whatsapp_number.trim() : null,
       sales_examples,
       survey_answers,
+      business_context: business_context ? business_context.trim() : null,
+      website_url: newUrl,
       response_mode,
       pause_keywords: pause_keywords ? pause_keywords.trim() : null,
       response_delay: response_delay != null ? Math.min(20, Math.max(0, parseInt(response_delay, 10) || 5)) : 5,
@@ -147,6 +178,17 @@ app.put('/api/business', requireAuth, async (req, res) => {
       analyzeStyle(sales_examples)
         .then(profile => setStyleProfile(business.id, profile))
         .catch(err => console.error('[style-analysis] failed:', err.message));
+    }
+
+    // Website summary — non-blocking, solo si la URL cambió
+    if (newUrl !== prevWebsiteUrl) {
+      if (newUrl) {
+        fetchAndSummarizeWebsite(newUrl)
+          .then(summary => setWebsiteSummary(business.id, summary))
+          .catch(err => console.error('[website-summary] failed:', err.message));
+      } else {
+        setWebsiteSummary(business.id, null);
+      }
     }
 
     res.json(business);
@@ -384,6 +426,33 @@ function isTrialExpired(business) {
   return new Date(business.trial_ends_at) < new Date();
 }
 
+// Pauses a conversation and notifies the business owner via email.
+// channel: 'whatsapp' | 'instagram' — only 'whatsapp' triggers notification for now.
+// contactId: customer identifier in the given channel (phone for WA, IG user ID for Instagram).
+async function notifyOwnerOfPause({ business, owner, channel, contactId, messageText, conversationId }) {
+  if (channel === 'instagram') return;
+  if (!owner) return;
+
+  const ownerPhone = owner.phone;
+  if (ownerPhone) {
+    try {
+      const waMsg = `⚠️ Conversación pausada — ${business.name}\nContacto: ${contactId}\nMensaje: ${messageText}\nVer conversación #${conversationId} en tu panel de Daxos.`;
+      await sendWhatsAppMessage(ownerPhone, waMsg);
+      return;
+    } catch (waErr) {
+      console.error('[notify-pause] WhatsApp failed, falling back to email:', waErr.message);
+    }
+  }
+
+  return sendPauseEmail({
+    to: owner.email,
+    businessName: business.name,
+    contactId,
+    messageText,
+    conversationId,
+  });
+}
+
 // Sends the first-contact disclosure required by Meta policy.
 // Always plain text, always saved to history. No-op if history already exists.
 async function maybeSendDisclosure(business, conversationId, history, recipientPhone) {
@@ -461,15 +530,10 @@ app.post('/webhook', async (req, res) => {
               addMessage(conversation.id, 'user', text);
               markConversationPaused(conversation.id);
               const owner = getUserByBusinessId(business.id);
-              if (owner) {
-                sendPauseEmail({
-                  to: owner.email,
-                  businessName: business.name,
-                  customerPhone,
-                  messageText: text,
-                  conversationId: conversation.id,
-                }).catch(err => console.error('[resend]', err.message));
-              }
+              notifyOwnerOfPause({
+                business, owner, channel: 'whatsapp', contactId: customerPhone,
+                messageText: text, conversationId: conversation.id,
+              }).catch(err => console.error('[notify-pause]', err.message));
               continue;
             }
           }
@@ -487,11 +551,17 @@ app.post('/webhook', async (req, res) => {
           ]);
 
           let sendDoc = false;
+          let needsHuman = false;
           let reply = rawReply;
-          if (rawReply.startsWith('[SEND_DOC]')) {
-            sendDoc = true;
-            reply = rawReply.replace(/^\[SEND_DOC\]\s*/m, '').trim();
+          if (reply.startsWith('[NEEDS_HUMAN]')) {
+            needsHuman = true;
+            reply = reply.replace(/^\[NEEDS_HUMAN\]\n?/, '');
           }
+          if (reply.startsWith('[SEND_DOC]')) {
+            sendDoc = true;
+            reply = reply.replace(/^\[SEND_DOC\]\n?/, '');
+          }
+          reply = reply.trim();
 
           addMessage(conversation.id, 'user', text);
           addMessage(conversation.id, 'assistant', reply);
@@ -519,6 +589,16 @@ app.post('/webhook', async (req, res) => {
             }
           } else {
             await sendWhatsAppMessage(customerPhone, reply);
+          }
+
+          // Derivación por incertidumbre — no dispara si la conversación ya estaba pausada
+          if (needsHuman && !conversation.needs_attention) {
+            markConversationPaused(conversation.id);
+            const owner = getUserByBusinessId(business.id);
+            notifyOwnerOfPause({
+              business, owner, channel: 'whatsapp', contactId: customerPhone,
+              messageText: text, conversationId: conversation.id,
+            }).catch(err => console.error('[notify-pause]', err.message));
           }
         }
       }
