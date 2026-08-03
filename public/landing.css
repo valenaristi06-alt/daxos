@@ -362,7 +362,7 @@ html, body {
     inset: 0;
     background-image: url('/oficinaapp.png');
     background-size: cover;
-    background-position: center;
+    background-position: right center;
     filter: brightness(1.7);
     z-index: 0;
   }
@@ -759,6 +759,7 @@ details[open] .faq-question::after {
     position: relative;
     padding: 60px 24px 48px;
     background-image: none;
+    align-items: flex-start;
   }
   .hero::before {
     content: '';
@@ -766,7 +767,7 @@ details[open] .faq-question::after {
     inset: 0;
     background-image: url('/conversacionapp.png');
     background-size: cover;
-    background-position: center;
+    background-position: right center;
     filter: brightness(1.7);
     z-index: 0;
   }
