@@ -87,7 +87,7 @@ html, body {
   justify-content: space-between;
   gap: 60px;
   padding: 100px 80px 80px;
-  background: radial-gradient(ellipse at 70% 50%, rgba(217,114,46,0.06) 0%, transparent 55%), var(--bg);
+  background: radial-gradient(ellipse at 72% 48%, rgba(217,114,46,0.07) 0%, transparent 58%), var(--bg);
 }
 
 .hero-inner {
@@ -97,26 +97,11 @@ html, body {
 }
 
 .hero-visual {
-  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  width: 320px;
-  height: 480px;
-  background: url('/phone-tight.png') center / cover no-repeat;
-}
-
-.phone-screen-inlay {
-  position: absolute;
-  top: 15%;
-  left: 7%;
-  right: 7%;
-  bottom: 6%;
-  background: #111b21;
-  overflow: hidden;
-}
-
-.phone-screen-inlay .chat-demo-messages {
-  height: 100%;
-  padding: 10px 8px;
+  width: 280px;
 }
 
 .hero-terminal {
@@ -984,7 +969,10 @@ details[open] .faq-question::after {
 }
 
 @media (max-width: 860px) {
-  .hero { gap: 40px; padding: 100px 48px 80px; }
+  .hero {
+    gap: 40px;
+    padding: 100px 48px 80px;
+  }
   .hero-inner { max-width: 100%; }
 }
 
@@ -992,14 +980,14 @@ details[open] .faq-question::after {
   .hero {
     flex-direction: column;
     align-items: flex-start;
-    padding: 80px 24px 48px;
-    gap: 32px;
+    padding: 84px 24px 56px;
+    gap: 36px;
     min-height: auto;
   }
   .hero-inner { max-width: 100%; }
   .hero-visual {
-    width: 260px;
-    height: 390px;
+    width: 100%;
+    max-width: 300px;
     align-self: center;
   }
 }
