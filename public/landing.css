@@ -44,8 +44,9 @@ html, body {
 .land-header {
   position: fixed;
   top: 0; left: 0; right: 0;
-  height: 52px;
+  min-height: 52px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   padding: 0 40px;
   z-index: 10;
