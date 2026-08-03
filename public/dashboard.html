@@ -1014,6 +1014,9 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           if (data.sent_audio) {
             previewAddBubble('assistant', '🔊 [El asistente enviaría una nota de voz con tu voz clonada]');
           }
+          if (data.needs_human) {
+            previewAddBubble('assistant', '⚠️ [Derivación activada — esta conversación se marcaría como pendiente y se notificaría al dueño]');
+          }
         } else {
           previewAddBubble('assistant', `⚠ ${data.error || 'Error al generar respuesta.'}`);
         }

@@ -387,14 +387,20 @@ app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
   try {
     const rawReply = await generateReply(business, history, message.trim());
     let sent_doc = false;
+    let needs_human = false;
     let reply = rawReply;
-    if (rawReply.startsWith('[SEND_DOC]')) {
-      sent_doc = true;
-      reply = rawReply.replace(/^\[SEND_DOC\]\s*/m, '').trim();
+    if (reply.startsWith('[NEEDS_HUMAN]')) {
+      needs_human = true;
+      reply = reply.replace(/^\[NEEDS_HUMAN\]\n?/, '');
     }
+    if (reply.startsWith('[SEND_DOC]')) {
+      sent_doc = true;
+      reply = reply.replace(/^\[SEND_DOC\]\s*/m, '');
+    }
+    reply = reply.trim();
     const planAllowsAudio = ['crecimiento', 'a_medida'].includes(business.plan);
     const sent_audio = business.response_mode === 'audio' && !!business.voice_id && planAllowsAudio;
-    res.json({ reply, sent_doc, sent_audio });
+    res.json({ reply, sent_doc, sent_audio, needs_human });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
