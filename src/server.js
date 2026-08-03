@@ -57,6 +57,10 @@ app.use(session({
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
   },
 }));
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/landing.html'));
+});
+
 app.use(express.static(path.join(__dirname, '../public')));
 
 app.get('/health', (req, res) => {
