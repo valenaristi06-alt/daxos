@@ -1016,6 +1016,9 @@ details[open] .faq-question::after {
     max-width: 300px;
     align-self: center;
   }
+  .chat-demo-phone {
+    box-shadow: 0 0 0 6px #161616, 0 0 28px rgba(196,92,26,0.22), 0 0 56px rgba(196,92,26,0.10), 0 20px 48px rgba(0,0,0,0.55);
+  }
 }
 
 @media (max-width: 600px) {
