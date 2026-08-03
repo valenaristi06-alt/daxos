@@ -85,9 +85,9 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 36px;
+  gap: 20px;
   padding: 100px 80px 80px;
-  background: radial-gradient(ellipse at 72% 48%, rgba(217,114,46,0.07) 0%, transparent 58%), var(--bg);
+  background: radial-gradient(ellipse at 72% 50%, rgba(196,92,26,0.16) 0%, transparent 52%), var(--bg);
 }
 
 .hero-inner {
@@ -287,7 +287,7 @@ html, body {
   background: #111;
   border-radius: 28px;
   border: 1px solid #2a2a2a;
-  box-shadow: 0 0 0 6px #161616, 0 28px 72px rgba(0,0,0,0.65);
+  box-shadow: 0 0 0 6px #161616, 0 0 48px rgba(196,92,26,0.45), 0 0 100px rgba(196,92,26,0.18), 0 28px 72px rgba(0,0,0,0.65);
   overflow: hidden;
   width: 100%;
   max-width: 320px;
