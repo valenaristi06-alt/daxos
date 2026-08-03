@@ -363,14 +363,14 @@ html, body {
     background-image: url('/oficinaapp.png');
     background-size: cover;
     background-position: center;
-    filter: brightness(1.4);
+    filter: brightness(1.7);
     z-index: 0;
   }
   .pitch-section::after {
     content: '';
     position: absolute;
     inset: 0;
-    background: rgba(5,5,5,0.30);
+    background: rgba(5,5,5,0.22);
     z-index: 1;
   }
   .pitch-text { z-index: 2; }
@@ -709,8 +709,8 @@ details[open] .faq-question::after {
     gap: 10px;
     max-width: none;
   }
-  .pricing-card { padding: 16px 14px; }
-  .pricing-card--featured { padding-top: 30px; }
+  .pricing-card { padding: 24px 14px; }
+  .pricing-card--featured { padding-top: 28px; }
   .pricing-card:last-child {
     grid-column: 1 / -1;
     max-width: calc(50% - 5px);
@@ -718,8 +718,8 @@ details[open] .faq-question::after {
   }
   .price-amount { font-size: 24px; }
   .card-desc,
-  .card-features li { font-size: 11px; }
-  .card-cta { font-size: 12px; padding: 9px 12px; }
+  .card-features li { font-size: 13px; }
+  .card-cta { font-size: 13px; padding: 9px 12px; }
 }
 
 @media (max-width: 768px) {
@@ -730,7 +730,7 @@ details[open] .faq-question::after {
 @media (max-width: 600px) {
   .how-section { padding: 48px 24px 56px; }
   .how-grid { grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  .how-text { font-size: 12px; line-height: 1.45; }
+  .how-text { font-size: 13px; line-height: 1.45; }
   .how-icon { width: 24px; height: 24px; }
   .how-step { gap: 10px; }
 }
@@ -757,7 +757,7 @@ details[open] .faq-question::after {
   .land-header { padding: 0 24px; }
   .hero {
     position: relative;
-    padding: 72px 24px 48px;
+    padding: 60px 24px 48px;
     background-image: none;
   }
   .hero::before {
@@ -767,14 +767,14 @@ details[open] .faq-question::after {
     background-image: url('/conversacionapp.png');
     background-size: cover;
     background-position: center;
-    filter: brightness(1.4);
+    filter: brightness(1.7);
     z-index: 0;
   }
   .hero::after {
     content: '';
     position: absolute;
     inset: 0;
-    background: rgba(5,5,5,0.30);
+    background: rgba(5,5,5,0.22);
     z-index: 1;
   }
   .hero-inner {
