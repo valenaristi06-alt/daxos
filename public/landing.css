@@ -290,6 +290,28 @@ html, body {
   margin: 0 auto;
 }
 
+.phone-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 16px 5px;
+  background: #111;
+}
+
+.status-time {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: -0.2px;
+}
+
+.status-icons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .chat-demo-bar {
   background: #1c1c1c;
   padding: 14px 16px 12px;
