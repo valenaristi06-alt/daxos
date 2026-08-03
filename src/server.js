@@ -493,7 +493,10 @@ async function notifyOwnerOfPause({ business, owner, channel, contactId, message
 async function maybeSendDisclosure(business, conversationId, history, recipientPhone) {
   if (history.length > 0) return;
   const notice = `Hola! Soy el asistente automático de ${business.name} 🤖. Te ayudo con consultas, precios y turnos.`;
-  if (recipientPhone) await sendWhatsAppMessage(recipientPhone, notice);
+  if (recipientPhone) {
+    try { await sendWhatsAppMessage(recipientPhone, notice); }
+    catch (err) { console.error('[disclosure] WA send failed:', err.message); }
+  }
   addMessage(conversationId, 'assistant', notice);
 }
 
@@ -558,9 +561,7 @@ app.post('/webhook', async (req, res) => {
             continue;
           }
 
-          await maybeSendDisclosure(business, conversation.id, history, customerPhone);
-
-          // Pause keyword check — runs before AI reply
+          // Pause keyword check — before any network call so WA errors can't skip it
           if (business.pause_keywords) {
             const keywords = business.pause_keywords
               .split(',')
@@ -579,6 +580,8 @@ app.post('/webhook', async (req, res) => {
               continue;
             }
           }
+
+          await maybeSendDisclosure(business, conversation.id, history, customerPhone);
 
           // Mark as read + show typing indicator immediately
           markAsRead(msg.id).catch(() => {});
@@ -619,18 +622,22 @@ app.post('/webhook', async (req, res) => {
           }
 
           const planAllowsAudio = ['crecimiento', 'a_medida'].includes(business.plan);
-          if (business.response_mode === 'audio' && business.voice_id && planAllowsAudio) {
-            try {
-              const mp3 = await generateAudioBuffer(business.voice_id, reply);
-              const ogg = await convertToOgg(mp3);
-              const mediaId = await uploadMedia(ogg, 'reply.ogg', 'audio/ogg');
-              await sendWhatsAppAudio(customerPhone, mediaId);
-            } catch (audioErr) {
-              console.error('[audio-reply] failed, falling back to text:', audioErr.message);
+          try {
+            if (business.response_mode === 'audio' && business.voice_id && planAllowsAudio) {
+              try {
+                const mp3 = await generateAudioBuffer(business.voice_id, reply);
+                const ogg = await convertToOgg(mp3);
+                const mediaId = await uploadMedia(ogg, 'reply.ogg', 'audio/ogg');
+                await sendWhatsAppAudio(customerPhone, mediaId);
+              } catch (audioErr) {
+                console.error('[audio-reply] failed, falling back to text:', audioErr.message);
+                await sendWhatsAppMessage(customerPhone, reply);
+              }
+            } else {
               await sendWhatsAppMessage(customerPhone, reply);
             }
-          } else {
-            await sendWhatsAppMessage(customerPhone, reply);
+          } catch (sendErr) {
+            console.error('[reply-send] failed:', sendErr.message);
           }
 
           // Derivación por incertidumbre — no dispara si la conversación ya estaba pausada
