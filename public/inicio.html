@@ -52,6 +52,7 @@
 
     <p class="page-terminal">&gt; inicio</p>
     <h1 class="page-title" id="greeting">Hola</h1>
+    <p class="page-subtitle" id="greeting-sub"></p>
 
     <div id="trial-banner" style="display:none"></div>
 
@@ -153,7 +154,21 @@
       }
 
       // Greeting
-      document.getElementById('greeting').textContent = b?.name ? `Hola, ${b.name}` : 'Hola';
+      const hour = new Date().getHours();
+      const timeGreeting = hour >= 6 && hour < 12  ? 'Buen día'
+                         : hour >= 12 && hour < 19 ? 'Buenas tardes'
+                         :                           'Buenas noches';
+      document.getElementById('greeting').textContent = b?.name
+        ? `${timeGreeting}, ${b.name}`
+        : timeGreeting;
+
+      const greetingSubs = [
+        'Tu asistente ya está listo para responder.',
+        'Cada mensaje respondido es una venta que no perdiste.',
+        'Tu WhatsApp no descansa. Ni el de tus clientes.',
+      ];
+      document.getElementById('greeting-sub').textContent =
+        greetingSubs[Math.floor(Math.random() * greetingSubs.length)];
 
       // Trial banner (top, small — same as dashboard)
       const banner = document.getElementById('trial-banner');
