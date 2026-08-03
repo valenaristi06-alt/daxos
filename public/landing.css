@@ -779,7 +779,7 @@ details[open] .faq-question::after {
     inset: 0;
     background-image: url('/conversacionapp.png');
     background-size: cover;
-    background-position: 65% center;
+    background-position: 55% 62%;
     filter: brightness(1.7);
     z-index: 0;
   }
