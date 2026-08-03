@@ -352,7 +352,28 @@ html, body {
 }
 
 @media (max-width: 600px) {
-  .pitch-section { padding: 56px 24px 72px; }
+  .pitch-section {
+    padding: 56px 24px 72px;
+    background-image: none;
+  }
+  .pitch-section::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url('/oficinaapp.png');
+    background-size: cover;
+    background-position: center;
+    filter: brightness(1.4);
+    z-index: 0;
+  }
+  .pitch-section::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(5,5,5,0.30);
+    z-index: 1;
+  }
+  .pitch-text { z-index: 2; }
   .pitch-title { font-size: clamp(28px, 8vw, 40px); }
 }
 
@@ -677,13 +698,50 @@ details[open] .faq-question::after {
 /* ── Responsive ── */
 
 @media (max-width: 900px) {
-  .pricing-grid { grid-template-columns: 1fr; max-width: 480px; }
+  .pricing-grid { grid-template-columns: 1fr; max-width: 440px; }
   .pricing-section { padding: 72px 24px 88px; }
+}
+
+@media (max-width: 600px) {
+  .pricing-section { padding: 56px 16px 64px; }
+  .pricing-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    max-width: none;
+  }
+  .pricing-card { padding: 16px 14px; }
+  .pricing-card--featured { padding-top: 30px; }
+  .pricing-card:last-child {
+    grid-column: 1 / -1;
+    max-width: calc(50% - 5px);
+    margin: 0 auto;
+  }
+  .price-amount { font-size: 24px; }
+  .card-desc,
+  .card-features li { font-size: 11px; }
+  .card-cta { font-size: 12px; padding: 9px 12px; }
 }
 
 @media (max-width: 768px) {
   .how-grid { grid-template-columns: 1fr; gap: 40px; }
   .how-section { padding: 72px 24px 88px; }
+}
+
+@media (max-width: 600px) {
+  .how-section { padding: 48px 24px 56px; }
+  .how-grid { grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .how-text { font-size: 12px; line-height: 1.45; }
+  .how-icon { width: 24px; height: 24px; }
+  .how-step { gap: 10px; }
+}
+
+@media (max-width: 400px) {
+  .how-grid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .how-step:last-child {
+    grid-column: 1 / -1;
+    max-width: 50%;
+    margin: 0 auto;
+  }
 }
 
 @media (max-width: 860px) {
@@ -697,5 +755,30 @@ details[open] .faq-question::after {
 
 @media (max-width: 600px) {
   .land-header { padding: 0 24px; }
-  .hero { padding: 96px 24px 64px; }
+  .hero {
+    position: relative;
+    padding: 72px 24px 48px;
+    background-image: none;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url('/conversacionapp.png');
+    background-size: cover;
+    background-position: center;
+    filter: brightness(1.4);
+    z-index: 0;
+  }
+  .hero::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(5,5,5,0.30);
+    z-index: 1;
+  }
+  .hero-inner {
+    position: relative;
+    z-index: 2;
+  }
 }
