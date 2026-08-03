@@ -41,6 +41,22 @@
     </div>
   </main>
 
+  <section class="chat-demo-section" id="chat-demo-section">
+    <div class="chat-demo-inner">
+      <p class="how-label">&gt; en acción</p>
+      <div class="chat-demo-phone">
+        <div class="chat-demo-bar">
+          <div class="chat-demo-avatar">DX</div>
+          <div class="chat-demo-info">
+            <span class="chat-demo-name">Daxos · tu negocio</span>
+            <span class="chat-demo-online">en línea</span>
+          </div>
+        </div>
+        <div class="chat-demo-messages" id="chat-demo-messages"></div>
+      </div>
+    </div>
+  </section>
+
   <section class="pitch-section">
     <div class="pitch-text">
       <h2 class="pitch-title">El empleado que nunca duerme.</h2>
@@ -280,6 +296,88 @@
 
       parallax();
     })();
+  </script>
+
+  <script>
+  (function () {
+    const MSGS = [
+      { from: 'client', text: 'Hola, tienen turno para el jueves?' },
+      { from: 'bot',    text: '¡Hola! Sí, hay lugar el jueves. ¿Mañana o tarde te queda mejor?' },
+      { from: 'client', text: 'Tarde, entre las 5 y las 7' },
+      { from: 'bot',    text: 'Tengo disponible las 17:30 o las 18:00. ¿Cuál te viene bien?' },
+      { from: 'client', text: 'Las 17:30' },
+      { from: 'bot',    text: 'Confirmado ✓ Jueves a las 17:30. ¿Tu nombre para la reserva?' },
+      { from: 'client', text: 'Valentina' },
+      { from: 'bot',    text: 'Listo, Valentina. ¡Te esperamos el jueves! Cualquier cambio, avisá por acá.' },
+    ];
+
+    const wrap = document.getElementById('chat-demo-messages');
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+    function bubble(from) {
+      const el = document.createElement('div');
+      el.className = `chat-bubble chat-bubble--${from}`;
+      const t = document.createElement('span');
+      el.appendChild(t);
+      return { el, t };
+    }
+
+    function typingDots() {
+      const el = document.createElement('div');
+      el.className = 'chat-typing';
+      el.innerHTML = '<span class="chat-dot"></span><span class="chat-dot"></span><span class="chat-dot"></span>';
+      return el;
+    }
+
+    async function loop() {
+      wrap.innerHTML = '';
+      wrap.style.opacity = '1';
+      for (const msg of MSGS) {
+        if (msg.from === 'client') {
+          await sleep(750);
+          const { el, t } = bubble('client');
+          t.textContent = msg.text;
+          wrap.appendChild(el);
+          void el.offsetWidth;
+          el.classList.add('visible');
+          wrap.scrollTop = wrap.scrollHeight;
+          await sleep(480);
+        } else {
+          await sleep(820);
+          const dots = typingDots();
+          wrap.appendChild(dots);
+          wrap.scrollTop = wrap.scrollHeight;
+          await sleep(Math.min(1700, Math.max(850, msg.text.length * 24)));
+          dots.remove();
+          const { el, t } = bubble('bot');
+          wrap.appendChild(el);
+          void el.offsetWidth;
+          el.classList.add('visible');
+          for (const ch of msg.text) {
+            t.textContent += ch;
+            wrap.scrollTop = wrap.scrollHeight;
+            await sleep(19);
+          }
+          await sleep(560);
+        }
+      }
+      await sleep(2200);
+      wrap.style.transition = 'opacity 0.75s';
+      wrap.style.opacity = '0';
+      await sleep(900);
+      wrap.style.transition = '';
+      loop();
+    }
+
+    let going = false;
+    new IntersectionObserver((entries, obs) => {
+      if (entries[0].isIntersecting && !going) {
+        going = true;
+        loop();
+        obs.disconnect();
+      }
+    }, { threshold: 0.15 }).observe(document.getElementById('chat-demo-section'));
+  })();
   </script>
 
 </body>
