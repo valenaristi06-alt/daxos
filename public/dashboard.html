@@ -653,6 +653,16 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       document.getElementById('owner_phone').value = u.phone || '';
     });
 
+    function normalizePhone(raw) {
+      const s = raw.replace(/[\s\-().]/g, '');
+      if (!s) return '';
+      if (s.startsWith('+'))                      return s;
+      if (s.startsWith('00'))                     return '+' + s.slice(2);
+      if (s.startsWith('0'))                      return '+598' + s.slice(1);
+      if (s.startsWith('598') && s.length >= 11)  return '+' + s;
+      return '+598' + s;
+    }
+
     function validatePhone(val) {
       if (!val) return true; // empty = clear saved number, allowed
       return /^\+\d{8,15}$/.test(val);
@@ -685,29 +695,33 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
     }
 
     document.getElementById('owner_phone').addEventListener('blur', async () => {
-      const val = document.getElementById('owner_phone').value.trim();
+      const input = document.getElementById('owner_phone');
       const status = document.getElementById('save-status-account');
-      if (!validatePhone(val)) {
-        status.textContent = 'Formato inválido (ej: +598912345678)';
+      const normalized = normalizePhone(input.value.trim());
+      if (!validatePhone(normalized)) {
+        status.textContent = 'Formato inválido (ej: 098323308 o +59898323308)';
         status.className = 'save-status error';
         return;
       }
+      input.value = normalized; // reflect canonical format back into field
       status.textContent = '';
       status.className = 'save-status';
-      await saveOwnerPhone(val);
+      await saveOwnerPhone(normalized);
     });
 
     document.getElementById('btn-save-account').addEventListener('click', async () => {
       const btn = document.getElementById('btn-save-account');
-      const val = document.getElementById('owner_phone').value.trim();
+      const input = document.getElementById('owner_phone');
       const status = document.getElementById('save-status-account');
-      if (!validatePhone(val)) {
-        status.textContent = 'Formato inválido (ej: +598912345678)';
+      const normalized = normalizePhone(input.value.trim());
+      if (!validatePhone(normalized)) {
+        status.textContent = 'Formato inválido (ej: 098323308 o +59898323308)';
         status.className = 'save-status error';
         return;
       }
+      input.value = normalized;
       btn.disabled = true;
-      await saveOwnerPhone(val);
+      await saveOwnerPhone(normalized);
       btn.disabled = false;
     });
 
