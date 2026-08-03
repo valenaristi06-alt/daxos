@@ -778,8 +778,8 @@ details[open] .faq-question::after {
     position: absolute;
     inset: 0;
     background-image: url('/conversacionapp.png');
-    background-size: auto 120%;
-    background-position: 70% 60%;
+    background-size: 150%;
+    background-position: 27% 100%;
     filter: brightness(1.7);
     z-index: 0;
   }
