@@ -9,7 +9,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, getDailyConversationStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments } = require('./db');
 const { generateReply, analyzeStyle, summarizeWebsite } = require('./claude');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
 const { sendPauseEmail, sendUnmatchedPaymentAlert } = require('./email');
@@ -346,6 +346,17 @@ app.patch('/api/conversations/:id/label', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+app.patch('/api/conversations/:id/resume', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+
+  const conv = getConversationById(parseInt(req.params.id));
+  if (!conv || conv.business_id !== user.business_id) return res.status(404).json({ error: 'Conversación no encontrada.' });
+
+  markConversationResumed(conv.id);
+  res.json({ ok: true });
+});
+
 app.post('/api/business/document', requireAuth, documentUpload.single('document'), async (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
@@ -539,6 +550,13 @@ app.post('/webhook', async (req, res) => {
 
           const conversation = getOrCreateConversation(business.id, customerPhone);
           const history = getConversationHistory(conversation.id, 20);
+
+          // Conversation paused — record message so owner sees it, but no AI reply
+          if (conversation.needs_attention) {
+            addMessage(conversation.id, 'user', text);
+            markAsRead(msg.id).catch(() => {});
+            continue;
+          }
 
           await maybeSendDisclosure(business, conversation.id, history, customerPhone);
 

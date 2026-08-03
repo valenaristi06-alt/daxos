@@ -166,6 +166,10 @@ function markConversationPaused(conversationId) {
   db.prepare('UPDATE conversations SET needs_attention = 1 WHERE id = ?').run(conversationId);
 }
 
+function markConversationResumed(conversationId) {
+  db.prepare('UPDATE conversations SET needs_attention = 0 WHERE id = ?').run(conversationId);
+}
+
 function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = null, survey_answers = null, business_context = null, website_url = null, response_mode = 'texto', pause_keywords = null, response_delay = 5, pricing_info = null }) {
   const serialized = {
     name,
@@ -407,6 +411,7 @@ module.exports = {
   addMessage,
   getConversationHistory,
   markConversationPaused,
+  markConversationResumed,
   getDailyConversationStats,
   setConversationLabel,
   setBusinessDocument,

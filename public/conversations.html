@@ -160,6 +160,11 @@
             <option value="no_interesado" ${conversation.label === 'no_interesado' ? 'selected' : ''}>No interesado</option>
           </select>
         </div>
+        ${conversation.needs_attention ? `
+        <div class="pause-banner" id="pause-banner">
+          <span class="pause-banner-text">⚠️ Asistente pausado — esta conversación requiere atención humana</span>
+          <button class="btn-resume" onclick="resumeConv(${id})">Reanudar asistente</button>
+        </div>` : ''}
       `;
 
       if (!messages.length) {
@@ -179,6 +184,15 @@
       // Scroll to bottom
       const el2 = document.getElementById('thread-messages');
       el2.scrollTop = el2.scrollHeight;
+    }
+
+    // ── Resume conversation ──
+    async function resumeConv(id) {
+      const res = await fetch(`/api/conversations/${id}/resume`, { method: 'PATCH' });
+      if (!res.ok) return;
+      document.getElementById('pause-banner')?.remove();
+      const dot = document.querySelector(`.conv-item[data-id="${id}"] .conv-attention-dot`);
+      if (dot) dot.remove();
     }
 
     // ── Label helpers ──
