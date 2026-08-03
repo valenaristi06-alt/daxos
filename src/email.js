@@ -6,7 +6,7 @@ async function sendPauseEmail({ to, businessName, contactId, messageText, conver
   }
 
   const body = {
-    from: 'Daxos <notificaciones@daxos.ai>',
+    from: 'Daxos <notificaciones@daxos.lat>',
     to: [to],
     subject: `Nueva conversación pausada — ${businessName}`,
     html: `
@@ -52,7 +52,7 @@ async function sendUnmatchedPaymentAlert({ adminEmail, payerEmail, amount, curre
   }
 
   const body = {
-    from: 'Daxos <notificaciones@daxos.ai>',
+    from: 'Daxos <notificaciones@daxos.lat>',
     to: [adminEmail],
     subject: `Pago recibido sin negocio asociado — ${payerEmail}`,
     html: `
