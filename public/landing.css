@@ -712,11 +712,11 @@ details[open] .faq-question::after {
     grid-template-columns: repeat(2, 1fr);
     gap: 10px;
     max-width: none;
-    align-items: start;
   }
   .pricing-card {
     padding: 16px 12px;
     overflow: hidden;
+    min-height: 260px;
   }
   .pricing-card--featured { padding-top: 26px; }
   .pricing-card:last-child {
@@ -779,7 +779,7 @@ details[open] .faq-question::after {
     inset: 0;
     background-image: url('/conversacionapp.png');
     background-size: cover;
-    background-position: right center;
+    background-position: 65% center;
     filter: brightness(1.7);
     z-index: 0;
   }
@@ -794,4 +794,5 @@ details[open] .faq-question::after {
     position: relative;
     z-index: 2;
   }
+  .hero-terminal { margin-top: 28px; }
 }
