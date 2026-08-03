@@ -84,22 +84,24 @@ html, body {
   min-height: 100vh;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  padding: 100px 40px 80px;
-  background-image:
-    linear-gradient(to right, rgba(5,5,5,0.92) 32%, rgba(5,5,5,0.55) 58%, rgba(5,5,5,0.0) 80%),
-    url('/conversacionapp.png');
-  background-size: cover;
-  background-position: center;
+  justify-content: space-between;
+  gap: 60px;
+  padding: 100px 80px 80px;
+  background: radial-gradient(ellipse at 72% 48%, rgba(217,114,46,0.07) 0%, transparent 58%), var(--bg);
 }
 
 .hero-inner {
-  max-width: 580px;
+  max-width: 520px;
   width: 100%;
+  flex-shrink: 0;
 }
 
 .hero-visual {
-  display: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 280px;
 }
 
 .hero-terminal {
@@ -277,21 +279,6 @@ html, body {
 
 /* ── Chat demo ── */
 
-.chat-demo-section {
-  border-top: 1px solid #1a1a1a;
-  padding: 80px 40px 96px;
-  text-align: center;
-}
-
-.chat-demo-inner {
-  max-width: 380px;
-  margin: 0 auto;
-}
-
-.chat-demo-inner .how-label {
-  margin-bottom: 36px;
-}
-
 .chat-demo-phone {
   background: #111;
   border-radius: 28px;
@@ -350,7 +337,7 @@ html, body {
 
 .chat-demo-messages {
   padding: 14px 12px;
-  height: 280px;
+  height: 340px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -420,8 +407,84 @@ html, body {
   30% { opacity: 1; transform: scale(1.15); }
 }
 
-@media (max-width: 600px) {
-  .chat-demo-section { padding: 56px 24px 64px; }
+/* ── Audio bubble ── */
+
+.audio-msg-bubble {
+  max-width: 88%;
+  align-self: flex-end;
+  background: var(--accent);
+  border-radius: 14px;
+  border-bottom-right-radius: 4px;
+  padding: 8px 10px 6px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.audio-msg-bubble.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.audio-msg-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.audio-play-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.audio-wave {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+}
+
+.audio-bar {
+  width: 2.5px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.55);
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.audio-wave--playing .audio-bar {
+  background: #fff;
+  animation: audio-bar-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes audio-bar-pulse {
+  0%, 100% { transform: scaleY(0.45); }
+  50%       { transform: scaleY(1); }
+}
+
+.audio-duration {
+  font-size: 10px;
+  color: rgba(255,255,255,0.75);
+  font-family: var(--mono);
+  flex-shrink: 0;
+}
+
+.audio-transcript {
+  font-size: 11px;
+  color: rgba(255,255,255,0.88);
+  font-family: var(--sans);
+  margin: 4px 0 0;
+  line-height: 1.45;
+  min-height: 0;
+  word-break: break-word;
 }
 
 /* ── Empleado cero ── */
@@ -907,42 +970,29 @@ details[open] .faq-question::after {
 
 @media (max-width: 860px) {
   .hero {
-    background-image:
-      linear-gradient(rgba(5,5,5,0.78), rgba(5,5,5,0.78)),
-      url('/conversacionapp.png');
+    gap: 40px;
+    padding: 100px 48px 80px;
   }
   .hero-inner { max-width: 100%; }
 }
 
+@media (max-width: 640px) {
+  .hero {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 84px 24px 56px;
+    gap: 36px;
+    min-height: auto;
+  }
+  .hero-inner { max-width: 100%; }
+  .hero-visual {
+    width: 100%;
+    max-width: 300px;
+    align-self: center;
+  }
+}
+
 @media (max-width: 600px) {
   .land-header { padding: 0 24px; }
-  .hero {
-    position: relative;
-    padding: 60px 24px 48px;
-    background-image: none;
-    align-items: flex-start;
-  }
-  .hero::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-image: url('/conversacionapp.png');
-    background-size: auto 75%;
-    background-repeat: no-repeat;
-    background-position: 62% 100%;
-    filter: brightness(1.7);
-    z-index: 0;
-  }
-  .hero::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(to bottom, rgba(5,5,5,0.88) 50%, rgba(5,5,5,0.08) 100%);
-    z-index: 1;
-  }
-  .hero-inner {
-    position: relative;
-    z-index: 2;
-  }
-  .hero-terminal { margin-top: 28px; }
+  .hero-terminal { margin-top: 12px; }
 }

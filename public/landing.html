@@ -26,24 +26,6 @@
       </div>
     </div>
     <div class="hero-visual" aria-hidden="true">
-      <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" style="max-width:320px;width:100%;height:auto;">
-        <rect x="120" y="40" width="160" height="320" rx="28" fill="none" stroke="#F5F0E8" stroke-width="3"/>
-        <rect x="135" y="70" width="130" height="230" rx="4" fill="none" stroke="#F5F0E8" stroke-width="2" opacity="0.5"/>
-        <path d="M60 140 Q40 140 40 165 L40 210 Q40 235 60 235 L75 235 L70 260 L105 235 L150 235 Q170 235 170 210 L170 165 Q170 140 150 140 Z" fill="#D9722E"/>
-        <circle cx="80" cy="187" r="6" fill="#0B0B0B"/>
-        <circle cx="105" cy="187" r="6" fill="#0B0B0B"/>
-        <circle cx="130" cy="187" r="6" fill="#0B0B0B"/>
-        <path d="M250 100 L215 175 L245 175 L225 240 L275 155 L245 155 Z" fill="#F5F0E8"/>
-        <circle cx="340" cy="90" r="3" fill="#D9722E" opacity="0.6"/>
-        <circle cx="355" cy="110" r="2" fill="#D9722E" opacity="0.4"/>
-        <circle cx="330" cy="120" r="2.5" fill="#D9722E" opacity="0.5"/>
-      </svg>
-    </div>
-  </main>
-
-  <section class="chat-demo-section" id="chat-demo-section">
-    <div class="chat-demo-inner">
-      <p class="how-label">&gt; en acción</p>
       <div class="chat-demo-phone">
         <div class="chat-demo-bar">
           <div class="chat-demo-avatar">DX</div>
@@ -52,10 +34,10 @@
             <span class="chat-demo-online">en línea</span>
           </div>
         </div>
-        <div class="chat-demo-messages" id="chat-demo-messages"></div>
+        <div class="chat-demo-messages" id="chat-hero-messages"></div>
       </div>
     </div>
-  </section>
+  </main>
 
   <section class="pitch-section">
     <div class="pitch-text">
@@ -300,21 +282,25 @@
 
   <script>
   (function () {
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const WAVE_H = [6,10,18,26,22,30,24,32,20,28,32,18,28,24,14,26,20,30,18,22,16,20,10,6];
+
     const MSGS = [
-      { from: 'client', text: 'Hola, tienen turno para el jueves?' },
-      { from: 'bot',    text: '¡Hola! Sí, hay lugar el jueves. ¿Mañana o tarde te queda mejor?' },
-      { from: 'client', text: 'Tarde, entre las 5 y las 7' },
-      { from: 'bot',    text: 'Tengo disponible las 17:30 o las 18:00. ¿Cuál te viene bien?' },
-      { from: 'client', text: 'Las 17:30' },
-      { from: 'bot',    text: 'Confirmado ✓ Jueves a las 17:30. ¿Tu nombre para la reserva?' },
-      { from: 'client', text: 'Valentina' },
-      { from: 'bot',    text: 'Listo, Valentina. ¡Te esperamos el jueves! Cualquier cambio, avisá por acá.' },
+      { from: 'client', type: 'text',  text: 'Hola, tienen turno para el jueves?' },
+      { from: 'bot',    type: 'text',  text: '¡Hola! ¿cómo estás? Sí, hay lugar el jueves. ¿Te queda mejor en la mañana o en la tarde?' },
+      { from: 'client', type: 'text',  text: 'De tarde, entre las 5 y las 7' },
+      { from: 'bot',    type: 'audio', duration: '0:06',
+        words: ['Tengo','disponible','las','17:30','o','las','18:00.','¿Cuál','te','viene','bien?'],
+        totalMs: 6000 },
+      { from: 'client', type: 'text',  text: 'Las 17:30' },
+      { from: 'bot',    type: 'text',  text: 'Confirmado ✓ Jueves a las 17:30. ¿Tu nombre para la reserva?' },
+      { from: 'client', type: 'text',  text: 'Valentina' },
+      { from: 'bot',    type: 'audio', duration: '0:05',
+        words: ['Listo,','Valentina.','¡Te','esperamos','el','jueves!'],
+        totalMs: 5000 },
     ];
 
-    const wrap = document.getElementById('chat-demo-messages');
-    const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-    function bubble(from) {
+    function makeBubble(from) {
       const el = document.createElement('div');
       el.className = `chat-bubble chat-bubble--${from}`;
       const t = document.createElement('span');
@@ -322,45 +308,96 @@
       return { el, t };
     }
 
-    function typingDots() {
+    function makeTyping() {
       const el = document.createElement('div');
       el.className = 'chat-typing';
       el.innerHTML = '<span class="chat-dot"></span><span class="chat-dot"></span><span class="chat-dot"></span>';
       return el;
     }
 
+    function makeAudioBubble(duration) {
+      const ab = document.createElement('div');
+      ab.className = 'audio-msg-bubble';
+      const row = document.createElement('div');
+      row.className = 'audio-msg-row';
+      const btn = document.createElement('div');
+      btn.className = 'audio-play-btn';
+      btn.innerHTML = '&#9654;';
+      const wave = document.createElement('div');
+      wave.className = 'audio-wave';
+      WAVE_H.forEach((h, i) => {
+        const bar = document.createElement('span');
+        bar.className = 'audio-bar';
+        bar.style.height = h + 'px';
+        bar.style.animationDelay = (i * 0.035) + 's';
+        wave.appendChild(bar);
+      });
+      const dur = document.createElement('span');
+      dur.className = 'audio-duration';
+      dur.textContent = duration;
+      const transcript = document.createElement('p');
+      transcript.className = 'audio-transcript';
+      row.append(btn, wave, dur);
+      ab.append(row, transcript);
+      return { ab, wave, transcript };
+    }
+
     async function loop() {
+      const wrap = document.getElementById('chat-hero-messages');
       wrap.innerHTML = '';
       wrap.style.opacity = '1';
+
       for (const msg of MSGS) {
         if (msg.from === 'client') {
           await sleep(750);
-          const { el, t } = bubble('client');
+          const { el, t } = makeBubble('client');
           t.textContent = msg.text;
           wrap.appendChild(el);
           void el.offsetWidth;
           el.classList.add('visible');
           wrap.scrollTop = wrap.scrollHeight;
           await sleep(480);
-        } else {
+        } else if (msg.type === 'text') {
           await sleep(820);
-          const dots = typingDots();
+          const dots = makeTyping();
           wrap.appendChild(dots);
           wrap.scrollTop = wrap.scrollHeight;
-          await sleep(Math.min(1700, Math.max(850, msg.text.length * 24)));
+          await sleep(Math.min(1700, Math.max(850, msg.text.length * 22)));
           dots.remove();
-          const { el, t } = bubble('bot');
+          const { el, t } = makeBubble('bot');
           wrap.appendChild(el);
           void el.offsetWidth;
           el.classList.add('visible');
           for (const ch of msg.text) {
             t.textContent += ch;
             wrap.scrollTop = wrap.scrollHeight;
-            await sleep(19);
+            await sleep(18);
           }
           await sleep(560);
+        } else {
+          await sleep(820);
+          const dots = makeTyping();
+          wrap.appendChild(dots);
+          wrap.scrollTop = wrap.scrollHeight;
+          await sleep(950);
+          dots.remove();
+          const { ab, wave, transcript } = makeAudioBubble(msg.duration);
+          wrap.appendChild(ab);
+          void ab.offsetWidth;
+          ab.classList.add('visible');
+          wrap.scrollTop = wrap.scrollHeight;
+          wave.classList.add('audio-wave--playing');
+          const wordDelay = msg.totalMs / msg.words.length;
+          for (const word of msg.words) {
+            transcript.textContent += (transcript.textContent ? ' ' : '') + word;
+            wrap.scrollTop = wrap.scrollHeight;
+            await sleep(wordDelay);
+          }
+          wave.classList.remove('audio-wave--playing');
+          await sleep(500);
         }
       }
+
       await sleep(2200);
       wrap.style.transition = 'opacity 0.75s';
       wrap.style.opacity = '0';
@@ -369,14 +406,7 @@
       loop();
     }
 
-    let going = false;
-    new IntersectionObserver((entries, obs) => {
-      if (entries[0].isIntersecting && !going) {
-        going = true;
-        loop();
-        obs.disconnect();
-      }
-    }, { threshold: 0.15 }).observe(document.getElementById('chat-demo-section'));
+    loop();
   })();
   </script>
 
