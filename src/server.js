@@ -400,7 +400,18 @@ app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
     reply = reply.trim();
     const planAllowsAudio = ['crecimiento', 'a_medida'].includes(business.plan);
     const sent_audio = business.response_mode === 'audio' && !!business.voice_id && planAllowsAudio;
-    res.json({ reply, sent_doc, sent_audio, needs_human });
+
+    let audio_b64 = null;
+    if (sent_audio) {
+      try {
+        const mp3 = await generateAudioBuffer(business.voice_id, reply);
+        audio_b64 = mp3.toString('base64');
+      } catch (audioErr) {
+        console.error('[preview-audio] ElevenLabs failed:', audioErr.message);
+      }
+    }
+
+    res.json({ reply, sent_doc, sent_audio, needs_human, audio_b64 });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

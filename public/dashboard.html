@@ -1012,7 +1012,19 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
             previewAddBubble('assistant', '📎 [El asistente enviaría tu documento adjunto aquí]');
           }
           if (data.sent_audio) {
-            previewAddBubble('assistant', '🔊 [El asistente enviaría una nota de voz con tu voz clonada]');
+            const messages = document.getElementById('preview-messages');
+            const row = document.createElement('div');
+            row.className = 'preview-bubble-row preview-bubble-row--ai';
+            if (data.audio_b64) {
+              row.innerHTML = `<div class="preview-bubble preview-bubble--ai preview-audio-bubble">
+                <span class="preview-audio-label">🔊 Nota de voz</span>
+                <audio controls src="data:audio/mpeg;base64,${data.audio_b64}" class="preview-audio-player"></audio>
+              </div>`;
+            } else {
+              row.innerHTML = `<div class="preview-bubble preview-bubble--ai">🔊 [Voz generada — error al cargar el audio]</div>`;
+            }
+            messages.appendChild(row);
+            messages.scrollTop = messages.scrollHeight;
           }
           if (data.needs_human) {
             previewAddBubble('assistant', '⚠️ [Derivación activada — esta conversación se marcaría como pendiente y se notificaría al dueño]');
