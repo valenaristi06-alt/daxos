@@ -392,7 +392,9 @@ app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
       sent_doc = true;
       reply = rawReply.replace(/^\[SEND_DOC\]\s*/m, '').trim();
     }
-    res.json({ reply, sent_doc });
+    const planAllowsAudio = ['crecimiento', 'a_medida'].includes(business.plan);
+    const sent_audio = business.response_mode === 'audio' && !!business.voice_id && planAllowsAudio;
+    res.json({ reply, sent_doc, sent_audio });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

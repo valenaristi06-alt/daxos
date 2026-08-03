@@ -311,6 +311,24 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
 
         <p class="voice-section-desc">Clonamos tu voz para que las respuestas por audio suenen como vos, no como un asistente genérico. Es opcional — si preferís, podés dejar todo en texto.</p>
 
+        <!-- Modo de respuesta -->
+        <div class="field" style="margin-bottom: 20px;">
+          <label class="field-label">Modo de respuesta</label>
+          <div class="radio-group" id="response-mode-group">
+            <label class="radio-option" id="rm-texto-option">
+              <input type="radio" name="response_mode" value="texto" />
+              <span class="radio-label">Texto</span>
+              <span class="radio-desc">Mensajes de WhatsApp</span>
+            </label>
+            <label class="radio-option" id="rm-audio-option">
+              <input type="radio" name="response_mode" value="audio" />
+              <span class="radio-label">Audio (voz clonada)</span>
+              <span class="radio-desc">Requiere plan Crecimiento y voz activa</span>
+            </label>
+          </div>
+          <p class="field-hint" id="rm-hint" style="display:none; margin-top:6px;"></p>
+        </div>
+
         <!-- Bloqueo para plan Arranque -->
         <div id="voice-plan-lock" style="display:none" class="voice-plan-lock">
           <p class="voice-lock-msg">Esta función es parte del plan Crecimiento.</p>
@@ -500,6 +518,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
 
     initRadioGroup('prioridad-group');
     initRadioGroup('largo-group');
+    initRadioGroup('response-mode-group');
 
     // ── Style profile card ──
     const TONO_LABELS = { cercano:'Cercano', formal:'Formal', directo:'Directo', persuasivo:'Persuasivo', informativo:'Informativo' };
@@ -598,6 +617,22 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       document.getElementById('voice-confirm').style.display  = 'none';
 
       if (planAllowsVoice && b.voice_id) showVoiceCloned();
+
+      // Response mode toggle — set value and apply disabling rules
+      setRadio('response_mode', b.response_mode || 'texto');
+      const audioOption = document.getElementById('rm-audio-option');
+      const rmHint = document.getElementById('rm-hint');
+      if (!planAllowsVoice) {
+        audioOption.classList.add('radio-option--disabled');
+        audioOption.querySelector('input').disabled = true;
+        rmHint.textContent = 'Actualizá al plan Crecimiento para enviar respuestas por audio.';
+        rmHint.style.display = '';
+      } else if (!b.voice_id) {
+        audioOption.classList.add('radio-option--disabled');
+        audioOption.querySelector('input').disabled = true;
+        rmHint.textContent = 'Primero clonás tu voz — después podés activar el modo audio.';
+        rmHint.style.display = '';
+      }
     }
 
     // ── Load account (user phone) ──
@@ -672,6 +707,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         },
         pause_keywords: document.getElementById('pause_keywords').value.trim() || null,
         response_delay: parseInt(document.getElementById('response_delay').value, 10),
+        response_mode: document.querySelector('input[name="response_mode"]:checked')?.value || 'texto',
       };
 
       const res = await fetch('/api/business', {
@@ -974,6 +1010,9 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           previewAddBubble('assistant', data.reply);
           if (data.sent_doc) {
             previewAddBubble('assistant', '📎 [El asistente enviaría tu documento adjunto aquí]');
+          }
+          if (data.sent_audio) {
+            previewAddBubble('assistant', '🔊 [El asistente enviaría una nota de voz con tu voz clonada]');
           }
         } else {
           previewAddBubble('assistant', `⚠ ${data.error || 'Error al generar respuesta.'}`);
