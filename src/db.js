@@ -107,6 +107,7 @@ if (!bizCols.includes('subscription_status'))    db.exec("ALTER TABLE businesses
 if (!bizCols.includes('business_context'))       db.exec('ALTER TABLE businesses ADD COLUMN business_context TEXT');
 if (!bizCols.includes('website_url'))            db.exec('ALTER TABLE businesses ADD COLUMN website_url TEXT');
 if (!bizCols.includes('website_summary'))        db.exec('ALTER TABLE businesses ADD COLUMN website_summary TEXT');
+if (!bizCols.includes('pricing_info'))           db.exec('ALTER TABLE businesses ADD COLUMN pricing_info TEXT');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS pending_payments (
@@ -165,7 +166,7 @@ function markConversationPaused(conversationId) {
   db.prepare('UPDATE conversations SET needs_attention = 1 WHERE id = ?').run(conversationId);
 }
 
-function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = null, survey_answers = null, business_context = null, website_url = null, response_mode = 'texto', pause_keywords = null, response_delay = 5 }) {
+function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = null, survey_answers = null, business_context = null, website_url = null, response_mode = 'texto', pause_keywords = null, response_delay = 5, pricing_info = null }) {
   const serialized = {
     name,
     whatsapp_number: whatsapp_number || null,
@@ -176,6 +177,7 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
     response_mode,
     pause_keywords: pause_keywords || null,
     response_delay: Number(response_delay) || 5,
+    pricing_info: pricing_info || null,
   };
 
   if (id) {
@@ -184,7 +186,7 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
         sales_examples=@sales_examples, survey_answers=@survey_answers,
         business_context=@business_context, website_url=@website_url,
         response_mode=@response_mode, pause_keywords=@pause_keywords,
-        response_delay=@response_delay
+        response_delay=@response_delay, pricing_info=@pricing_info
       WHERE id=@id
     `).run({ ...serialized, id });
     return getBusinessById(id);
@@ -192,21 +194,21 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
 
   if (whatsapp_number) {
     const result = db.prepare(`
-      INSERT INTO businesses (name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, response_delay, trial_ends_at)
-      VALUES (@name, @whatsapp_number, @sales_examples, @survey_answers, @business_context, @website_url, @response_mode, @response_delay, datetime('now', '+14 days'))
+      INSERT INTO businesses (name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, response_delay, pricing_info, trial_ends_at)
+      VALUES (@name, @whatsapp_number, @sales_examples, @survey_answers, @business_context, @website_url, @response_mode, @response_delay, @pricing_info, datetime('now', '+14 days'))
       ON CONFLICT(whatsapp_number) DO UPDATE SET
         name=excluded.name, sales_examples=excluded.sales_examples,
         survey_answers=excluded.survey_answers, business_context=excluded.business_context,
         website_url=excluded.website_url, response_mode=excluded.response_mode,
-        response_delay=excluded.response_delay
+        response_delay=excluded.response_delay, pricing_info=excluded.pricing_info
     `).run(serialized);
     const rowId = result.lastInsertRowid || db.prepare('SELECT id FROM businesses WHERE whatsapp_number = ?').get(whatsapp_number).id;
     return getBusinessById(rowId);
   }
 
   const result = db.prepare(`
-    INSERT INTO businesses (name, sales_examples, survey_answers, business_context, website_url, response_mode, response_delay, trial_ends_at)
-    VALUES (@name, @sales_examples, @survey_answers, @business_context, @website_url, @response_mode, @response_delay, datetime('now', '+14 days'))
+    INSERT INTO businesses (name, sales_examples, survey_answers, business_context, website_url, response_mode, response_delay, pricing_info, trial_ends_at)
+    VALUES (@name, @sales_examples, @survey_answers, @business_context, @website_url, @response_mode, @response_delay, @pricing_info, datetime('now', '+14 days'))
   `).run(serialized);
   return getBusinessById(result.lastInsertRowid);
 }

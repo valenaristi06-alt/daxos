@@ -14,6 +14,10 @@ function buildSystemPrompt(business, label) {
     lines.push(`\nContexto del negocio: ${business.business_context}`);
   }
 
+  if (business.pricing_info) {
+    lines.push(`\nPRECIOS Y SERVICIOS — información oficial cargada por el dueño del negocio. Usá estos datos para responder cualquier consulta sobre precios, planes o servicios de forma directa y confiada. Si la pregunta del cliente está cubierta aquí, respondé con estos datos y NO uses [NEEDS_HUMAN]:\n${business.pricing_info}`);
+  }
+
   if (business.website_summary) {
     lines.push(`\nInformación extraída automáticamente del sitio web del negocio (puede estar desactualizada — priorizá lo que el dueño escribió a mano): ${business.website_summary}`);
   }

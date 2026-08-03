@@ -154,7 +154,7 @@ async function fetchAndSummarizeWebsite(url) {
 }
 
 app.put('/api/business', requireAuth, async (req, res) => {
-  const { name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, response_delay } = req.body;
+  const { name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, response_delay, pricing_info } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'El nombre del negocio es requerido' });
 
   try {
@@ -174,6 +174,7 @@ app.put('/api/business', requireAuth, async (req, res) => {
       response_mode,
       pause_keywords: pause_keywords ? pause_keywords.trim() : null,
       response_delay: response_delay != null ? Math.min(20, Math.max(0, parseInt(response_delay, 10) || 5)) : 5,
+      pricing_info: pricing_info ? pricing_info.trim() : null,
     });
     if (!user.business_id) setUserBusiness(user.id, business.id);
 

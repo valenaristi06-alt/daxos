@@ -108,6 +108,18 @@
         </div>
 
         <div class="field">
+          <label class="field-label" for="pricing_info">
+            Precios y servicios
+            <span class="tag-optional">Opcional</span>
+          </label>
+          <span class="field-hint">Cargá tus precios, planes o servicios principales. El asistente los usará para responder consultas de precio sin derivar a un humano.</span>
+          <textarea id="pricing_info" rows="5" placeholder="Ej:
+Plan básico: $1.500/mes — incluye hasta 3 usuarios y soporte por email.
+Plan pro: $3.000/mes — usuarios ilimitados, soporte prioritario 24/7.
+Consultoría puntual: $500 la hora."></textarea>
+        </div>
+
+        <div class="field">
           <label class="field-label">
             Documento adjunto
             <span class="tag-optional">Opcional</span>
@@ -576,6 +588,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       document.getElementById('name').value = b.name || '';
       document.getElementById('whatsapp_number').value = b.whatsapp_number || '';
       document.getElementById('business_context').value = b.business_context || '';
+      document.getElementById('pricing_info').value = b.pricing_info || '';
       document.getElementById('website_url').value = b.website_url || '';
 
       if (Array.isArray(b.sales_examples)) {
@@ -708,6 +721,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         pause_keywords: document.getElementById('pause_keywords').value.trim() || null,
         response_delay: parseInt(document.getElementById('response_delay').value, 10),
         response_mode: document.querySelector('input[name="response_mode"]:checked')?.value || 'texto',
+        pricing_info: document.getElementById('pricing_info').value.trim() || null,
       };
 
       const res = await fetch('/api/business', {
