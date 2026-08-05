@@ -346,6 +346,61 @@ function getDailyConversationStats(businessId) {
   return result;
 }
 
+function getTodayStats(businessId) {
+  const messages24h = db.prepare(`
+    SELECT COUNT(*) as count FROM messages m
+    JOIN conversations c ON c.id = m.conversation_id
+    WHERE c.business_id = ? AND m.created_at >= datetime('now', '-1 day')
+  `).get(businessId).count;
+
+  const uniqueClientsToday = db.prepare(`
+    SELECT COUNT(DISTINCT c.customer_id) as count FROM messages m
+    JOIN conversations c ON c.id = m.conversation_id
+    WHERE c.business_id = ? AND date(m.created_at, '-3 hours') = date('now', '-3 hours')
+  `).get(businessId).count;
+
+  const pausedToday = db.prepare(`
+    SELECT COUNT(*) as count FROM conversations c
+    WHERE c.business_id = ? AND c.needs_attention = 1
+    AND EXISTS (
+      SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND date(m.created_at, '-3 hours') = date('now', '-3 hours')
+    )
+  `).get(businessId).count;
+
+  const resolvedToday = db.prepare(`
+    SELECT COUNT(*) as count FROM conversations c
+    WHERE c.business_id = ? AND c.needs_attention = 0
+    AND EXISTS (
+      SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND date(m.created_at, '-3 hours') = date('now', '-3 hours')
+    )
+  `).get(businessId).count;
+
+  return { messages24h, uniqueClientsToday, pausedToday, resolvedToday };
+}
+
+function getDailyMessageStats(businessId) {
+  const rows = db.prepare(`
+    SELECT date(m.created_at, '-3 hours') as day, COUNT(*) as count
+    FROM messages m
+    JOIN conversations c ON c.id = m.conversation_id
+    WHERE c.business_id = ? AND m.created_at >= date('now', '-3 hours', '-6 days')
+    GROUP BY date(m.created_at, '-3 hours')
+    ORDER BY day ASC
+  `).all(businessId);
+
+  const map = {};
+  rows.forEach(r => { map[r.day] = r.count; });
+
+  const result = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    d.setUTCDate(d.getUTCDate() - i);
+    const day = d.toISOString().slice(0, 10);
+    result.push({ day, count: map[day] || 0 });
+  }
+  return result;
+}
+
 // --- users ---
 
 const stmtCreateUser = db.prepare(`
@@ -413,6 +468,8 @@ module.exports = {
   markConversationPaused,
   markConversationResumed,
   getDailyConversationStats,
+  getTodayStats,
+  getDailyMessageStats,
   setConversationLabel,
   setBusinessDocument,
   clearBusinessDocument,

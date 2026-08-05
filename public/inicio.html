@@ -58,56 +58,64 @@
 
     <div id="trial-banner" style="display:none"></div>
 
+    <!-- 3 tarjetas superiores -->
     <div class="inicio-grid" id="inicio-grid">
 
-      <!-- Integraciones -->
-      <div class="icard" id="card-whatsapp">
-        <p class="icard-label">Integraciones</p>
+      <div class="icard" id="card-msgs24h">
+        <p class="icard-label">Mensajes · últimas 24 h</p>
         <div class="icard-skeleton">
           <div class="skeleton skeleton-line skeleton-line--mid"></div>
         </div>
       </div>
 
-      <!-- Trial / plan -->
-      <div class="icard" id="card-trial" style="display:none">
-        <p class="icard-label">Período de prueba</p>
-        <div class="icard-big-num" id="trial-days-num"></div>
-        <p class="icard-big-label" id="trial-days-label"></p>
+      <div class="icard" id="card-clients">
+        <p class="icard-label">Clientes únicos hoy</p>
+        <div class="icard-skeleton">
+          <div class="skeleton skeleton-line skeleton-line--mid"></div>
+        </div>
       </div>
 
-      <!-- Conversations -->
-      <div class="icard" id="card-convs">
-        <p class="icard-label">Conversaciones</p>
-        <div id="convs-content">
-          <div class="icard-skeleton">
-            <div class="skeleton skeleton-line skeleton-line--short"></div>
-            <div class="skeleton skeleton-line skeleton-line--mid"></div>
-          </div>
+      <div class="icard" id="card-paused">
+        <p class="icard-label">Derivadas a vos hoy</p>
+        <div class="icard-skeleton">
+          <div class="skeleton skeleton-line skeleton-line--mid"></div>
         </div>
       </div>
 
     </div>
 
-    <!-- 7-day chart -->
-    <div class="chart-section">
-      <div class="chart-header">
-        <span class="chart-title">Conversaciones · últimos 7 días</span>
-        <span class="chart-subtitle" id="chart-total"></span>
-      </div>
-      <div class="chart-wrap">
-        <div class="chart-bars" id="chart-bars">
-          <!-- skeleton while loading -->
-          <div class="icard-skeleton" style="width:100%;flex-direction:row;align-items:flex-end;gap:8px;height:80px;">
-            <div class="skeleton" style="flex:1;height:45%"></div>
-            <div class="skeleton" style="flex:1;height:70%"></div>
-            <div class="skeleton" style="flex:1;height:30%"></div>
-            <div class="skeleton" style="flex:1;height:80%"></div>
-            <div class="skeleton" style="flex:1;height:55%"></div>
-            <div class="skeleton" style="flex:1;height:40%"></div>
-            <div class="skeleton" style="flex:1;height:65%"></div>
+    <!-- fila inferior: gráfico + estado del agente -->
+    <div class="inicio-bottom-row">
+
+      <div class="chart-section">
+        <div class="chart-header">
+          <span class="chart-title">Mensajes procesados · últimos 7 días</span>
+          <span class="chart-subtitle" id="chart-total"></span>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-bars" id="chart-bars">
+            <div class="icard-skeleton" style="width:100%;flex-direction:row;align-items:flex-end;gap:8px;height:80px;">
+              <div class="skeleton" style="flex:1;height:45%"></div>
+              <div class="skeleton" style="flex:1;height:70%"></div>
+              <div class="skeleton" style="flex:1;height:30%"></div>
+              <div class="skeleton" style="flex:1;height:80%"></div>
+              <div class="skeleton" style="flex:1;height:55%"></div>
+              <div class="skeleton" style="flex:1;height:40%"></div>
+              <div class="skeleton" style="flex:1;height:65%"></div>
+            </div>
           </div>
         </div>
       </div>
+
+      <div class="icard" id="card-agent">
+        <p class="icard-label">Estado del agente</p>
+        <div class="icard-skeleton">
+          <div class="skeleton skeleton-line skeleton-line--full"></div>
+          <div class="skeleton skeleton-line skeleton-line--mid"></div>
+          <div class="skeleton skeleton-line skeleton-line--full"></div>
+        </div>
+      </div>
+
     </div>
 
     <div class="shortcut-grid">
@@ -138,15 +146,15 @@
       document.getElementById('btn-logout').addEventListener('click', doLogout);
       document.getElementById('btn-logout-mobile').addEventListener('click', doLogout);
 
-      // Load business + stats in parallel
-      const [bRes, sRes, dRes] = await Promise.all([
+      // Load all data in parallel
+      const [bRes, todayRes, msgDailyRes] = await Promise.all([
         fetch('/api/business'),
-        fetch('/api/stats'),
-        fetch('/api/stats/daily'),
+        fetch('/api/stats/today'),
+        fetch('/api/stats/messages-daily'),
       ]);
-      const b = bRes.ok ? await bRes.json() : null;
-      const stats = sRes.ok ? await sRes.json() : { conversation_count: 0 };
-      const daily = dRes.ok ? await dRes.json() : [];
+      const b        = bRes.ok        ? await bRes.json()        : null;
+      const today    = todayRes.ok    ? await todayRes.json()    : { messages24h: 0, uniqueClientsToday: 0, pausedToday: 0, resolvedToday: 0 };
+      const msgDaily = msgDailyRes.ok ? await msgDailyRes.json() : [];
 
       // Plan badge
       if (b?.plan) {
@@ -172,7 +180,7 @@
       document.getElementById('greeting-sub').textContent =
         greetingSubs[Math.floor(Math.random() * greetingSubs.length)];
 
-      // Trial banner (top, small — same as dashboard)
+      // Trial banner
       const banner = document.getElementById('trial-banner');
       if (!b) {
         banner.className = 'trial-banner trial-banner--active';
@@ -194,114 +202,115 @@
         }
       }
 
-      // Integraciones card (replace skeleton)
-      const waCard = document.getElementById('card-whatsapp');
-      const waRow = document.createElement('p');
-      if (b?.whatsapp_number) {
-        waRow.className = 'icard-status-ok';
-        waRow.textContent = 'WhatsApp: Conectado ✓';
-      } else {
-        waRow.className = 'icard-status-warn';
-        waRow.innerHTML = 'WhatsApp: <a href="/dashboard.html">No conectado</a>';
-      }
-      const igRow = document.createElement('p');
-      igRow.className = 'icard-status-soon';
-      igRow.textContent = 'Instagram: Próximamente';
-      const wrap = document.createElement('div');
-      wrap.append(waRow, igRow);
-      waCard.querySelector('.icard-skeleton').replaceWith(wrap);
+      const EMPTY_MSG = 'Todavía sin actividad — en cuanto tus clientes escriban, lo vas a ver acá.';
 
-      // Trial card (prominent days remaining — only for arranque with active trial)
-      const trialCard = document.getElementById('card-trial');
-      if (b?.plan === 'arranque' && b?.trial_ends_at) {
-        const endsAt = new Date(b.trial_ends_at);
-        const now = new Date();
-        trialCard.style.display = 'block';
-        if (endsAt < now) {
-          document.getElementById('trial-days-num').className = 'icard-big-num';
-          document.getElementById('trial-days-num').textContent = '0';
-          document.getElementById('trial-days-label').textContent = 'días restantes. Tu prueba terminó.';
-        } else {
-          const daysLeft = Math.ceil((endsAt - now) / (1000 * 60 * 60 * 24));
-          document.getElementById('trial-days-num').textContent = daysLeft;
-          document.getElementById('trial-days-label').textContent = `día${daysLeft !== 1 ? 's' : ''} restante${daysLeft !== 1 ? 's' : ''} de prueba gratis.`;
-        }
-      }
+      // Card: mensajes 24h
+      const msgs24El = document.getElementById('card-msgs24h');
+      msgs24El.querySelector('.icard-skeleton').replaceWith(
+        today.messages24h > 0
+          ? Object.assign(document.createElement('div'), {
+              innerHTML: `<div class="icard-num-today">${today.messages24h}</div>
+                          <p class="icard-big-label">mensaje${today.messages24h !== 1 ? 's' : ''} en las últimas 24 h</p>`
+            })
+          : Object.assign(document.createElement('p'), {
+              className: 'icard-empty-today', textContent: EMPTY_MSG
+            })
+      );
 
+      // Card: clientes únicos hoy
+      const clientsEl = document.getElementById('card-clients');
+      clientsEl.querySelector('.icard-skeleton').replaceWith(
+        today.uniqueClientsToday > 0
+          ? Object.assign(document.createElement('div'), {
+              innerHTML: `<div class="icard-num-today">${today.uniqueClientsToday}</div>
+                          <p class="icard-big-label">cliente${today.uniqueClientsToday !== 1 ? 's' : ''} único${today.uniqueClientsToday !== 1 ? 's' : ''} que escribieron hoy</p>`
+            })
+          : Object.assign(document.createElement('p'), {
+              className: 'icard-empty-today', textContent: EMPTY_MSG
+            })
+      );
+
+      // Card: derivadas hoy
+      const pausedEl = document.getElementById('card-paused');
+      pausedEl.querySelector('.icard-skeleton').replaceWith(
+        today.pausedToday > 0
+          ? Object.assign(document.createElement('div'), {
+              innerHTML: `<div class="icard-num-today icard-num-today--accent">${today.pausedToday}</div>
+                          <p class="icard-big-label">conversación${today.pausedToday !== 1 ? 'es' : ''} esperando tu respuesta</p>`
+            })
+          : Object.assign(document.createElement('p'), {
+              className: 'icard-empty-today', textContent: 'Ninguna conversación requiere tu atención hoy.'
+            })
+      );
+
+      // Card: estado del agente
+      function renderAgentCard() {
+        const agentEl = document.getElementById('card-agent');
+        const waOk = !!b?.whatsapp_number;
+        const botOnline = waOk;
+        const hasActivity = today.resolvedToday > 0 || today.pausedToday > 0;
+
+        const resolutionHtml = hasActivity
+          ? `<div class="agent-resolution">
+               <span class="res-count">${today.resolvedToday}</span> resueltas solas
+               &nbsp;·&nbsp;
+               <span class="res-derived">${today.pausedToday}</span> derivadas a vos
+             </div>`
+          : `<div class="agent-resolution"><span style="color:var(--muted);font-style:italic">Sin conversaciones hoy todavía.</span></div>`;
+
+        agentEl.querySelector('.icard-skeleton').replaceWith(
+          Object.assign(document.createElement('div'), {
+            innerHTML: `
+              <div class="agent-status-row">
+                <span class="agent-dot ${botOnline ? 'agent-dot--online' : 'agent-dot--offline'}"></span>
+                <span>${botOnline ? 'En línea' : 'Sin conectar'}</span>
+              </div>
+              <div class="agent-channels">
+                <div class="agent-channel-row">
+                  <span class="${waOk ? 'agent-channel-ok' : ''}">WhatsApp${waOk ? ' ✓' : ' — <a href="/dashboard.html" style="color:var(--accent);text-decoration:none">conectar</a>'}</span>
+                </div>
+                <div class="agent-channel-row">
+                  <span class="agent-channel-soon">Instagram — próximamente</span>
+                </div>
+              </div>
+              ${resolutionHtml}
+            `
+          })
+        );
+      }
+      renderAgentCard();
+
+      // 7-day messages chart
       function renderDailyChart(data) {
         const container = document.getElementById('chart-bars');
         if (!data || !data.length) { container.innerHTML = ''; return; }
 
         const max = Math.max(...data.map(d => d.count), 1);
         const totalWeek = data.reduce((s, d) => s + d.count, 0);
+        const todayStr = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-        const totalEl = document.getElementById('chart-total');
-        totalEl.textContent = totalWeek === 0 ? 'sin actividad esta semana'
-          : `${totalWeek} esta semana`;
+        document.getElementById('chart-total').textContent = totalWeek === 0
+          ? 'sin actividad esta semana'
+          : `${totalWeek} mensajes esta semana`;
 
         const DAYS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
         container.innerHTML = data.map(({ day, count }) => {
           const pct = Math.round((count / max) * 100);
           const label = DAYS[new Date(day + 'T12:00:00').getDay()];
+          const isToday = day === todayStr;
           return `
-            <div class="chart-col" title="${day}: ${count} conversación${count !== 1 ? 'es' : ''}">
+            <div class="chart-col" title="${day}: ${count} mensaje${count !== 1 ? 's' : ''}">
               <div class="chart-bar-wrap">
-                <div class="chart-bar ${count === 0 ? 'chart-bar--zero' : ''}"
+                <div class="chart-bar ${count === 0 ? 'chart-bar--zero' : ''} ${isToday ? 'chart-bar--today' : ''}"
                      style="height:${count === 0 ? 3 : Math.max(pct, 6)}%"></div>
               </div>
-              <span class="chart-day">${label}</span>
+              <span class="chart-day" style="${isToday ? 'color:var(--accent);font-weight:700' : ''}">${label}</span>
               <span class="chart-count">${count > 0 ? count : ''}</span>
             </div>`;
         }).join('');
       }
 
-      function formatPhone(raw) {
-        if (!raw) return 'Desconocido';
-        if (raw.length > 8) return raw.slice(0, -6).replace(/./g, '·') + raw.slice(-6);
-        return raw;
-      }
-
-      function timeAgo(dt) {
-        const d = new Date(dt.replace(' ', 'T') + 'Z');
-        const diff = Date.now() - d.getTime();
-        const mins = Math.floor(diff / 60000);
-        const hrs  = Math.floor(diff / 3600000);
-        const days = Math.floor(diff / 86400000);
-        if (mins < 1)  return 'ahora';
-        if (mins < 60) return `hace ${mins} min`;
-        if (hrs < 24)  return `hace ${hrs}h`;
-        return `hace ${days}d`;
-      }
-
-      function escapeHtml(s) {
-        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      }
-
-      // 7-day chart
-      renderDailyChart(daily);
-
-      // Conversations card
-      const convsEl = document.getElementById('convs-content');
-      const count = stats.conversation_count;
-      if (count === 0) {
-        convsEl.innerHTML = '<p class="icard-empty-msg">Todavía no tuviste conversaciones — en cuanto tus clientes te escriban, las vas a ver acá.</p>';
-      } else {
-        const lm = stats.last_message;
-        const preview = lm
-          ? `<div class="icard-last-msg">
-               <div class="icard-last-meta">
-                 <span class="icard-last-who">${formatPhone(lm.customer_id)}</span>
-                 <span class="icard-last-time">${timeAgo(lm.msg_at)}</span>
-               </div>
-               <p class="icard-last-text">${escapeHtml(lm.content.slice(0, 100))}${lm.content.length > 100 ? '…' : ''}</p>
-             </div>`
-          : '';
-        convsEl.innerHTML = `
-          <div class="icard-big-num icard-big-num--text">${count}</div>
-          <p class="icard-big-label">conversacion${count !== 1 ? 'es' : ''} en total.</p>
-          ${preview}
-        `;
-      }
+      renderDailyChart(msgDaily);
     })();
   </script>
 

@@ -9,7 +9,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments } = require('./db');
 const { generateReply, analyzeStyle, summarizeWebsite } = require('./claude');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
 const { sendPauseEmail, sendUnmatchedPaymentAlert } = require('./email');
@@ -316,6 +316,18 @@ app.get('/api/stats/daily', requireAuth, (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user.business_id) return res.json([]);
   res.json(getDailyConversationStats(user.business_id));
+});
+
+app.get('/api/stats/today', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.json({ messages24h: 0, uniqueClientsToday: 0, pausedToday: 0, resolvedToday: 0 });
+  res.json(getTodayStats(user.business_id));
+});
+
+app.get('/api/stats/messages-daily', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.json([]);
+  res.json(getDailyMessageStats(user.business_id));
 });
 
 app.post('/businesses', (req, res) => {
