@@ -8,6 +8,26 @@
   <title>Panel — Daxos</title>
   <link rel="stylesheet" href="/dashboard.css" />
   <script src="/toast.js"></script>
+  <style>
+    .btn-wa-connect {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: #25D366;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-wa-connect:hover { background: #1ebe5a; }
+    .btn-wa-connect:disabled { background: #6b7280; cursor: not-allowed; }
+  </style>
+  <!-- Meta SDK — cargado async, se inicializa en fbAsyncInit -->
+  <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
 </head>
 <body>
 
@@ -85,12 +105,17 @@
         </div>
 
         <div class="field">
-          <label class="field-label" for="whatsapp_number">
-            Número de WhatsApp
-            <span class="tag-optional">Opcional</span>
-          </label>
-          <span class="field-hint">Podés conectarlo después desde el panel de Meta.</span>
-          <input id="whatsapp_number" type="text" placeholder="+59891234567" />
+          <label class="field-label">WhatsApp Business</label>
+          <span class="field-hint">Conectá tu cuenta de WhatsApp Business directamente desde Daxos para activar las respuestas automáticas.</span>
+          <div id="wa-connect-status" style="display:none; align-items:center; gap:10px; margin-top:6px;">
+            <span style="color:#22c55e; font-size:13px;">✓ Conectado</span>
+            <span id="wa-connected-number" style="color:#888; font-size:13px;"></span>
+          </div>
+          <button id="btn-wa-connect" type="button" class="btn-wa-connect" style="margin-top:8px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex-shrink:0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.855L.057 23.886a.5.5 0 0 0 .608.617l6.224-1.633A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.686-.528-5.208-1.44l-.374-.22-3.894 1.022 1.001-3.804-.242-.392A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+            Conectar WhatsApp Business
+          </button>
+          <p id="wa-connect-error" style="display:none; color:#ef4444; font-size:12px; margin-top:6px;"></p>
         </div>
         <div class="field">
           <label class="field-label" for="business_context">Contexto del negocio</label>
@@ -491,6 +516,8 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
   </div>
 
   <script>
+    let currentBusiness = null;
+
     // ── Redirect if not logged in ──
     (async () => {
       const res = await fetch('/auth/me');
@@ -555,8 +582,10 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
     async function loadBusiness() {
       const res = await fetch('/api/business');
       const b = await res.json();
+      currentBusiness = b;
       document.getElementById('form-skeleton').style.display = 'none';
       document.getElementById('form').style.display = '';
+      renderWaConnectionStatus(b);
 
       // Trial banner — runs even if no business saved yet
       const banner = document.getElementById('trial-banner');
@@ -1199,6 +1228,140 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       status.textContent = '';
       btn.disabled = false;
     });
+
+    // ── WhatsApp Embedded Signup ──
+
+    function renderWaConnectionStatus(b) {
+      const statusEl = document.getElementById('wa-connect-status');
+      const btnEl    = document.getElementById('btn-wa-connect');
+      const numEl    = document.getElementById('wa-connected-number');
+      if (b && b.phone_number_id) {
+        statusEl.style.display = 'flex';
+        numEl.textContent = b.whatsapp_number ? `(${b.whatsapp_number})` : `ID: ${b.phone_number_id}`;
+        btnEl.textContent = 'Reconectar WhatsApp';
+      } else {
+        statusEl.style.display = 'none';
+        btnEl.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex-shrink:0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.855L.057 23.886a.5.5 0 0 0 .608.617l6.224-1.633A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.686-.528-5.208-1.44l-.374-.22-3.894 1.022 1.001-3.804-.242-.392A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg> Conectar WhatsApp Business`;
+      }
+    }
+
+    // Carga config pública (META_APP_ID + CONFIG_ID) e inicializa el SDK
+    let metaConfig = {};
+    fetch('/api/config').then(r => r.json()).then(cfg => {
+      metaConfig = cfg;
+      window.fbAsyncInit = function () {
+        FB.init({
+          appId: cfg.metaAppId,
+          autoLogAppEvents: true,
+          xfbml: false,
+          version: 'v21.0',
+        });
+      };
+      // Si el SDK ya cargó antes de fbAsyncInit (raro pero posible), reinicializa
+      if (window.FB) window.fbAsyncInit();
+    });
+
+    // Escucha el evento del popup de Embedded Signup para capturar waba_id y phone_number_id
+    let pendingEsCode = null;
+    window.addEventListener('message', async function (event) {
+      if (event.origin !== 'https://www.facebook.com') return;
+      let data;
+      try { data = JSON.parse(event.data); } catch { return; }
+      if (data.type !== 'WA_EMBEDDED_SIGNUP') return;
+
+      const errEl = document.getElementById('wa-connect-error');
+      const btn   = document.getElementById('btn-wa-connect');
+
+      if (data.event === 'FINISH') {
+        const { phone_number_id, waba_id } = data.data;
+        if (!pendingEsCode || !waba_id || !phone_number_id) {
+          errEl.textContent = 'Datos incompletos del flujo de Meta. Intentá de nuevo.';
+          errEl.style.display = 'block';
+          btn.disabled = false;
+          return;
+        }
+        try {
+          const r = await fetch('/auth/whatsapp/callback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              code: pendingEsCode,
+              waba_id,
+              phone_number_id,
+              business_id: currentBusiness?.id,
+            }),
+          });
+          const result = await r.json();
+          if (!r.ok) throw new Error(result.error || 'Error desconocido');
+          toast('WhatsApp conectado correctamente ✓', 'ok');
+          errEl.style.display = 'none';
+          // Actualiza estado sin recargar la página
+          currentBusiness = { ...currentBusiness, phone_number_id, waba_id: waba_id };
+          renderWaConnectionStatus(currentBusiness);
+        } catch (err) {
+          errEl.textContent = `Error al guardar la conexión: ${err.message}`;
+          errEl.style.display = 'block';
+        } finally {
+          btn.disabled = false;
+          pendingEsCode = null;
+        }
+      } else if (data.event === 'CANCEL') {
+        errEl.textContent = 'Conectaste el WhatsApp pero cancelaste antes de terminar. Volvé a intentarlo para completar la conexión.';
+        errEl.style.display = 'block';
+        btn.disabled = false;
+        pendingEsCode = null;
+      } else if (data.event === 'ERROR') {
+        errEl.textContent = `Error en el flujo de Meta: ${data.data?.error_message || 'desconocido'}`;
+        errEl.style.display = 'block';
+        btn.disabled = false;
+        pendingEsCode = null;
+      }
+    });
+
+    document.getElementById('btn-wa-connect').addEventListener('click', function () {
+      if (!window.FB) {
+        document.getElementById('wa-connect-error').textContent = 'El SDK de Meta no cargó todavía. Recargá la página e intentá de nuevo.';
+        document.getElementById('wa-connect-error').style.display = 'block';
+        return;
+      }
+      if (!currentBusiness?.id) {
+        document.getElementById('wa-connect-error').textContent = 'Guardá tu negocio antes de conectar WhatsApp.';
+        document.getElementById('wa-connect-error').style.display = 'block';
+        return;
+      }
+
+      const btn = this;
+      btn.disabled = true;
+      document.getElementById('wa-connect-error').style.display = 'none';
+      pendingEsCode = null;
+
+      // TODO: reemplazar metaConfig.whatsappConfigId con el config_id real cuando
+      // Meta apruebe la Verificación de acceso en Meta Business Manager
+      const configId = metaConfig.whatsappConfigId;
+
+      FB.login(function (response) {
+        if (response.authResponse?.code) {
+          pendingEsCode = response.authResponse.code;
+          // El resto del flujo lo maneja el listener del message event (WA_EMBEDDED_SIGNUP FINISH)
+        } else {
+          btn.disabled = false;
+          if (!response.authResponse) {
+            document.getElementById('wa-connect-error').textContent = 'Inicio de sesión cancelado o ventana cerrada.';
+            document.getElementById('wa-connect-error').style.display = 'block';
+          }
+        }
+      }, {
+        config_id: configId,           // TODO: pendiente aprobación Meta
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: {
+          setup: {},
+          featureType: '',
+          sessionInfoVersion: '3',
+        },
+      });
+    });
+
   </script>
 
 </body>

@@ -1,6 +1,31 @@
 const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+
+// AES-256-GCM helpers — key must be 32-byte hex in ENCRYPTION_KEY env var
+const ENC_KEY = process.env.ENCRYPTION_KEY
+  ? Buffer.from(process.env.ENCRYPTION_KEY, 'hex')
+  : null;
+
+function encrypt(plaintext) {
+  if (!plaintext) return null;
+  if (!ENC_KEY) throw new Error('ENCRYPTION_KEY not set');
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-gcm', ENC_KEY, iv);
+  const enc = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `${iv.toString('hex')}:${tag.toString('hex')}:${enc.toString('hex')}`;
+}
+
+function decrypt(ciphertext) {
+  if (!ciphertext) return null;
+  if (!ENC_KEY) throw new Error('ENCRYPTION_KEY not set');
+  const [ivHex, tagHex, encHex] = ciphertext.split(':');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', ENC_KEY, Buffer.from(ivHex, 'hex'));
+  decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
+  return decipher.update(Buffer.from(encHex, 'hex')) + decipher.final('utf8');
+}
 
 const DB_DIR = path.join(__dirname, '../data');
 fs.mkdirSync(DB_DIR, { recursive: true });
@@ -108,6 +133,9 @@ if (!bizCols.includes('business_context'))       db.exec('ALTER TABLE businesses
 if (!bizCols.includes('website_url'))            db.exec('ALTER TABLE businesses ADD COLUMN website_url TEXT');
 if (!bizCols.includes('website_summary'))        db.exec('ALTER TABLE businesses ADD COLUMN website_summary TEXT');
 if (!bizCols.includes('pricing_info'))           db.exec('ALTER TABLE businesses ADD COLUMN pricing_info TEXT');
+if (!bizCols.includes('waba_id'))               db.exec('ALTER TABLE businesses ADD COLUMN waba_id TEXT');
+if (!bizCols.includes('phone_number_id'))        db.exec('ALTER TABLE businesses ADD COLUMN phone_number_id TEXT');
+if (!bizCols.includes('wa_access_token'))        db.exec('ALTER TABLE businesses ADD COLUMN wa_access_token TEXT');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS pending_payments (
@@ -130,7 +158,14 @@ function deserializeBusiness(row) {
     sales_examples: row.sales_examples ? JSON.parse(row.sales_examples) : null,
     survey_answers: row.survey_answers ? JSON.parse(row.survey_answers) : null,
     style_profile: row.style_profile ? JSON.parse(row.style_profile) : null,
+    wa_access_token: ENC_KEY ? decrypt(row.wa_access_token) : row.wa_access_token,
   };
+}
+
+function saveWabaCredentials(businessId, { wabaId, phoneNumberId, accessToken }) {
+  db.prepare(`
+    UPDATE businesses SET waba_id = ?, phone_number_id = ?, wa_access_token = ? WHERE id = ?
+  `).run(wabaId, phoneNumberId, encrypt(accessToken), businessId);
 }
 
 function setUserPhone(userId, phone) {
@@ -444,6 +479,53 @@ function getPendingPayments() {
   return db.prepare('SELECT * FROM pending_payments ORDER BY created_at DESC').all();
 }
 
+// --- admin queries (read-only) ---
+
+function getAllBusinesses() {
+  return db.prepare(`
+    SELECT
+      b.id, b.name, b.plan, b.trial_ends_at, b.plan_expires_at, b.subscription_status,
+      b.created_at, b.whatsapp_number, b.response_mode, b.voice_id, b.website_url,
+      u.email as owner_email,
+      (SELECT COUNT(*) FROM conversations c WHERE c.business_id = b.id) as conv_count,
+      (SELECT COUNT(*) FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.business_id = b.id) as msg_count,
+      (SELECT m.created_at FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.business_id = b.id ORDER BY m.created_at DESC LIMIT 1) as last_msg_at
+    FROM businesses b
+    LEFT JOIN users u ON u.business_id = b.id
+    ORDER BY b.created_at DESC
+  `).all();
+}
+
+function getGlobalStats() {
+  const totalBusinesses = db.prepare('SELECT COUNT(*) as n FROM businesses').get().n;
+  const trialCount      = db.prepare(`SELECT COUNT(*) as n FROM businesses WHERE plan = 'arranque'`).get().n;
+  const payingCount     = db.prepare(`SELECT COUNT(*) as n FROM businesses WHERE plan != 'arranque'`).get().n;
+  const totalMessages   = db.prepare('SELECT COUNT(*) as n FROM messages').get().n;
+  const messagesThisMonth = db.prepare(`SELECT COUNT(*) as n FROM messages WHERE created_at >= date('now','start of month')`).get().n;
+  const aiRepliesThisMonth = db.prepare(`SELECT COUNT(*) as n FROM messages WHERE role='assistant' AND created_at >= date('now','start of month')`).get().n;
+  const voiceRepliesThisMonth = db.prepare(`
+    SELECT COUNT(*) as n FROM messages m
+    JOIN conversations c ON c.id = m.conversation_id
+    JOIN businesses b ON b.id = c.business_id
+    WHERE m.role = 'assistant' AND b.voice_id IS NOT NULL
+      AND m.created_at >= date('now','start of month')
+  `).get().n;
+  return { totalBusinesses, trialCount, payingCount, totalMessages, messagesThisMonth, aiRepliesThisMonth, voiceRepliesThisMonth };
+}
+
+function getBusinessAdminMetrics(businessId) {
+  const conversations    = db.prepare('SELECT COUNT(*) as n FROM conversations WHERE business_id = ?').get(businessId).n;
+  const totalMessages    = db.prepare(`SELECT COUNT(*) as n FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.business_id = ?`).get(businessId).n;
+  const aiReplies        = db.prepare(`SELECT COUNT(*) as n FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.business_id = ? AND m.role = 'assistant'`).get(businessId).n;
+  const paused           = db.prepare('SELECT COUNT(*) as n FROM conversations WHERE business_id = ? AND needs_attention = 1').get(businessId).n;
+  const messagesThisMonth = db.prepare(`SELECT COUNT(*) as n FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.business_id = ? AND m.created_at >= date('now','start of month')`).get(businessId).n;
+  return { conversations, totalMessages, aiReplies, paused, messagesThisMonth };
+}
+
+function getPlanCounts() {
+  return db.prepare('SELECT plan, COUNT(*) as count FROM businesses GROUP BY plan').all();
+}
+
 module.exports = {
   setUserPhone,
   setStyleProfile,
@@ -477,4 +559,9 @@ module.exports = {
   setSubscriptionStatus,
   savePendingPayment,
   getPendingPayments,
+  getAllBusinesses,
+  getGlobalStats,
+  getBusinessAdminMetrics,
+  getPlanCounts,
+  saveWabaCredentials,
 };

@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/logodaxosnaranjanofondo.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — Daxos</title>
+  <link rel="stylesheet" href="/dashboard.css" />
+  <style>
+    .admin-badge {
+      font-family: var(--mono);
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: var(--bg);
+      background: var(--accent);
+      padding: 2px 5px;
+      text-transform: uppercase;
+      vertical-align: middle;
+      margin-left: 4px;
+    }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 2px solid var(--accent);
+      padding: 18px 20px;
+    }
+    .stat-label {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted-2);
+      margin-bottom: 8px;
+    }
+    .stat-value {
+      font-family: var(--serif);
+      font-size: 28px;
+      color: var(--text);
+      line-height: 1;
+    }
+    .cost-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .cost-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 18px 20px;
+    }
+    .cost-card.margin-card {
+      border-left: 2px solid #16a34a;
+    }
+    .cost-card.margin-card.negative {
+      border-left-color: var(--danger);
+    }
+    .cost-label {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted-2);
+      margin-bottom: 6px;
+    }
+    .cost-value {
+      font-family: var(--serif);
+      font-size: 24px;
+      color: var(--text);
+      line-height: 1;
+    }
+    .cost-sub {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .margin-positive { color: #4ade80; }
+    .margin-negative { color: var(--danger); }
+    .billing-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 36px;
+    }
+    .billing-btn {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted-2);
+      background: var(--surface);
+      border: 1px solid var(--border-2);
+      padding: 7px 14px;
+      text-decoration: none;
+      transition: border-color 0.15s, color 0.15s;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .billing-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .billing-btn svg { flex-shrink: 0; }
+    .section-title {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted-2);
+      margin-bottom: 12px;
+    }
+    .biz-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .biz-table th {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-align: left;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .biz-table td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      vertical-align: middle;
+    }
+    .biz-table tr:last-child td { border-bottom: none; }
+    .biz-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .biz-link {
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .biz-link:hover { color: var(--accent); }
+    .plan-pill {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border: 1px solid var(--border-2);
+      color: var(--muted-2);
+    }
+    .plan-pill.paying {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .muted-text { color: var(--muted); font-size: 12px; }
+    .cost-note {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+
+  <aside class="app-sidebar">
+    <a href="/admin/inicio" class="sidebar-logo">
+      <img src="/logodaxosnaranjanofondo.png" alt="" class="logo-img">DAXOS<span class="admin-badge">Admin</span>
+    </a>
+    <div class="sidebar-divider"></div>
+    <nav class="sidebar-nav">
+      <a href="/admin/inicio" class="sidebar-link active">
+        <svg class="sidebar-link-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M2 8L8 2L14 8V14H10V10H6V14H2V8Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+        </svg>
+        Inicio
+      </a>
+    </nav>
+    <div class="sidebar-bottom">
+      <span class="sidebar-email" id="admin-email" style="font-size:11px;color:var(--muted)">Admin</span>
+      <button class="btn-logout" id="btn-logout">Salir</button>
+    </div>
+  </aside>
+
+  <main class="app-main">
+    <p class="page-terminal">&gt; admin.panel</p>
+    <h1 class="page-title">Panel de Administración</h1>
+
+    <!-- Stats row -->
+    <p class="section-title">Plataforma</p>
+    <div class="stat-grid" id="stat-grid">
+      <div class="stat-card"><div class="stat-label">Negocios</div><div class="stat-value" id="s-total">—</div></div>
+      <div class="stat-card"><div class="stat-label">Trial</div><div class="stat-value" id="s-trial">—</div></div>
+      <div class="stat-card"><div class="stat-label">Pagando</div><div class="stat-value" id="s-paying">—</div></div>
+      <div class="stat-card"><div class="stat-label">Mensajes este mes</div><div class="stat-value" id="s-msgs">—</div></div>
+    </div>
+
+    <!-- Costs -->
+    <p class="section-title">Costos estimados — mes actual</p>
+    <div class="cost-grid" id="cost-grid">
+      <div class="cost-card"><div class="cost-label">Claude (IA)</div><div class="cost-value" id="c-claude">—</div><div class="cost-sub" id="c-claude-sub"></div></div>
+      <div class="cost-card"><div class="cost-label">ElevenLabs (voz)</div><div class="cost-value" id="c-el">—</div><div class="cost-sub" id="c-el-sub"></div></div>
+      <div class="cost-card"><div class="cost-label">Revenue estimado</div><div class="cost-value" id="c-rev">—</div><div class="cost-sub" id="c-rev-sub"></div></div>
+      <div class="cost-card margin-card" id="margin-card"><div class="cost-label">Margen bruto</div><div class="cost-value" id="c-margin">—</div><div class="cost-sub">ingresos − IA − voz</div></div>
+    </div>
+    <p class="cost-note">Estimaciones: Claude Sonnet 4.6 @ $3/$15 por MTok (input/output) · ElevenLabs @ $0.30/1k chars · Railway no incluido</p>
+
+    <!-- Billing links -->
+    <p class="section-title">Facturación por servicio</p>
+    <div class="billing-row">
+      <a class="billing-btn" href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M4 12L12 4M12 4H6M12 4V10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Anthropic
+      </a>
+      <a class="billing-btn" href="https://elevenlabs.io/subscription" target="_blank" rel="noopener">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M4 12L12 4M12 4H6M12 4V10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        ElevenLabs
+      </a>
+      <a class="billing-btn" href="https://railway.app/account/billing" target="_blank" rel="noopener">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M4 12L12 4M12 4H6M12 4V10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Railway
+      </a>
+      <a class="billing-btn" href="https://www.mercadopago.com.ar/costs-section/home" target="_blank" rel="noopener">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M4 12L12 4M12 4H6M12 4V10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        MercadoPago
+      </a>
+    </div>
+
+    <!-- Business table -->
+    <p class="section-title">Negocios registrados</p>
+    <div style="background:var(--surface);border:1px solid var(--border);overflow-x:auto;">
+      <table class="biz-table" id="biz-table">
+        <thead>
+          <tr>
+            <th>Negocio</th>
+            <th>Owner</th>
+            <th>Plan</th>
+            <th>Alta</th>
+            <th>Convs.</th>
+            <th>Mensajes</th>
+            <th>Último msg.</th>
+          </tr>
+        </thead>
+        <tbody id="biz-body">
+          <tr><td colspan="7" class="muted-text" style="padding:20px 12px;">Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  function fmt(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  }
+  function fmtUSD(n) {
+    return '$' + n.toFixed(2);
+  }
+
+  async function load() {
+    // Auth check
+    const me = await fetch('/admin/auth/me');
+    if (!me.ok) { window.location.href = '/admin/login'; return; }
+
+    // Stats
+    const stats = await fetch('/admin/api/stats').then(r => r.json());
+    document.getElementById('s-total').textContent  = stats.totalBusinesses;
+    document.getElementById('s-trial').textContent  = stats.trialCount;
+    document.getElementById('s-paying').textContent = stats.payingCount;
+    document.getElementById('s-msgs').textContent   = stats.messagesThisMonth.toLocaleString('es-AR');
+
+    // Costs
+    const costs = await fetch('/admin/api/costs').then(r => r.json());
+    document.getElementById('c-claude').textContent   = fmtUSD(costs.claude.estimatedUSD);
+    document.getElementById('c-claude-sub').textContent = `${costs.claude.replies} replies IA`;
+    document.getElementById('c-el').textContent       = fmtUSD(costs.elevenlabs.estimatedUSD);
+    document.getElementById('c-el-sub').textContent   = `${costs.elevenlabs.voiceReplies} replies voz`;
+    document.getElementById('c-rev').textContent      = fmtUSD(costs.revenue.estimatedUSD);
+    const planLines = costs.revenue.planCounts.map(p => `${p.plan}: ${p.count}`).join(' · ');
+    document.getElementById('c-rev-sub').textContent  = planLines;
+    const marginEl = document.getElementById('c-margin');
+    marginEl.textContent = fmtUSD(costs.margin);
+    marginEl.className = 'cost-value ' + (costs.margin >= 0 ? 'margin-positive' : 'margin-negative');
+    if (costs.margin < 0) document.getElementById('margin-card').classList.add('negative');
+
+    // Businesses table
+    const businesses = await fetch('/admin/api/businesses').then(r => r.json());
+    const tbody = document.getElementById('biz-body');
+    if (!businesses.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="muted-text" style="padding:20px 12px;">Sin negocios registrados.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = businesses.map(b => {
+      const isPaying = b.plan && b.plan !== 'arranque';
+      const planLabel = b.plan || 'arranque';
+      return `<tr>
+        <td><a class="biz-link" href="/admin/negocio/${b.id}">${escHtml(b.name)}</a></td>
+        <td class="muted-text">${escHtml(b.owner_email || '—')}</td>
+        <td><span class="plan-pill ${isPaying ? 'paying' : ''}">${planLabel}</span></td>
+        <td class="muted-text">${fmt(b.created_at)}</td>
+        <td class="muted-text">${b.conv_count}</td>
+        <td class="muted-text">${b.msg_count}</td>
+        <td class="muted-text">${fmt(b.last_msg_at)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function escHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  document.getElementById('btn-logout').addEventListener('click', async () => {
+    await fetch('/admin/auth/logout', { method: 'POST' });
+    window.location.href = '/admin/login';
+  });
+
+  load();
+</script>
+</body>
+</html>

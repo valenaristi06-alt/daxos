@@ -9,7 +9,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials } = require('./db');
 const { generateReply, analyzeStyle, summarizeWebsite } = require('./claude');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
 const { sendPauseEmail, sendUnmatchedPaymentAlert } = require('./email');
@@ -129,6 +129,14 @@ app.put('/auth/me', requireAuth, (req, res) => {
 });
 
 // --- Panel API ---
+
+app.get('/api/config', (req, res) => {
+  res.json({
+    metaAppId: process.env.META_APP_ID || null,
+    // TODO: reemplazar cuando se apruebe la Verificación de acceso en Meta Business Manager
+    whatsappConfigId: process.env.WHATSAPP_CONFIG_ID || null,
+  });
+});
 
 app.get('/api/business', requireAuth, (req, res) => {
   const business = getBusinessByUserId(req.session.userId);
@@ -476,15 +484,15 @@ function isTrialExpired(business) {
 // Pauses a conversation and notifies the business owner via email.
 // channel: 'whatsapp' | 'instagram' — only 'whatsapp' triggers notification for now.
 // contactId: customer identifier in the given channel (phone for WA, IG user ID for Instagram).
-async function notifyOwnerOfPause({ business, owner, channel, contactId, messageText, conversationId }) {
+async function notifyOwnerOfPause({ business, owner, channel, contactId, messageText, conversationId, waCredentials }) {
   if (channel === 'instagram') return;
   if (!owner) return;
 
   const ownerPhone = owner.phone;
-  if (ownerPhone) {
+  if (ownerPhone && waCredentials) {
     try {
       const waMsg = `⚠️ Conversación pausada — ${business.name}\nContacto: ${contactId}\nMensaje: ${messageText}\nVer conversación #${conversationId} en tu panel de Daxos.`;
-      await sendWhatsAppMessage(ownerPhone, waMsg);
+      await sendWhatsAppMessage(ownerPhone, waMsg, waCredentials);
       return;
     } catch (waErr) {
       console.error('[notify-pause] WhatsApp failed, falling back to email:', waErr.message);
@@ -502,11 +510,11 @@ async function notifyOwnerOfPause({ business, owner, channel, contactId, message
 
 // Sends the first-contact disclosure required by Meta policy.
 // Always plain text, always saved to history. No-op if history already exists.
-async function maybeSendDisclosure(business, conversationId, history, recipientPhone) {
+async function maybeSendDisclosure(business, conversationId, history, recipientPhone, waCredentials) {
   if (history.length > 0) return;
   const notice = `Hola! Soy el asistente automático de ${business.name} 🤖. Te ayudo con consultas, precios y turnos.`;
-  if (recipientPhone) {
-    try { await sendWhatsAppMessage(recipientPhone, notice); }
+  if (recipientPhone && waCredentials) {
+    try { await sendWhatsAppMessage(recipientPhone, notice, waCredentials); }
     catch (err) { console.error('[disclosure] WA send failed:', err.message); }
   }
   addMessage(conversationId, 'assistant', notice);
@@ -549,6 +557,8 @@ app.post('/webhook', async (req, res) => {
           continue;
         }
 
+        const waCredentials = { phoneNumberId: business.phone_number_id, accessToken: business.wa_access_token };
+
         for (const msg of messages) {
           if (msg.type !== 'text') continue;
 
@@ -558,7 +568,8 @@ app.post('/webhook', async (req, res) => {
 
           if (isTrialExpired(business)) {
             await sendWhatsAppMessage(customerPhone,
-              `Hola! El período de prueba de ${business.name} terminó. Para seguir recibiendo respuestas automáticas, el negocio necesita activar su plan.`
+              `Hola! El período de prueba de ${business.name} terminó. Para seguir recibiendo respuestas automáticas, el negocio necesita activar su plan.`,
+              waCredentials
             );
             continue;
           }
@@ -569,7 +580,7 @@ app.post('/webhook', async (req, res) => {
           // Conversation paused — record message so owner sees it, but no AI reply
           if (conversation.needs_attention) {
             addMessage(conversation.id, 'user', text);
-            markAsRead(msg.id).catch(() => {});
+            markAsRead(msg.id, waCredentials).catch(() => {});
             continue;
           }
 
@@ -587,17 +598,17 @@ app.post('/webhook', async (req, res) => {
               const owner = getUserByBusinessId(business.id);
               notifyOwnerOfPause({
                 business, owner, channel: 'whatsapp', contactId: customerPhone,
-                messageText: text, conversationId: conversation.id,
+                messageText: text, conversationId: conversation.id, waCredentials,
               }).catch(err => console.error('[notify-pause]', err.message));
               continue;
             }
           }
 
-          await maybeSendDisclosure(business, conversation.id, history, customerPhone);
+          await maybeSendDisclosure(business, conversation.id, history, customerPhone, waCredentials);
 
           // Mark as read + show typing indicator immediately
-          markAsRead(msg.id).catch(() => {});
-          sendTypingIndicator(customerPhone).catch(() => {});
+          markAsRead(msg.id, waCredentials).catch(() => {});
+          sendTypingIndicator(customerPhone, waCredentials).catch(() => {});
 
           // Generate reply and enforce minimum delay in parallel
           const delayMs = (business.response_delay ?? 5) * 1000;
@@ -626,8 +637,8 @@ app.post('/webhook', async (req, res) => {
           if (sendDoc && business.document_path && fs.existsSync(business.document_path)) {
             try {
               const docBuffer = fs.readFileSync(business.document_path);
-              const docMediaId = await uploadMedia(docBuffer, business.document_name, 'application/pdf');
-              await sendWhatsAppDocument(customerPhone, docMediaId, business.document_name);
+              const docMediaId = await uploadMedia(docBuffer, business.document_name, 'application/pdf', waCredentials);
+              await sendWhatsAppDocument(customerPhone, docMediaId, business.document_name, waCredentials);
             } catch (docErr) {
               console.error('[doc-send] failed:', docErr.message);
             }
@@ -639,14 +650,14 @@ app.post('/webhook', async (req, res) => {
               try {
                 const mp3 = await generateAudioBuffer(business.voice_id, reply);
                 const ogg = await convertToOgg(mp3);
-                const mediaId = await uploadMedia(ogg, 'reply.ogg', 'audio/ogg');
-                await sendWhatsAppAudio(customerPhone, mediaId);
+                const mediaId = await uploadMedia(ogg, 'reply.ogg', 'audio/ogg', waCredentials);
+                await sendWhatsAppAudio(customerPhone, mediaId, waCredentials);
               } catch (audioErr) {
                 console.error('[audio-reply] failed, falling back to text:', audioErr.message);
-                await sendWhatsAppMessage(customerPhone, reply);
+                await sendWhatsAppMessage(customerPhone, reply, waCredentials);
               }
             } else {
-              await sendWhatsAppMessage(customerPhone, reply);
+              await sendWhatsAppMessage(customerPhone, reply, waCredentials);
             }
           } catch (sendErr) {
             console.error('[reply-send] failed:', sendErr.message);
@@ -658,7 +669,7 @@ app.post('/webhook', async (req, res) => {
             const owner = getUserByBusinessId(business.id);
             notifyOwnerOfPause({
               business, owner, channel: 'whatsapp', contactId: customerPhone,
-              messageText: text, conversationId: conversation.id,
+              messageText: text, conversationId: conversation.id, waCredentials,
             }).catch(err => console.error('[notify-pause]', err.message));
           }
         }
@@ -802,6 +813,179 @@ app.post('/webhook/mercadopago', async (req, res) => {
     console.error('[mp-webhook] Error processing payment:', err.message);
   }
 });
+
+// ─── Admin panel ──────────────────────────────────────────────────────────────
+
+function requireAdmin(req, res, next) {
+  if (req.session?.isAdmin) return next();
+  res.status(403).json({ error: 'Acceso denegado' });
+}
+
+app.get('/admin', (req, res) => {
+  if (!req.session?.isAdmin) return res.redirect('/admin/login');
+  res.redirect('/admin/inicio');
+});
+
+app.get('/admin/login', (req, res) => {
+  if (req.session?.isAdmin) return res.redirect('/admin/inicio');
+  res.sendFile(path.join(__dirname, 'views/admin/login.html'));
+});
+
+app.get('/admin/inicio', (req, res) => {
+  if (!req.session?.isAdmin) return res.redirect('/admin/login');
+  res.sendFile(path.join(__dirname, 'views/admin/inicio.html'));
+});
+
+app.get('/admin/negocio/:id', (req, res) => {
+  if (!req.session?.isAdmin) return res.redirect('/admin/login');
+  res.sendFile(path.join(__dirname, 'views/admin/negocio.html'));
+});
+
+app.post('/admin/auth/login', async (req, res) => {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (!adminEmail) return res.status(500).json({ error: 'ADMIN_EMAIL no configurado' });
+
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' });
+  if (email.toLowerCase().trim() !== adminEmail.toLowerCase()) {
+    return res.status(403).json({ error: 'Acceso denegado' });
+  }
+
+  const user = getUserByEmail(email.toLowerCase().trim());
+  if (!user) return res.status(403).json({ error: 'Acceso denegado' });
+
+  try {
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) return res.status(401).json({ error: 'Credenciales incorrectas' });
+    req.session.isAdmin = true;
+    req.session.adminUserId = user.id;
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/admin/auth/logout', (req, res) => {
+  req.session.destroy(() => res.json({ ok: true }));
+});
+
+app.get('/admin/auth/me', (req, res) => {
+  if (!req.session?.isAdmin) return res.status(403).json({ error: 'No autorizado' });
+  res.json({ ok: true });
+});
+
+app.get('/admin/api/stats', requireAdmin, (req, res) => {
+  res.json(getGlobalStats());
+});
+
+app.get('/admin/api/businesses', requireAdmin, (req, res) => {
+  res.json(getAllBusinesses());
+});
+
+app.get('/admin/api/business/:id', requireAdmin, (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
+  const business = getBusinessById(id);
+  if (!business) return res.status(404).json({ error: 'Negocio no encontrado' });
+
+  const metrics = getBusinessAdminMetrics(id);
+  const owner = getUserByBusinessId(id);
+
+  // Strip sensitive/large fields — never expose conversation content or internal keys
+  const { sales_examples, survey_answers, style_profile, document_path, ...safeFields } = business;
+  res.json({ ...safeFields, metrics, owner_email: owner?.email || null });
+});
+
+app.get('/admin/api/costs', requireAdmin, (req, res) => {
+  const stats = getGlobalStats();
+  const planCounts = getPlanCounts();
+
+  // Claude Sonnet 4.6 pricing: $3/MTok input, $15/MTok output
+  // Estimate per AI reply: 2000 tok input + 300 tok output
+  const claudeUSD = stats.aiRepliesThisMonth * (
+    (2000 * 3 / 1_000_000) + (300 * 15 / 1_000_000)
+  );
+
+  // ElevenLabs: ~$0.30/1000 chars, ~200 chars/voice reply
+  const elevenlabsUSD = stats.voiceRepliesThisMonth * 200 * (0.30 / 1000);
+
+  // Revenue by plan (USD/month)
+  const PLAN_PRICES = { arranque: 0, crecimiento: 39, a_medida: 99 };
+  const revenueUSD = planCounts.reduce((sum, row) => sum + (PLAN_PRICES[row.plan] || 0) * row.count, 0);
+
+  res.json({
+    claude: { replies: stats.aiRepliesThisMonth, estimatedUSD: parseFloat(claudeUSD.toFixed(2)) },
+    elevenlabs: { voiceReplies: stats.voiceRepliesThisMonth, estimatedUSD: parseFloat(elevenlabsUSD.toFixed(2)) },
+    revenue: { planCounts, estimatedUSD: parseFloat(revenueUSD.toFixed(2)) },
+    margin: parseFloat((revenueUSD - claudeUSD - elevenlabsUSD).toFixed(2)),
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Embedded Signup — OAuth callback
+// POST /auth/whatsapp/callback
+// Body: { code, waba_id, phone_number_id, business_id }
+// The frontend sends these after the Meta JS SDK Embedded Signup flow completes.
+app.post('/auth/whatsapp/callback', requireAuth, async (req, res) => {
+  const { code, waba_id, phone_number_id, business_id } = req.body;
+
+  if (!code || !waba_id || !phone_number_id || !business_id) {
+    return res.status(400).json({ error: 'code, waba_id, phone_number_id, business_id requeridos' });
+  }
+
+  const userBusiness = getBusinessByUserId(req.session.userId);
+  if (!userBusiness || userBusiness.id !== Number(business_id)) {
+    return res.status(403).json({ error: 'No autorizado' });
+  }
+
+  const appId = process.env.META_APP_ID;
+  const appSecret = process.env.META_APP_SECRET;
+  const redirectUri = process.env.META_REDIRECT_URI;
+
+  if (!appId || !appSecret) {
+    return res.status(500).json({ error: 'META_APP_ID y META_APP_SECRET no configurados en el servidor' });
+  }
+
+  try {
+    // 1. Exchange code for user access token
+    const tokenUrl = new URL('https://graph.facebook.com/v21.0/oauth/access_token');
+    tokenUrl.searchParams.set('client_id', appId);
+    tokenUrl.searchParams.set('client_secret', appSecret);
+    tokenUrl.searchParams.set('code', code);
+    if (redirectUri) tokenUrl.searchParams.set('redirect_uri', redirectUri);
+
+    const tokenRes = await fetch(tokenUrl.toString());
+    const tokenData = await tokenRes.json();
+
+    if (!tokenRes.ok || !tokenData.access_token) {
+      console.error('[whatsapp-callback] token exchange failed:', tokenData);
+      return res.status(400).json({ error: 'Token exchange falló', detail: tokenData });
+    }
+
+    const accessToken = tokenData.access_token;
+
+    // 2. Subscribe WABA to Daxos webhook
+    const subRes = await fetch(`https://graph.facebook.com/v21.0/${waba_id}/subscribed_apps`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+    });
+    const subData = await subRes.json();
+
+    if (!subRes.ok) {
+      console.error('[whatsapp-callback] subscribed_apps failed:', subData);
+    }
+
+    // 3. Persist credentials (access token encrypted at rest)
+    saveWabaCredentials(Number(business_id), { wabaId: waba_id, phoneNumberId: phone_number_id, accessToken });
+
+    res.json({ ok: true, waba_id, phone_number_id, subscribed: subRes.ok });
+  } catch (err) {
+    console.error('[whatsapp-callback]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

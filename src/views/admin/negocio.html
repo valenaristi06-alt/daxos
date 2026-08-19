@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/logodaxosnaranjanofondo.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Negocio — Admin Daxos</title>
+  <link rel="stylesheet" href="/dashboard.css" />
+  <style>
+    .admin-badge {
+      font-family: var(--mono);
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: var(--bg);
+      background: var(--accent);
+      padding: 2px 5px;
+      text-transform: uppercase;
+      vertical-align: middle;
+      margin-left: 4px;
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted-2);
+      text-decoration: none;
+      margin-bottom: 24px;
+      transition: color 0.15s;
+    }
+    .back-link:hover { color: var(--accent); }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+    @media (max-width: 680px) { .detail-grid { grid-template-columns: 1fr; } }
+    .detail-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 2px solid var(--accent);
+      padding: 20px;
+    }
+    .detail-card-title {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted-2);
+      margin-bottom: 16px;
+    }
+    .field-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .field-row:last-child { border-bottom: none; }
+    .field-key {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      flex-shrink: 0;
+    }
+    .field-val {
+      font-size: 13px;
+      color: var(--text);
+      text-align: right;
+      word-break: break-all;
+    }
+    .field-val.muted { color: var(--muted-2); }
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 16px 18px;
+    }
+    .metric-label {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted-2);
+      margin-bottom: 6px;
+    }
+    .metric-value {
+      font-family: var(--serif);
+      font-size: 26px;
+      color: var(--text);
+      line-height: 1;
+    }
+    .plan-pill {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border: 1px solid var(--border-2);
+      color: var(--muted-2);
+    }
+    .plan-pill.paying { border-color: var(--accent); color: var(--accent); }
+    .section-title {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted-2);
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+
+  <aside class="app-sidebar">
+    <a href="/admin/inicio" class="sidebar-logo">
+      <img src="/logodaxosnaranjanofondo.png" alt="" class="logo-img">DAXOS<span class="admin-badge">Admin</span>
+    </a>
+    <div class="sidebar-divider"></div>
+    <nav class="sidebar-nav">
+      <a href="/admin/inicio" class="sidebar-link">
+        <svg class="sidebar-link-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M2 8L8 2L14 8V14H10V10H6V14H2V8Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+        </svg>
+        Inicio
+      </a>
+    </nav>
+    <div class="sidebar-bottom">
+      <button class="btn-logout" id="btn-logout">Salir</button>
+    </div>
+  </aside>
+
+  <main class="app-main">
+    <a href="/admin/inicio" class="back-link">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Volver al panel
+    </a>
+
+    <p class="page-terminal" id="page-terminal">&gt; negocio.detail</p>
+    <h1 class="page-title" id="page-title">Cargando...</h1>
+
+    <p class="section-title">Métricas de uso</p>
+    <div class="metric-grid">
+      <div class="metric-card"><div class="metric-label">Conversaciones</div><div class="metric-value" id="m-convs">—</div></div>
+      <div class="metric-card"><div class="metric-label">Mensajes totales</div><div class="metric-value" id="m-msgs">—</div></div>
+      <div class="metric-card"><div class="metric-label">Replies IA</div><div class="metric-value" id="m-ai">—</div></div>
+      <div class="metric-card"><div class="metric-label">Pausadas</div><div class="metric-value" id="m-paused">—</div></div>
+      <div class="metric-card"><div class="metric-label">Msgs este mes</div><div class="metric-value" id="m-month">—</div></div>
+    </div>
+
+    <p class="section-title">Configuración</p>
+    <div class="detail-grid">
+      <div class="detail-card">
+        <div class="detail-card-title">General</div>
+        <div id="config-general"></div>
+      </div>
+      <div class="detail-card">
+        <div class="detail-card-title">Estado y plan</div>
+        <div id="config-plan"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  function escHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function fmt(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  }
+  function row(key, val, muted) {
+    return `<div class="field-row"><span class="field-key">${key}</span><span class="field-val${muted ? ' muted' : ''}">${val}</span></div>`;
+  }
+
+  async function load() {
+    const me = await fetch('/admin/auth/me');
+    if (!me.ok) { window.location.href = '/admin/login'; return; }
+
+    const id = window.location.pathname.split('/').pop();
+    const r = await fetch(`/admin/api/business/${id}`);
+    if (!r.ok) { document.getElementById('page-title').textContent = 'Negocio no encontrado'; return; }
+
+    const d = await r.json();
+
+    document.getElementById('page-terminal').textContent = `> negocio.${d.id}`;
+    document.getElementById('page-title').textContent = d.name;
+
+    // Metrics
+    document.getElementById('m-convs').textContent  = d.metrics.conversations;
+    document.getElementById('m-msgs').textContent   = d.metrics.totalMessages;
+    document.getElementById('m-ai').textContent     = d.metrics.aiReplies;
+    document.getElementById('m-paused').textContent = d.metrics.paused;
+    document.getElementById('m-month').textContent  = d.metrics.messagesThisMonth;
+
+    // Config — general
+    let gen = '';
+    gen += row('Owner', escHtml(d.owner_email || '—'), true);
+    gen += row('WhatsApp ID', escHtml(d.whatsapp_number || '—'), true);
+    gen += row('Sitio web', d.website_url ? `<a href="${escHtml(d.website_url)}" target="_blank" rel="noopener" style="color:var(--accent);font-size:12px;">${escHtml(d.website_url)}</a>` : '—', false);
+    gen += row('Modo respuesta', escHtml(d.response_mode || '—'), true);
+    gen += row('Voz clonada', d.voice_id ? 'Sí' : 'No', !d.voice_id);
+    gen += row('Documento', d.document_name ? escHtml(d.document_name) : '—', !d.document_name);
+    gen += row('Alta', fmt(d.created_at), true);
+    document.getElementById('config-general').innerHTML = gen;
+
+    // Config — plan / status
+    const isPaying = d.plan && d.plan !== 'arranque';
+    let pl = '';
+    pl += row('Plan', `<span class="plan-pill ${isPaying ? 'paying' : ''}">${escHtml(d.plan || 'arranque')}</span>`, false);
+    pl += row('Estado suscripción', escHtml(d.subscription_status || '—'), true);
+    pl += row('Trial vence', fmt(d.trial_ends_at), true);
+    pl += row('Plan pagado', fmt(d.plan_paid_at), true);
+    pl += row('Plan vence', fmt(d.plan_expires_at), true);
+    document.getElementById('config-plan').innerHTML = pl;
+  }
+
+  document.getElementById('btn-logout').addEventListener('click', async () => {
+    await fetch('/admin/auth/logout', { method: 'POST' });
+    window.location.href = '/admin/login';
+  });
+
+  load();
+</script>
+</body>
+</html>
