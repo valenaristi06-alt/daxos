@@ -135,6 +135,7 @@ app.get('/api/config', (req, res) => {
     metaAppId: process.env.META_APP_ID || null,
     // TODO: reemplazar cuando se apruebe la Verificación de acceso en Meta Business Manager
     whatsappConfigId: process.env.WHATSAPP_CONFIG_ID || null,
+    _debug_keys: Object.keys(process.env).filter(k => k.startsWith('META_') || k.startsWith('WHATSAPP_')),
   });
 });
 
