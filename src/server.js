@@ -1,4 +1,6 @@
+console.log('[BOOT] pre-dotenv keys:', Object.keys(process.env).length, '| ANTHROPIC:', !!process.env.ANTHROPIC_API_KEY, '| META_APP_ID:', !!process.env.META_APP_ID);
 require('dotenv').config({ path: '.env.local' });
+console.log('[BOOT] post-dotenv keys:', Object.keys(process.env).length, '| ANTHROPIC:', !!process.env.ANTHROPIC_API_KEY, '| META_APP_ID:', !!process.env.META_APP_ID);
 
 const crypto = require('crypto');
 const express = require('express');
