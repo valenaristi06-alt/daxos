@@ -1,6 +1,4 @@
-console.log('[BOOT] pre-dotenv keys:', Object.keys(process.env).length, '| ANTHROPIC:', !!process.env.ANTHROPIC_API_KEY, '| META_APP_ID:', !!process.env.META_APP_ID);
 require('dotenv').config({ path: '.env.local' });
-console.log('[BOOT] post-dotenv keys:', Object.keys(process.env).length, '| ANTHROPIC:', !!process.env.ANTHROPIC_API_KEY, '| META_APP_ID:', !!process.env.META_APP_ID);
 
 const crypto = require('crypto');
 const express = require('express');
@@ -133,18 +131,10 @@ app.put('/auth/me', requireAuth, (req, res) => {
 // --- Panel API ---
 
 app.get('/api/config', (req, res) => {
-  const metaVal = process.env.META_APP_ID;
-  console.log('[api/config] META_APP_ID at request time:', metaVal, '| total keys:', Object.keys(process.env).length);
   res.json({
-    metaAppId: metaVal || null,
+    metaAppId: process.env.META_APP_ID || null,
     // TODO: reemplazar cuando se apruebe la Verificación de acceso en Meta Business Manager
     whatsappConfigId: process.env.WHATSAPP_CONFIG_ID || null,
-    _debug_keys: Object.keys(process.env).filter(k => k.startsWith('META_') || k.startsWith('WHATSAPP_')),
-    _debug_has_anthropic: !!process.env.ANTHROPIC_API_KEY,
-    _debug_has_session: !!process.env.SESSION_SECRET,
-    _debug_total_env_keys: Object.keys(process.env).length,
-    _debug_pid: process.pid,
-    _debug_uptime: Math.round(process.uptime()),
   });
 });
 
