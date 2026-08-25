@@ -126,6 +126,7 @@
             Conectar WhatsApp Business
           </button>
           <p id="wa-connect-error" style="display:none; color:#ef4444; font-size:12px; margin-top:6px;"></p>
+          <p id="wa-step" style="display:none; color:#888; font-size:12px; margin-top:4px;"></p>
         </div>
         <div class="field">
           <label class="field-label" for="business_context">Contexto del negocio</label>
@@ -1260,12 +1261,22 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
     fetch('/api/config').then(r => r.json()).then(cfg => { metaConfig = cfg; });
 
     // Escucha el evento del popup de Embedded Signup para capturar waba_id y phone_number_id
+    function waStep(msg) {
+      const el = document.getElementById('wa-step');
+      el.textContent = msg;
+      el.style.display = msg ? 'block' : 'none';
+    }
+
     let pendingEsCode = null;
     window.addEventListener('message', async function (event) {
       if (!event.origin.endsWith('.facebook.com') && !event.origin.endsWith('.meta.com')) return;
       let data;
-      try { data = JSON.parse(event.data); } catch { return; }
-      if (data.type !== 'WA_EMBEDDED_SIGNUP') return;
+      try { data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; } catch { return; }
+      if (data.type !== 'WA_EMBEDDED_SIGNUP') {
+        waStep(`Mensaje de Meta recibido (tipo: ${data.type || 'desconocido'}) — esperando WA_EMBEDDED_SIGNUP…`);
+        return;
+      }
+      waStep(`Evento recibido: ${data.event}`);
 
       const errEl = document.getElementById('wa-connect-error');
       const btn   = document.getElementById('btn-wa-connect');
@@ -1332,13 +1343,14 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       btn.disabled = true;
       document.getElementById('wa-connect-error').style.display = 'none';
       pendingEsCode = null;
+      waStep('Abriendo ventana de Meta…');
 
-      // Fallback: si el mensaje WA_EMBEDDED_SIGNUP nunca llega (origen inesperado, popup
-      // cerrado sin completar, etc.), re-habilitamos el botón a los 60 segundos
+      // Fallback: re-habilita el botón si WA_EMBEDDED_SIGNUP nunca llega
       const fallbackTimer = setTimeout(() => {
         if (btn.disabled) {
           btn.disabled = false;
           pendingEsCode = null;
+          waStep('Tiempo agotado sin respuesta de Meta. Intentá de nuevo.');
         }
       }, 60000);
 
@@ -1349,9 +1361,11 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       FB.login(function (response) {
         if (response.authResponse?.code) {
           pendingEsCode = response.authResponse.code;
-          // El resto del flujo lo maneja el listener del message event (WA_EMBEDDED_SIGNUP FINISH)
+          waStep('Login OK — esperando datos de WhatsApp de Meta…');
         } else {
+          clearTimeout(fallbackTimer);
           btn.disabled = false;
+          waStep('');
           if (!response.authResponse) {
             document.getElementById('wa-connect-error').textContent = 'Inicio de sesión cancelado o ventana cerrada.';
             document.getElementById('wa-connect-error').style.display = 'block';
