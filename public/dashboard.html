@@ -26,7 +26,17 @@
     .btn-wa-connect:hover { background: #1ebe5a; }
     .btn-wa-connect:disabled { background: #6b7280; cursor: not-allowed; }
   </style>
-  <!-- Meta SDK — cargado async, se inicializa en fbAsyncInit -->
+  <!-- Meta SDK: fbAsyncInit debe estar definido ANTES que el script cargue -->
+  <script>
+    window.fbAsyncInit = function () {
+      FB.init({
+        appId: '1025010310140011',
+        autoLogAppEvents: true,
+        xfbml: false,
+        version: 'v21.0',
+      });
+    };
+  </script>
   <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
 </head>
 <body>
@@ -1245,21 +1255,9 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       }
     }
 
-    // Carga config pública (META_APP_ID + CONFIG_ID) e inicializa el SDK
+    // Solo necesitamos el whatsappConfigId del servidor (META_APP_ID está en fbAsyncInit)
     let metaConfig = {};
-    fetch('/api/config').then(r => r.json()).then(cfg => {
-      metaConfig = cfg;
-      window.fbAsyncInit = function () {
-        FB.init({
-          appId: cfg.metaAppId,
-          autoLogAppEvents: true,
-          xfbml: false,
-          version: 'v21.0',
-        });
-      };
-      // Si el SDK ya cargó antes de fbAsyncInit (raro pero posible), reinicializa
-      if (window.FB) window.fbAsyncInit();
-    });
+    fetch('/api/config').then(r => r.json()).then(cfg => { metaConfig = cfg; });
 
     // Escucha el evento del popup de Embedded Signup para capturar waba_id y phone_number_id
     let pendingEsCode = null;
