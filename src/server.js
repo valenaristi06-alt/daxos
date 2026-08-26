@@ -295,7 +295,7 @@ app.post('/api/business/voice/preview', requireAuth, async (req, res) => {
 });
 
 // TEMP: seed test conversations directly into server's live DB
-app.post('/api/debug/seed-conversations', requireAuth, (req, res) => {
+app.get('/api/debug/seed-conversations', requireAuth, (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user?.business_id) return res.status(400).json({ error: 'No business_id' });
   const biz = user.business_id;
