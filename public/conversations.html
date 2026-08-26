@@ -111,9 +111,17 @@
 
       // DEBUG — visible en pantalla, borrar después
       const dbg = document.createElement('div');
-      dbg.style.cssText = 'position:fixed;bottom:12px;right:12px;background:#1a1a2e;color:#a3e635;font-size:11px;font-family:monospace;padding:10px 14px;border-radius:8px;z-index:9999;max-width:300px;word-break:break-all;';
-      dbg.innerHTML = 'HTTP ' + res.status + ' | convs: ' + (Array.isArray(convs) ? convs.length : 'ERROR') + '<br>raw: ' + rawText.slice(0, 120);
+      dbg.style.cssText = 'position:fixed;bottom:12px;right:12px;background:#1a1a2e;color:#a3e635;font-size:11px;font-family:monospace;padding:10px 14px;border-radius:8px;z-index:9999;max-width:340px;word-break:break-all;';
+      dbg.innerHTML = 'HTTP ' + res.status + ' | convs: ' + (Array.isArray(convs) ? convs.length : 'ERROR') + '<br>raw: ' + rawText.slice(0, 80) + '<br>cargando debug…';
       document.body.appendChild(dbg);
+      fetch('/api/debug/me').then(r => r.json()).then(d => {
+        dbg.innerHTML = 'HTTP ' + res.status + ' | convs: ' + (Array.isArray(convs) ? convs.length : 'ERROR')
+          + '<br>raw: ' + rawText.slice(0, 60)
+          + '<br>sessionUserId: ' + d.sessionUserId
+          + ' | userId: ' + d.userId
+          + '<br>businessId: ' + d.businessId
+          + ' | convCount: ' + d.convCount;
+      }).catch(e => { dbg.innerHTML += '<br>debug/me error: ' + e.message; });
 
       if (!convs.length) {
         list.innerHTML = `

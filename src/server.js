@@ -294,6 +294,14 @@ app.post('/api/business/voice/preview', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/api/debug/me', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  const convCount = user?.business_id
+    ? getConversationsByBusinessId(user.business_id).length
+    : 0;
+  res.json({ sessionUserId: req.session.userId, userId: user?.id, email: user?.email, businessId: user?.business_id ?? null, convCount });
+});
+
 app.get('/api/conversations', requireAuth, (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user.business_id) return res.json([]);
