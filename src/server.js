@@ -294,6 +294,39 @@ app.post('/api/business/voice/preview', requireAuth, async (req, res) => {
   }
 });
 
+// TEMP: seed test conversations directly into server's live DB
+app.post('/api/debug/seed-conversations', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'No business_id' });
+  const biz = user.business_id;
+
+  const contacts = [
+    { phone: '59891234567', msgs: [
+      { role: 'user', content: 'Hola, ¿tienen disponible el producto X?' },
+      { role: 'assistant', content: 'Sí, está disponible. ¿Querés que te dé más detalles?' },
+      { role: 'user', content: 'Sí por favor, ¿cuánto cuesta?' },
+      { role: 'assistant', content: 'El precio es $2.500. ¿Te gustaría hacer un pedido?' },
+    ]},
+    { phone: '59899887766', msgs: [
+      { role: 'user', content: 'Buenos días, necesito información sobre sus servicios' },
+      { role: 'assistant', content: 'Buenos días. Con gusto te ayudo. ¿Qué servicio te interesa?' },
+      { role: 'user', content: 'El plan mensual' },
+    ]},
+    { phone: '59898112233', msgs: [
+      { role: 'user', content: '¿Hacen envíos a Montevideo?' },
+      { role: 'assistant', content: 'Sí, hacemos envíos a todo Montevideo. El envío demora 24-48hs.' },
+    ]},
+  ];
+
+  const created = [];
+  for (const c of contacts) {
+    const conv = getOrCreateConversation(biz, c.phone);
+    for (const m of c.msgs) addMessage(conv.id, m.role, m.content);
+    created.push(conv.id);
+  }
+  res.json({ ok: true, businessId: biz, conversationIds: created });
+});
+
 app.get('/api/debug/me', requireAuth, (req, res) => {
   const user = getUserById(req.session.userId);
   const convCount = user?.business_id
