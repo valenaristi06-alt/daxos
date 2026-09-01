@@ -646,7 +646,22 @@ app.post('/webhook', async (req, res) => {
           if (business.plan === 'arranque' && business.trial_starts_at) {
             const trialCount = getTrialMessageCount(business.id, business.trial_starts_at);
             if (trialCount >= TRIAL_MESSAGE_LIMIT) {
-              console.log(`[trial-limit] business ${business.id} hit limit (${trialCount}/${TRIAL_MESSAGE_LIMIT}), dropping message from ${customerPhone}`);
+              const conv = getOrCreateConversation(business.id, customerPhone);
+              if (!conv.needs_attention) {
+                const limitMsg = `Hola! Por el momento no podemos responder automáticamente. Alguien de ${business.name} te va a contestar a la brevedad.`;
+                await sendWhatsAppMessage(customerPhone, limitMsg, waCredentials).catch(() => {});
+                addMessage(conv.id, 'user', text);
+                addMessage(conv.id, 'assistant', limitMsg);
+                markConversationPaused(conv.id);
+                const owner = getUserByBusinessId(business.id);
+                notifyOwnerOfPause({
+                  business, owner, channel: 'whatsapp', contactId: customerPhone,
+                  messageText: text, conversationId: conv.id, waCredentials,
+                }).catch(err => console.error('[trial-limit-notify]', err.message));
+                console.log(`[trial-limit] business ${business.id} hit limit (${trialCount}/${TRIAL_MESSAGE_LIMIT}), notified customer ${customerPhone} and owner`);
+              } else {
+                addMessage(conv.id, 'user', text);
+              }
               continue;
             }
           }
