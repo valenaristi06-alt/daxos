@@ -167,6 +167,7 @@ app.put('/api/business', requireAuth, async (req, res) => {
 
   try {
     const user = getUserById(req.session.userId);
+    console.log('[PUT /api/business] sessionUserId:', req.session.userId, '| user:', user?.id ?? 'NOT FOUND', '| existing business_id:', user?.business_id ?? 'null');
 
     const prevWebsiteUrl = user.business_id ? (getBusinessById(user.business_id)?.website_url ?? null) : null;
     const newUrl = website_url ? website_url.trim() : null;
@@ -184,7 +185,11 @@ app.put('/api/business', requireAuth, async (req, res) => {
       response_delay: response_delay != null ? Math.min(20, Math.max(0, parseInt(response_delay, 10) || 5)) : 5,
       pricing_info: pricing_info ? pricing_info.trim() : null,
     });
-    if (!user.business_id) setUserBusiness(user.id, business.id);
+    console.log('[PUT /api/business] upsertBusiness result id:', business?.id ?? 'null');
+    if (!user.business_id) {
+      setUserBusiness(user.id, business.id);
+      console.log('[PUT /api/business] setUserBusiness called:', user.id, '->', business.id);
+    }
 
     // Style analysis — non-blocking, failure never interrupts save
     if (Array.isArray(sales_examples) && sales_examples.length > 0) {
@@ -298,15 +303,23 @@ app.post('/api/business/voice/preview', requireAuth, async (req, res) => {
 app.get('/api/debug/setup-review', requireAuth, (req, res) => {
   const user = getUserById(req.session.userId);
   if (user?.email !== 'review@daxos.lat') return res.status(403).json({ error: 'Solo disponible para review@daxos.lat' });
-  if (!user.business_id) return res.status(400).json({ error: 'No business_id' });
 
-  // Set business name and upgrade plan
-  upsertBusiness({ id: user.business_id, name: 'Comercio Demo' });
-  upgradePlan(user.business_id, 'crecimiento', new Date().toISOString(), null);
-  setSubscriptionStatus(user.business_id, 'active');
+  // Create business if it doesn't exist yet
+  let bizId = user.business_id;
+  if (!bizId) {
+    const biz = upsertBusiness({ name: 'Comercio Demo' });
+    setUserBusiness(user.id, biz.id);
+    bizId = biz.id;
+  } else {
+    upsertBusiness({ id: bizId, name: 'Comercio Demo' });
+  }
+
+  // Upgrade plan
+  upgradePlan(bizId, 'crecimiento', new Date().toISOString(), null);
+  setSubscriptionStatus(bizId, 'active');
 
   // Seed conversations (same as video)
-  const biz = user.business_id;
+  const biz = bizId;
   const contacts = [
     { phone: '59891234567', msgs: [
       { role: 'user', content: 'Hola, ¿tienen disponible el producto X?' },
