@@ -1,30 +1,4 @@
-const _adminEmailBeforeDotenv = process.env.ADMIN_EMAIL;
-
 require('dotenv').config({ path: '.env.local' });
-
-const _adminEmailAfterDotenv = process.env.ADMIN_EMAIL;
-
-// Startup diagnostic — readable in Railway "View logs"
-(function diagAdminEmail() {
-  const fs = require('fs');
-  const envPath = require('path').join(__dirname, '../.env.local');
-  const fileExists = fs.existsSync(envPath);
-  const fileKeys = fileExists
-    ? fs.readFileSync(envPath, 'utf8').split('\n')
-        .map(l => l.split('=')[0].trim()).filter(Boolean)
-    : [];
-  const after = _adminEmailAfterDotenv;
-  console.log('[DIAG] ADMIN_EMAIL before dotenv:', JSON.stringify(_adminEmailBeforeDotenv));
-  console.log('[DIAG] ADMIN_EMAIL after  dotenv:', JSON.stringify(after));
-  console.log('[DIAG] ADMIN_EMAIL length:', after != null ? after.length : 'n/a');
-  console.log('[DIAG] .env.local exists:', fileExists, '| keys:', fileKeys);
-  if (after) {
-    console.log('[DIAG] starts with quote:', after[0] === '"' || after[0] === "'");
-    console.log('[DIAG] ends   with quote:', after[after.length - 1] === '"' || after[after.length - 1] === "'");
-    console.log('[DIAG] starts with space:', after[0] === ' ');
-    console.log('[DIAG] ends   with space:', after[after.length - 1] === ' ');
-  }
-})();
 
 const crypto = require('crypto');
 const express = require('express');
@@ -910,7 +884,6 @@ app.get('/admin/negocio/:id', (req, res) => {
 
 app.post('/admin/auth/login', async (req, res) => {
   const rawAdminEmail = process.env.ADMIN_EMAIL;
-  console.log('[DIAG3] admin login attempt — ADMIN_EMAIL at request time:', JSON.stringify(rawAdminEmail));
   if (!rawAdminEmail) return res.status(500).json({ error: 'ADMIN_EMAIL no configurado' });
   // Strip surrounding quotes and whitespace that Raw Editor in Railway may inject
   const adminEmail = rawAdminEmail.trim().replace(/^["']|["']$/g, '').trim().toLowerCase();
@@ -1057,10 +1030,10 @@ app.post('/auth/whatsapp/callback', requireAuth, async (req, res) => {
 
 // ──────────────────────────────────────────────────────────────────────────────
 
-console.log('[DIAG2] ADMIN_EMAIL at listen time:', JSON.stringify(process.env.ADMIN_EMAIL));
-
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  const ckResult = checkpoint();
+  console.log('WAL checkpoint on startup:', JSON.stringify(ckResult));
 });
 
 app.get('/admin/api/checkpoint', requireAdmin, (req, res) => {
