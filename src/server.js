@@ -1,5 +1,7 @@
 require('dotenv').config({ path: '.env.local' });
 
+const TRIAL_MESSAGE_LIMIT = 200;
+
 const crypto = require('crypto');
 const express = require('express');
 const path = require('path');
@@ -9,7 +11,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, checkpoint, closeDb } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, getTrialMessageCount, checkpoint, closeDb } = require('./db');
 const { generateReply, analyzeStyle, summarizeWebsite } = require('./claude');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
 const { sendPauseEmail, sendUnmatchedPaymentAlert } = require('./email');
@@ -140,7 +142,12 @@ app.get('/api/config', (req, res) => {
 
 app.get('/api/business', requireAuth, (req, res) => {
   const business = getBusinessByUserId(req.session.userId);
-  res.json(business || null);
+  if (!business) return res.json(null);
+  if (business.plan === 'arranque' && business.trial_starts_at) {
+    const trial_msg_count = getTrialMessageCount(business.id, business.trial_starts_at);
+    return res.json({ ...business, trial_msg_count, trial_msg_limit: TRIAL_MESSAGE_LIMIT });
+  }
+  res.json(business);
 });
 
 async function fetchAndSummarizeWebsite(url) {
@@ -634,6 +641,14 @@ app.post('/webhook', async (req, res) => {
               waCredentials
             );
             continue;
+          }
+
+          if (business.plan === 'arranque' && business.trial_starts_at) {
+            const trialCount = getTrialMessageCount(business.id, business.trial_starts_at);
+            if (trialCount >= TRIAL_MESSAGE_LIMIT) {
+              console.log(`[trial-limit] business ${business.id} hit limit (${trialCount}/${TRIAL_MESSAGE_LIMIT}), dropping message from ${customerPhone}`);
+              continue;
+            }
           }
 
           const conversation = getOrCreateConversation(business.id, customerPhone);

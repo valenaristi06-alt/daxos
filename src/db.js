@@ -537,6 +537,14 @@ function getPendingPayments() {
   return db.prepare('SELECT * FROM pending_payments ORDER BY created_at DESC').all();
 }
 
+function getTrialMessageCount(businessId, trialStartsAt) {
+  return db.prepare(`
+    SELECT COUNT(*) as n FROM messages m
+    JOIN conversations c ON c.id = m.conversation_id
+    WHERE c.business_id = ? AND m.role = 'user' AND m.created_at >= ?
+  `).get(businessId, trialStartsAt).n;
+}
+
 // --- admin queries (read-only) ---
 
 function getAllBusinesses() {
@@ -622,6 +630,7 @@ module.exports = {
   getBusinessAdminMetrics,
   getPlanCounts,
   saveWabaCredentials,
+  getTrialMessageCount,
   checkpoint,
   closeDb,
 };
