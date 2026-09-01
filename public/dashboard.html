@@ -626,7 +626,6 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       }
 
       document.getElementById('name').value = b.name || '';
-      document.getElementById('whatsapp_number').value = b.whatsapp_number || '';
       document.getElementById('business_context').value = b.business_context || '';
       document.getElementById('pricing_info').value = b.pricing_info || '';
       document.getElementById('website_url').value = b.website_url || '';
@@ -802,7 +801,6 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
 
       const payload = {
         name: document.getElementById('name').value.trim(),
-        whatsapp_number: document.getElementById('whatsapp_number').value.trim() || null,
         business_context: document.getElementById('business_context').value.trim() || null,
         website_url: document.getElementById('website_url').value.trim() || null,
         sales_examples,
