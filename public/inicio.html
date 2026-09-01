@@ -184,21 +184,35 @@
       const banner = document.getElementById('trial-banner');
       if (!b) {
         banner.className = 'trial-banner trial-banner--active';
-        banner.innerHTML = '<span class="trial-msg">Tenés 14 días de prueba gratis. Completá tu configuración para empezar.</span>';
+        banner.innerHTML = '<span class="trial-msg">Completá tu configuración para empezar.</span>';
         banner.style.display = 'flex';
-      } else if (b.plan === 'arranque' && b.trial_ends_at) {
-        const endsAt = new Date(b.trial_ends_at);
-        const now = new Date();
-        if (endsAt < now) {
+      } else if (b.plan !== 'arranque' && (b.subscription_status === 'cancelled' || b.subscription_status === 'paused')) {
+        const expiry = b.plan_expires_at || b.trial_ends_at;
+        if (!expiry || new Date(expiry) < new Date()) {
           banner.className = 'trial-banner trial-banner--expired';
-          banner.innerHTML = `<span class="trial-msg">Tu prueba gratuita terminó.</span>
-            <a href="https://mpago.la/1PDxazc" class="trial-action" target="_blank" rel="noopener">Activá tu plan →</a>`;
+          banner.innerHTML = `<span class="trial-msg">Tu suscripción está inactiva.</span>
+            <a href="https://mpago.la/1PDxazc" class="trial-action" target="_blank" rel="noopener">Reactivá tu plan →</a>`;
           banner.style.display = 'flex';
-        } else {
-          const daysLeft = Math.ceil((endsAt - now) / (1000 * 60 * 60 * 24));
+        }
+      } else if (b.plan === 'arranque') {
+        if (!b.trial_starts_at) {
           banner.className = 'trial-banner trial-banner--active';
-          banner.innerHTML = `<span class="trial-msg">Te ${daysLeft === 1 ? 'queda 1 día' : `quedan ${daysLeft} días`} de prueba gratis.</span>`;
+          banner.innerHTML = '<span class="trial-msg">Conectá tu WhatsApp para empezar tu prueba de 14 días.</span>';
           banner.style.display = 'flex';
+        } else if (b.trial_ends_at) {
+          const endsAt = new Date(b.trial_ends_at);
+          const now = new Date();
+          if (endsAt < now) {
+            banner.className = 'trial-banner trial-banner--expired';
+            banner.innerHTML = `<span class="trial-msg">Tu prueba gratuita terminó.</span>
+              <a href="https://mpago.la/1PDxazc" class="trial-action" target="_blank" rel="noopener">Activá tu plan →</a>`;
+            banner.style.display = 'flex';
+          } else {
+            const daysLeft = Math.ceil((endsAt - now) / (1000 * 60 * 60 * 24));
+            banner.className = 'trial-banner trial-banner--active';
+            banner.innerHTML = `<span class="trial-msg">Te ${daysLeft === 1 ? 'queda 1 día' : `quedan ${daysLeft} días`} de prueba gratis.</span>`;
+            banner.style.display = 'flex';
+          }
         }
       }
 

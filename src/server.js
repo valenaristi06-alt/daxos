@@ -521,9 +521,26 @@ app.post('/test/simulate', async (req, res) => {
 });
 
 function isTrialExpired(business) {
-  if (business.plan !== 'arranque') return false;
-  if (!business.trial_ends_at) return false;
-  return new Date(business.trial_ends_at) < new Date();
+  const { plan, subscription_status, trial_starts_at, trial_ends_at, phone_number_id } = business;
+
+  // Paid plan
+  if (plan !== 'arranque') {
+    if (subscription_status === 'cancelled' || subscription_status === 'paused') {
+      if (!trial_ends_at && !business.plan_expires_at) return true;
+      const expiry = business.plan_expires_at || trial_ends_at;
+      return new Date(expiry) < new Date();
+    }
+    return false; // active / authorized / pending / unknown → allow
+  }
+
+  // Trial (arranque)
+  if (!trial_starts_at && !phone_number_id) return false; // clock not started yet
+  if (!trial_starts_at && phone_number_id) {
+    console.warn(`[isTrialExpired] business ${business.id}: phone_number_id set but no trial_starts_at — invalid state, allowing`);
+    return false;
+  }
+  if (!trial_ends_at) return false;
+  return new Date(trial_ends_at) < new Date();
 }
 
 // Pauses a conversation and notifies the business owner via email.

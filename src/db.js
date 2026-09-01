@@ -150,6 +150,52 @@ db.exec(`
   );
 `);
 
+// ── Schema migrations (run-once) ──
+db.exec(`
+  CREATE TABLE IF NOT EXISTS schema_migrations (
+    version    TEXT PRIMARY KEY,
+    applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
+(function runMigrations() {
+  const applied = version => !!db.prepare('SELECT 1 FROM schema_migrations WHERE version = ?').get(version);
+
+  if (!applied('002_trial_starts_at')) {
+    const cols = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+    if (!cols.includes('trial_starts_at')) {
+      db.exec('ALTER TABLE businesses ADD COLUMN trial_starts_at TEXT');
+    }
+
+    // Exclude review@daxos.lat — COALESCE(-1) so subquery null doesn't break WHERE
+    const reviewId = db.prepare(`
+      SELECT b.id FROM businesses b
+      JOIN users u ON u.business_id = b.id
+      WHERE u.email = 'review@daxos.lat'
+    `).get()?.id ?? -1;
+
+    // Businesses WITH phone_number_id: approximate trial_starts_at from existing trial_ends_at
+    const withPhone = db.prepare(`
+      UPDATE businesses
+      SET trial_starts_at = datetime(trial_ends_at, '-14 days')
+      WHERE phone_number_id IS NOT NULL
+        AND trial_ends_at IS NOT NULL
+        AND id != ?
+    `).run(reviewId);
+
+    // Businesses WITHOUT phone_number_id: clock hasn't started — clear both dates
+    const withoutPhone = db.prepare(`
+      UPDATE businesses
+      SET trial_starts_at = NULL, trial_ends_at = NULL
+      WHERE phone_number_id IS NULL
+        AND id != ?
+    `).run(reviewId);
+
+    db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('002_trial_starts_at');
+    console.log(`[migration 002] trial_starts_at added. With phone: ${withPhone.changes} rows. Without phone: ${withoutPhone.changes} rows. Excluded review id: ${reviewId === -1 ? 'not found (none excluded)' : reviewId}`);
+  }
+})();
+
 // --- businesses ---
 
 function deserializeBusiness(row) {
@@ -163,9 +209,21 @@ function deserializeBusiness(row) {
 }
 
 function saveWabaCredentials(businessId, { wabaId, phoneNumberId, accessToken }) {
-  db.prepare(`
-    UPDATE businesses SET waba_id = ?, phone_number_id = ?, wa_access_token = ? WHERE id = ?
-  `).run(wabaId, phoneNumberId, encrypt(accessToken), businessId);
+  // Only start the trial clock on first connection — don't reset if already connected
+  const existing = db.prepare('SELECT trial_starts_at FROM businesses WHERE id = ?').get(businessId);
+  if (existing && !existing.trial_starts_at) {
+    db.prepare(`
+      UPDATE businesses
+      SET waba_id = ?, phone_number_id = ?, wa_access_token = ?,
+          trial_starts_at = datetime('now'),
+          trial_ends_at   = datetime('now', '+14 days')
+      WHERE id = ?
+    `).run(wabaId, phoneNumberId, encrypt(accessToken), businessId);
+  } else {
+    db.prepare(`
+      UPDATE businesses SET waba_id = ?, phone_number_id = ?, wa_access_token = ? WHERE id = ?
+    `).run(wabaId, phoneNumberId, encrypt(accessToken), businessId);
+  }
 }
 
 function setUserPhone(userId, phone) {
@@ -233,8 +291,8 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
 
   if (whatsapp_number) {
     const result = db.prepare(`
-      INSERT INTO businesses (name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, response_delay, pricing_info, trial_ends_at)
-      VALUES (@name, @whatsapp_number, @sales_examples, @survey_answers, @business_context, @website_url, @response_mode, @response_delay, @pricing_info, datetime('now', '+14 days'))
+      INSERT INTO businesses (name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, response_delay, pricing_info)
+      VALUES (@name, @whatsapp_number, @sales_examples, @survey_answers, @business_context, @website_url, @response_mode, @response_delay, @pricing_info)
       ON CONFLICT(whatsapp_number) DO UPDATE SET
         name=excluded.name, sales_examples=excluded.sales_examples,
         survey_answers=excluded.survey_answers, business_context=excluded.business_context,
@@ -246,8 +304,8 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
   }
 
   const result = db.prepare(`
-    INSERT INTO businesses (name, sales_examples, survey_answers, business_context, website_url, response_mode, response_delay, pricing_info, trial_ends_at)
-    VALUES (@name, @sales_examples, @survey_answers, @business_context, @website_url, @response_mode, @response_delay, @pricing_info, datetime('now', '+14 days'))
+    INSERT INTO businesses (name, sales_examples, survey_answers, business_context, website_url, response_mode, response_delay, pricing_info)
+    VALUES (@name, @sales_examples, @survey_answers, @business_context, @website_url, @response_mode, @response_delay, @pricing_info)
   `).run(serialized);
   return getBusinessById(result.lastInsertRowid);
 }
