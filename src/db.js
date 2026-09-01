@@ -564,4 +564,14 @@ module.exports = {
   getBusinessAdminMetrics,
   getPlanCounts,
   saveWabaCredentials,
+  checkpoint,
+  closeDb,
 };
+
+function checkpoint() {
+  return db.pragma('wal_checkpoint(FULL)');
+}
+
+function closeDb() {
+  db.close();
+}

@@ -1,4 +1,30 @@
+const _adminEmailBeforeDotenv = process.env.ADMIN_EMAIL;
+
 require('dotenv').config({ path: '.env.local' });
+
+const _adminEmailAfterDotenv = process.env.ADMIN_EMAIL;
+
+// Startup diagnostic — readable in Railway "View logs"
+(function diagAdminEmail() {
+  const fs = require('fs');
+  const envPath = require('path').join(__dirname, '../.env.local');
+  const fileExists = fs.existsSync(envPath);
+  const fileKeys = fileExists
+    ? fs.readFileSync(envPath, 'utf8').split('\n')
+        .map(l => l.split('=')[0].trim()).filter(Boolean)
+    : [];
+  const after = _adminEmailAfterDotenv;
+  console.log('[DIAG] ADMIN_EMAIL before dotenv:', JSON.stringify(_adminEmailBeforeDotenv));
+  console.log('[DIAG] ADMIN_EMAIL after  dotenv:', JSON.stringify(after));
+  console.log('[DIAG] ADMIN_EMAIL length:', after != null ? after.length : 'n/a');
+  console.log('[DIAG] .env.local exists:', fileExists, '| keys:', fileKeys);
+  if (after) {
+    console.log('[DIAG] starts with quote:', after[0] === '"' || after[0] === "'");
+    console.log('[DIAG] ends   with quote:', after[after.length - 1] === '"' || after[after.length - 1] === "'");
+    console.log('[DIAG] starts with space:', after[0] === ' ');
+    console.log('[DIAG] ends   with space:', after[after.length - 1] === ' ');
+  }
+})();
 
 const crypto = require('crypto');
 const express = require('express');
@@ -9,7 +35,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, checkpoint, closeDb } = require('./db');
 const { generateReply, analyzeStyle, summarizeWebsite } = require('./claude');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
 const { sendPauseEmail, sendUnmatchedPaymentAlert } = require('./email');
@@ -883,12 +909,14 @@ app.get('/admin/negocio/:id', (req, res) => {
 });
 
 app.post('/admin/auth/login', async (req, res) => {
-  const adminEmail = process.env.ADMIN_EMAIL;
-  if (!adminEmail) return res.status(500).json({ error: 'ADMIN_EMAIL no configurado' });
+  const rawAdminEmail = process.env.ADMIN_EMAIL;
+  if (!rawAdminEmail) return res.status(500).json({ error: 'ADMIN_EMAIL no configurado' });
+  // Strip surrounding quotes and whitespace that Raw Editor in Railway may inject
+  const adminEmail = rawAdminEmail.trim().replace(/^["']|["']$/g, '').trim().toLowerCase();
 
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' });
-  if (email.toLowerCase().trim() !== adminEmail.toLowerCase()) {
+  if (email.toLowerCase().trim() !== adminEmail) {
     return res.status(403).json({ error: 'Acceso denegado' });
   }
 
@@ -1030,4 +1058,21 @@ app.post('/auth/whatsapp/callback', requireAuth, async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+});
+
+app.get('/admin/api/checkpoint', requireAdmin, (req, res) => {
+  const result = checkpoint();
+  res.json({ ok: true, result });
+});
+
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received — checkpointing WAL and closing DB...');
+  try {
+    checkpoint();
+    closeDb();
+    console.log('DB closed cleanly.');
+  } catch (err) {
+    console.error('Error during shutdown:', err.message);
+  }
+  process.exit(0);
 });
