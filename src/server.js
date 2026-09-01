@@ -492,7 +492,10 @@ app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
     reply = reply.trim();
     const planAllowsAudio = ['crecimiento', 'a_medida'].includes(business.plan);
     const replyFitsAudio = reply.length <= AUDIO_MAX_CHARS;
-    const sent_audio = business.response_mode === 'audio' && !!business.voice_id && planAllowsAudio && replyFitsAudio;
+    const isFirstMessage = history.length === 0;
+    const wantsAudio = business.response_mode === 'audio' ||
+                       (business.response_mode === 'audio_key' && isFirstMessage);
+    const sent_audio = wantsAudio && !!business.voice_id && planAllowsAudio && replyFitsAudio;
 
     let audio_b64 = null;
     if (sent_audio) {
@@ -747,8 +750,11 @@ app.post('/webhook', async (req, res) => {
 
           const planAllowsAudio = ['crecimiento', 'a_medida'].includes(business.plan);
           const replyFitsAudio = reply.length <= AUDIO_MAX_CHARS;
+          const isFirstMessage = history.length === 0;
+          const wantsAudio = business.response_mode === 'audio' ||
+                             (business.response_mode === 'audio_key' && isFirstMessage);
           try {
-            if (business.response_mode === 'audio' && business.voice_id && planAllowsAudio && replyFitsAudio) {
+            if (wantsAudio && business.voice_id && planAllowsAudio && replyFitsAudio) {
               try {
                 const mp3 = await generateAudioBuffer(business.voice_id, reply);
                 const ogg = await convertToOgg(mp3);
@@ -759,7 +765,7 @@ app.post('/webhook', async (req, res) => {
                 await sendWhatsAppMessage(customerPhone, reply, waCredentials);
               }
             } else {
-              if (business.response_mode === 'audio' && !replyFitsAudio) {
+              if (wantsAudio && !replyFitsAudio) {
                 console.log(`[audio-skip] reply too long (${reply.length} chars > ${AUDIO_MAX_CHARS}), sending as text`);
               }
               await sendWhatsAppMessage(customerPhone, reply, waCredentials);
