@@ -3,6 +3,7 @@ require('dotenv').config({ path: '.env.local' });
 const { convertToMp3 } = require('./audio');
 
 const API_KEY = process.env.ELEVENLABS_API_KEY;
+const TTS_MODEL = process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2';
 const BASE = 'https://api.elevenlabs.io/v1';
 
 function requireKey() {
@@ -36,7 +37,7 @@ async function cloneVoice(name, fileBuffer) {
 function ttsBody(text) {
   return JSON.stringify({
     text,
-    model_id: 'eleven_multilingual_v2',
+    model_id: TTS_MODEL,
     voice_settings: { stability: 0.5, similarity_boost: 0.95 },
   });
 }

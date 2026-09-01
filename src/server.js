@@ -1,6 +1,7 @@
 require('dotenv').config({ path: '.env.local' });
 
 const TRIAL_MESSAGE_LIMIT = 200;
+const AUDIO_MAX_CHARS = 600;
 
 const crypto = require('crypto');
 const express = require('express');
@@ -490,7 +491,8 @@ app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
     }
     reply = reply.trim();
     const planAllowsAudio = ['crecimiento', 'a_medida'].includes(business.plan);
-    const sent_audio = business.response_mode === 'audio' && !!business.voice_id && planAllowsAudio;
+    const replyFitsAudio = reply.length <= AUDIO_MAX_CHARS;
+    const sent_audio = business.response_mode === 'audio' && !!business.voice_id && planAllowsAudio && replyFitsAudio;
 
     let audio_b64 = null;
     if (sent_audio) {
@@ -744,8 +746,9 @@ app.post('/webhook', async (req, res) => {
           }
 
           const planAllowsAudio = ['crecimiento', 'a_medida'].includes(business.plan);
+          const replyFitsAudio = reply.length <= AUDIO_MAX_CHARS;
           try {
-            if (business.response_mode === 'audio' && business.voice_id && planAllowsAudio) {
+            if (business.response_mode === 'audio' && business.voice_id && planAllowsAudio && replyFitsAudio) {
               try {
                 const mp3 = await generateAudioBuffer(business.voice_id, reply);
                 const ogg = await convertToOgg(mp3);
@@ -756,6 +759,9 @@ app.post('/webhook', async (req, res) => {
                 await sendWhatsAppMessage(customerPhone, reply, waCredentials);
               }
             } else {
+              if (business.response_mode === 'audio' && !replyFitsAudio) {
+                console.log(`[audio-skip] reply too long (${reply.length} chars > ${AUDIO_MAX_CHARS}), sending as text`);
+              }
               await sendWhatsAppMessage(customerPhone, reply, waCredentials);
             }
           } catch (sendErr) {
