@@ -910,6 +910,7 @@ app.get('/admin/negocio/:id', (req, res) => {
 
 app.post('/admin/auth/login', async (req, res) => {
   const rawAdminEmail = process.env.ADMIN_EMAIL;
+  console.log('[DIAG3] admin login attempt — ADMIN_EMAIL at request time:', JSON.stringify(rawAdminEmail));
   if (!rawAdminEmail) return res.status(500).json({ error: 'ADMIN_EMAIL no configurado' });
   // Strip surrounding quotes and whitespace that Raw Editor in Railway may inject
   const adminEmail = rawAdminEmail.trim().replace(/^["']|["']$/g, '').trim().toLowerCase();
@@ -1055,6 +1056,8 @@ app.post('/auth/whatsapp/callback', requireAuth, async (req, res) => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
+
+console.log('[DIAG2] ADMIN_EMAIL at listen time:', JSON.stringify(process.env.ADMIN_EMAIL));
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
