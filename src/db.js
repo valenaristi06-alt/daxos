@@ -133,9 +133,10 @@ if (!bizCols.includes('business_context'))       db.exec('ALTER TABLE businesses
 if (!bizCols.includes('website_url'))            db.exec('ALTER TABLE businesses ADD COLUMN website_url TEXT');
 if (!bizCols.includes('website_summary'))        db.exec('ALTER TABLE businesses ADD COLUMN website_summary TEXT');
 if (!bizCols.includes('pricing_info'))           db.exec('ALTER TABLE businesses ADD COLUMN pricing_info TEXT');
-if (!bizCols.includes('waba_id'))               db.exec('ALTER TABLE businesses ADD COLUMN waba_id TEXT');
-if (!bizCols.includes('phone_number_id'))        db.exec('ALTER TABLE businesses ADD COLUMN phone_number_id TEXT');
-if (!bizCols.includes('wa_access_token'))        db.exec('ALTER TABLE businesses ADD COLUMN wa_access_token TEXT');
+if (!bizCols.includes('waba_id'))                db.exec('ALTER TABLE businesses ADD COLUMN waba_id TEXT');
+if (!bizCols.includes('phone_number_id'))         db.exec('ALTER TABLE businesses ADD COLUMN phone_number_id TEXT');
+if (!bizCols.includes('wa_access_token'))         db.exec('ALTER TABLE businesses ADD COLUMN wa_access_token TEXT');
+if (!bizCols.includes('wa_payment_confirmed'))    db.exec('ALTER TABLE businesses ADD COLUMN wa_payment_confirmed INTEGER NOT NULL DEFAULT 0');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS pending_payments (
@@ -537,6 +538,10 @@ function getPendingPayments() {
   return db.prepare('SELECT * FROM pending_payments ORDER BY created_at DESC').all();
 }
 
+function setWaPaymentConfirmed(businessId) {
+  db.prepare('UPDATE businesses SET wa_payment_confirmed = 1 WHERE id = ?').run(businessId);
+}
+
 function getTrialMessageCount(businessId, trialStartsAt) {
   return db.prepare(`
     SELECT COUNT(*) as n FROM messages m
@@ -630,6 +635,7 @@ module.exports = {
   getBusinessAdminMetrics,
   getPlanCounts,
   saveWabaCredentials,
+  setWaPaymentConfirmed,
   getTrialMessageCount,
   checkpoint,
   closeDb,

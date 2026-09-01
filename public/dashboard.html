@@ -85,6 +85,7 @@
     <p class="page-terminal">&gt; negocio.config</p>
     <h1 class="page-title">Configuración</h1>
 
+    <div id="activation-panel" style="display:none"></div>
     <div id="trial-banner" style="display:none"></div>
 
     <div id="form-skeleton" style="display:flex;flex-direction:column;gap:24px;margin-bottom:32px;">
@@ -576,6 +577,60 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
     const LARGO_LABELS = { corto:'Mensajes cortos', medio:'Mensajes medios', largo:'Mensajes largos' };
     const CIERRE_LABELS = { 'con pregunta':'Cierra con pregunta', 'con llamado a la acción':'Llamado a la acción', abierto:'Cierre abierto', mixto:'Cierre mixto' };
 
+    function renderActivationPanel(b) {
+      const panel = document.getElementById('activation-panel');
+      const step1 = true;
+      const step2 = !!b && !!(b.business_context || (Array.isArray(b.sales_examples) && b.sales_examples.length > 0));
+      const step3 = !!b && !!b.phone_number_id;
+      const step4 = !!b && !!b.wa_payment_confirmed;
+
+      if (step1 && step2 && step3 && step4) {
+        panel.style.display = 'none';
+        return;
+      }
+
+      const stepRow = (done, label, note = '', extra = '') => `
+        <li class="activation-step">
+          <span class="step-icon ${done ? 'step-icon--done' : 'step-icon--pending'}">${done ? '✓' : '○'}</span>
+          <div>
+            <span class="step-label ${done ? 'step-label--done' : ''}">${label}</span>
+            ${note ? `<p class="step-note">${note}</p>` : ''}
+            ${extra}
+          </div>
+        </li>`;
+
+      panel.innerHTML = `
+        <p class="activation-title">Pasos para activar tu asistente</p>
+        <ul class="activation-steps">
+          ${stepRow(true, 'Cuenta creada')}
+          ${stepRow(step2, 'Información del negocio cargada', step2 ? '' : 'Completá el contexto del negocio o los ejemplos de venta abajo.')}
+          ${stepRow(step3, 'WhatsApp conectado', step3 ? '' : 'Conectá tu número de WhatsApp Business más abajo.')}
+          ${step4
+            ? stepRow(true, 'Método de pago en Meta')
+            : stepRow(false, 'Método de pago en Meta',
+                'Meta requiere que tu cuenta de WhatsApp Business tenga un método de pago registrado. Responder a clientes que te escriben primero es gratis — es solo un requisito de activación de Meta.',
+                `<button class="step-confirm-btn" id="btn-confirm-payment" onclick="confirmWaPayment()">Ya lo cargué →</button>`
+              )
+          }
+        </ul>`;
+      panel.style.display = 'block';
+    }
+
+    async function confirmWaPayment() {
+      const btn = document.getElementById('btn-confirm-payment');
+      if (!btn) return;
+      btn.disabled = true;
+      btn.textContent = 'Guardando…';
+      const res = await fetch('/api/business/wa-payment-confirmed', { method: 'PATCH' });
+      if (res.ok) {
+        currentBusiness = { ...currentBusiness, wa_payment_confirmed: 1 };
+        renderActivationPanel(currentBusiness);
+      } else {
+        btn.disabled = false;
+        btn.textContent = 'Ya lo cargué →';
+      }
+    }
+
     function renderStyleProfile(profile) {
       if (!profile) { document.getElementById('style-card').style.display = 'none'; return; }
       document.getElementById('style-card').style.display = 'block';
@@ -597,6 +652,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       document.getElementById('form-skeleton').style.display = 'none';
       document.getElementById('form').style.display = '';
       renderWaConnectionStatus(b);
+      renderActivationPanel(b);
 
       // Trial banner — runs even if no business saved yet
       const banner = document.getElementById('trial-banner');
