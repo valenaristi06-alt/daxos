@@ -1,8 +1,14 @@
-require('dotenv').config({ path: '.env.local' });
-
 const Anthropic = require('@anthropic-ai/sdk');
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+let _client = null;
+function getClient() {
+  if (!_client) {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) throw new Error('ANTHROPIC_API_KEY no está configurada en el servidor');
+    _client = new Anthropic({ apiKey });
+  }
+  return _client;
+}
 
 function buildSystemPrompt(business, label, bookingContext = null) {
   const lines = [
@@ -131,12 +137,18 @@ async function generateReply(business, history, newMessage, label = null, bookin
     { role: 'user', content: newMessage },
   ];
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
-    system: systemPrompt,
-    messages,
-  });
+  let response;
+  try {
+    response = await getClient().messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages,
+    });
+  } catch (err) {
+    console.error('[claude] generateReply error:', err?.message);
+    throw new Error('El asistente no está disponible en este momento. Intentá de nuevo en unos segundos.');
+  }
 
   return response.content[0].text;
 }
@@ -174,7 +186,7 @@ Reglas:
 - "caracteristicas" es un array de exactamente 3 strings cortos que describen rasgos distintivos del estilo.
 - No agregues comentarios, markdown ni texto fuera del JSON.`;
 
-  const response = await client.messages.create({
+  const response = await getClient().messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 512,
     messages: [{ role: 'user', content: prompt }],
@@ -194,7 +206,7 @@ Reglas:
 }
 
 async function summarizeWebsite(text) {
-  const response = await client.messages.create({
+  const response = await getClient().messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 256,
     messages: [{

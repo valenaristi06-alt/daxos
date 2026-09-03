@@ -1,5 +1,8 @@
 require('dotenv').config({ path: '.env.local' });
 
+const _apiKey = process.env.ANTHROPIC_API_KEY;
+console.log('[startup] ANTHROPIC_API_KEY present:', !!_apiKey, '| length:', _apiKey?.length ?? 0, '| prefix:', _apiKey ? _apiKey.slice(0, 8) : 'MISSING');
+
 const TRIAL_MESSAGE_LIMIT = 200;
 const AUDIO_MAX_CHARS = 600;
 
