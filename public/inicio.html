@@ -158,8 +158,9 @@
 
       // Plan badge
       if (b?.plan) {
+        const PLAN_LABELS = { arranque: 'Arranque', crecimiento: 'Crecimiento', a_medida: 'A medida' };
         const badge = document.getElementById('plan-badge');
-        badge.textContent = b.plan;
+        badge.textContent = PLAN_LABELS[b.plan] || b.plan;
         badge.style.display = 'inline-block';
       }
 
@@ -172,11 +173,17 @@
         ? `${timeGreeting}, ${b.name}`
         : timeGreeting;
 
-      const greetingSubs = [
-        'Tu asistente ya está listo para responder.',
-        'Cada mensaje respondido es una venta que no perdiste.',
-        'Tu WhatsApp no descansa. Ni el de tus clientes.',
-      ];
+      const waConnected = !!b?.whatsapp_number;
+      const greetingSubs = waConnected
+        ? [
+            'Tu asistente está respondiendo en tu nombre.',
+            'Cada mensaje respondido es una venta que no perdiste.',
+            'Tu WhatsApp no descansa. Ni el de tus clientes.',
+          ]
+        : [
+            'Conectá tu WhatsApp para que el asistente empiece a responder.',
+            'Un paso más y tu asistente queda listo.',
+          ];
       document.getElementById('greeting-sub').textContent =
         greetingSubs[Math.floor(Math.random() * greetingSubs.length)];
 
@@ -358,17 +365,11 @@
       <svg class="mobile-nav-icon" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <path d="M2 3C2 2 3 1 4 1H12C13 1 14 2 14 3V9C14 10 13 11 12 11H7L4 14V11C3 11 2 10 2 9V3Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
       </svg>
-      Convs
+      Chats
     </a>
-    <button class="mobile-nav-item" id="btn-logout-mobile">
-      <svg class="mobile-nav-icon" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <path d="M6 2H3C2.4 2 2 2.4 2 3V13C2 13.6 2.4 14 3 14H6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-        <path d="M10 5L14 8L10 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-        <line x1="14" y1="8" x2="6" y2="8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-      </svg>
-      Salir
-    </button>
   </nav>
+
+  <button class="mobile-corner-logout" id="btn-logout-mobile" type="button">Salir</button>
 
 </body>
 </html>

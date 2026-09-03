@@ -105,7 +105,6 @@
     // ── Load conversation list ──
     async function loadList() {
       const res = await fetch('/api/conversations');
-      const rawText = await res.clone().text();
       const convs = await res.json().catch(() => []);
       const list = document.getElementById('conv-list');
 
@@ -148,7 +147,10 @@
       document.getElementById('thread-messages').innerHTML = '<div class="thread-loading">Cargando mensajes…</div>';
 
       const res = await fetch(`/api/conversations/${id}/messages`);
-      if (!res.ok) { return; }
+      if (!res.ok) {
+        document.getElementById('thread-messages').innerHTML = '<p class="no-msgs">No se pudieron cargar los mensajes. Recargá la página e intentá de nuevo.</p>';
+        return;
+      }
       const { conversation, messages } = await res.json();
 
       document.getElementById('thread-header').innerHTML = `
@@ -228,8 +230,6 @@
     // ── Helpers ──
     function formatPhone(raw) {
       if (!raw) return 'Desconocido';
-      // Show last 6 digits with prefix for readability
-      if (raw.length > 8) return raw.slice(0, -6).replace(/./g, '·') + raw.slice(-6);
       return raw;
     }
 
@@ -275,17 +275,11 @@
       <svg class="mobile-nav-icon" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <path d="M2 3C2 2 3 1 4 1H12C13 1 14 2 14 3V9C14 10 13 11 12 11H7L4 14V11C3 11 2 10 2 9V3Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
       </svg>
-      Convs
+      Chats
     </a>
-    <button class="mobile-nav-item" id="btn-logout-mobile">
-      <svg class="mobile-nav-icon" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <path d="M6 2H3C2.4 2 2 2.4 2 3V13C2 13.6 2.4 14 3 14H6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-        <path d="M10 5L14 8L10 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-        <line x1="14" y1="8" x2="6" y2="8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-      </svg>
-      Salir
-    </button>
   </nav>
+
+  <button class="mobile-corner-logout" id="btn-logout-mobile" type="button">Salir</button>
 
 </body>
 </html>
