@@ -332,6 +332,16 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           <p class="delay-value-display">Espera: <strong id="delay-display">5</strong> segundos</p>
         </div>
 
+        <div class="field">
+          <label class="field-label">¿Recibís pedidos de turno por WhatsApp?</label>
+          <span class="field-hint">Si lo activás, el asistente va a recolectar los datos del cliente y te va a avisar por WhatsApp para que confirmes vos. No agenda solo.</span>
+          <label class="toggle-row">
+            <input type="checkbox" id="booking_enabled" />
+            <span class="toggle-switch"></span>
+            <span class="toggle-label" id="booking-label">Apagado</span>
+          </label>
+        </div>
+
       </section>
 
       <div class="actions" id="actions-bar">
@@ -701,6 +711,9 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       setRadio('prioridad', s.prioridad);
       setRadio('largo_mensajes', s.largo_mensajes);
       document.getElementById('pause_keywords').value = b.pause_keywords || '';
+      const bookingEl = document.getElementById('booking_enabled');
+      bookingEl.checked = !!b.booking_enabled;
+      document.getElementById('booking-label').textContent = b.booking_enabled ? 'Activado' : 'Apagado';
 
       const delayVal = b.response_delay ?? 5;
       document.getElementById('response_delay').value = delayVal;
@@ -1248,6 +1261,27 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
     // ── Delay slider live display ──
     document.getElementById('response_delay').addEventListener('input', function () {
       document.getElementById('delay-display').textContent = this.value;
+    });
+
+    document.getElementById('booking_enabled').addEventListener('change', async function () {
+      const enabled = this.checked;
+      document.getElementById('booking-label').textContent = enabled ? 'Activado' : 'Apagado';
+      try {
+        const res = await fetch('/api/business/booking-enabled', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled }),
+        });
+        if (!res.ok) {
+          this.checked = !enabled; // revert on error
+          document.getElementById('booking-label').textContent = !enabled ? 'Activado' : 'Apagado';
+          console.error('[booking-toggle] failed:', await res.text());
+        }
+      } catch (err) {
+        this.checked = !enabled;
+        document.getElementById('booking-label').textContent = !enabled ? 'Activado' : 'Apagado';
+        console.error('[booking-toggle] network error:', err);
+      }
     });
 
     // ── Document upload ──

@@ -138,6 +138,7 @@ if (!bizCols.includes('waba_id'))                db.exec('ALTER TABLE businesses
 if (!bizCols.includes('phone_number_id'))         db.exec('ALTER TABLE businesses ADD COLUMN phone_number_id TEXT');
 if (!bizCols.includes('wa_access_token'))         db.exec('ALTER TABLE businesses ADD COLUMN wa_access_token TEXT');
 if (!bizCols.includes('wa_payment_confirmed'))    db.exec('ALTER TABLE businesses ADD COLUMN wa_payment_confirmed INTEGER NOT NULL DEFAULT 0');
+if (!bizCols.includes('booking_enabled'))         db.exec('ALTER TABLE businesses ADD COLUMN booking_enabled INTEGER NOT NULL DEFAULT 0');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS pending_bookings (
@@ -563,6 +564,10 @@ function setWaPaymentConfirmed(businessId) {
   db.prepare('UPDATE businesses SET wa_payment_confirmed = 1 WHERE id = ?').run(businessId);
 }
 
+function setBookingEnabled(businessId, enabled) {
+  db.prepare('UPDATE businesses SET booking_enabled = ? WHERE id = ?').run(enabled ? 1 : 0, businessId);
+}
+
 function getTrialMessageCount(businessId, trialStartsAt) {
   return db.prepare(`
     SELECT COUNT(*) as n FROM messages m
@@ -775,6 +780,7 @@ module.exports = {
   getPlanCounts,
   saveWabaCredentials,
   setWaPaymentConfirmed,
+  setBookingEnabled,
   getTrialMessageCount,
   createBooking,
   getBookingById,

@@ -12,9 +12,9 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, checkpoint, closeDb } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, checkpoint, closeDb } = require('./db');
 const { generateReply, analyzeStyle, summarizeWebsite } = require('./claude');
-const { handleOwnerBookingReply, checkBookingTimeouts } = require('./bookings');
+const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = require('./bookings');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
 const { sendPauseEmail, sendUnmatchedPaymentAlert } = require('./email');
 
@@ -248,6 +248,16 @@ app.post('/api/business/analyze-style', requireAuth, async (req, res) => {
     console.error('[style-analysis] failed:', err.message);
     res.status(500).json({ error: 'El análisis falló. Intentá de nuevo.' });
   }
+});
+
+app.patch('/api/business/booking-enabled', requireAuth, (req, res) => {
+  const { enabled } = req.body;
+  if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be boolean' });
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'No business' });
+  setBookingEnabled(user.business_id, enabled);
+  console.log(`[booking-enabled] business=${user.business_id} enabled=${enabled}`);
+  res.json({ ok: true, booking_enabled: enabled });
 });
 
 // Exact consent text — stored verbatim for legal record
@@ -735,8 +745,12 @@ app.post('/webhook', async (req, res) => {
           // Generate reply and enforce minimum delay in parallel
           const delayMs = (business.response_delay ?? 5) * 1000;
           const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+          const currentBookingState = business.booking_enabled ? getBookingState(conversation.id) : null;
           const [rawReply] = await Promise.all([
-            generateReply(business, history, text, conversation.label || null),
+            generateReply(business, history, text, conversation.label || null, {
+              enabled: !!business.booking_enabled,
+              state: currentBookingState,
+            }),
             sleep(delayMs),
           ]);
 
@@ -751,6 +765,76 @@ app.post('/webhook', async (req, res) => {
             sendDoc = true;
             reply = reply.replace(/^\[SEND_DOC\]\n?/, '');
           }
+
+          // Booking state machine — parse tags, update state, strip tags from reply
+          if (business.booking_enabled) {
+            let nextBookingState = currentBookingState;
+
+            if (/\[WANTS_BOOKING\]/.test(reply)) {
+              nextBookingState = { step: 'collecting_name' };
+              console.log(`[booking-flow] WANTS_BOOKING conversation=${conversation.id}`);
+            }
+            if (/\[CANCEL_BOOKING\]/.test(reply)) {
+              nextBookingState = null;
+              console.log(`[booking-flow] CANCEL_BOOKING conversation=${conversation.id}`);
+            }
+
+            const nameMatch = reply.match(/\[BOOKING_NAME:\s*([^\]]+)\]/);
+            if (nameMatch) {
+              const name = nameMatch[1].trim();
+              nextBookingState = { ...(currentBookingState || {}), step: 'collecting_reason', name };
+              console.log(`[booking-flow] collected name="${name}" conversation=${conversation.id}`);
+            }
+
+            const reasonMatch = reply.match(/\[BOOKING_REASON:\s*([^\]]+)\]/);
+            if (reasonMatch) {
+              const reason = reasonMatch[1].trim();
+              nextBookingState = { ...(currentBookingState || {}), step: 'collecting_slots', reason };
+              console.log(`[booking-flow] collected reason="${reason}" conversation=${conversation.id}`);
+            }
+
+            const slotsMatch = reply.match(/\[BOOKING_SLOTS:\s*([^\]]+)\]/);
+            if (slotsMatch) {
+              const slots = slotsMatch[1].split('|').map(s => s.trim()).filter(Boolean);
+              if (slots.length > 0 && currentBookingState?.name && currentBookingState?.reason) {
+                try {
+                  const bookingOwner = getUserByBusinessId(business.id);
+                  const booking = createBooking({
+                    businessId: business.id,
+                    conversationId: conversation.id,
+                    customerPhone,
+                    clientName: currentBookingState.name,
+                    reason: currentBookingState.reason,
+                    slots,
+                  });
+                  nextBookingState = { step: 'waiting_owner', bookingId: booking.id, name: currentBookingState.name };
+                  notifyOwnerOfBooking({ business, owner: bookingOwner, booking, waCredentials })
+                    .catch(err => console.error(`[booking-flow] notifyOwnerOfBooking failed booking=${booking.id}: ${err.message}`));
+                  console.log(`[booking-flow] booking created id=${booking.id} code=${booking.slot_code} conversation=${conversation.id}`);
+                } catch (bookingErr) {
+                  nextBookingState = null;
+                  console.error(`[booking-flow] createBooking failed conversation=${conversation.id}: ${bookingErr.message}`);
+                }
+              } else {
+                console.error(`[booking-flow] BOOKING_SLOTS found but state missing name/reason — state=${JSON.stringify(currentBookingState)}`);
+                nextBookingState = null;
+              }
+            }
+
+            // Strip all booking tags from the reply the client will see
+            reply = reply
+              .replace(/\[WANTS_BOOKING\]\n?/g, '')
+              .replace(/\[CANCEL_BOOKING\]\n?/g, '')
+              .replace(/\[BOOKING_NAME:[^\]]*\]\n?/g, '')
+              .replace(/\[BOOKING_REASON:[^\]]*\]\n?/g, '')
+              .replace(/\[BOOKING_SLOTS:[^\]]*\]\n?/g, '');
+
+            // Persist state only if it changed
+            if (JSON.stringify(nextBookingState) !== JSON.stringify(currentBookingState)) {
+              setBookingState(conversation.id, nextBookingState);
+            }
+          }
+
           reply = reply.trim();
 
           addMessage(conversation.id, 'user', text);
