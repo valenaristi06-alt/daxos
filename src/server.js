@@ -480,7 +480,10 @@ app.delete('/api/business/document', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
+app.post('/api/business/preview-chat', (req, res, next) => {
+  console.log('[preview-chat] HIT — sessionId:', req.session?.id, '| userId:', req.session?.userId ?? 'NONE');
+  next();
+}, requireAuth, async (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
 
