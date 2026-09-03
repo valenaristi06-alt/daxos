@@ -149,7 +149,9 @@ async function generateReply(business, history, newMessage, label = null, bookin
     });
   } catch (err) {
     console.error('[claude] generateReply error:', err?.status ?? 'no-status', err?.message, err?.stack?.split('\n')[1]);
-    throw new Error('El asistente no está disponible en este momento. Intentá de nuevo en unos segundos.');
+    const friendly = new Error('El asistente no está disponible en este momento. Intentá de nuevo en unos segundos.');
+    friendly.cause = err;
+    throw friendly;
   }
 
   return response.content[0].text;
