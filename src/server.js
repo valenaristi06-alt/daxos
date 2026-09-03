@@ -14,6 +14,7 @@ const Database = require('better-sqlite3');
 const multer = require('multer');
 const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, checkpoint, closeDb } = require('./db');
 const { generateReply, analyzeStyle, summarizeWebsite } = require('./claude');
+const { handleOwnerBookingReply, checkBookingTimeouts } = require('./bookings');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
 const { sendPauseEmail, sendUnmatchedPaymentAlert } = require('./email');
 
@@ -647,6 +648,23 @@ app.post('/webhook', async (req, res) => {
           const text = msg.text?.body;
           if (!text) continue;
 
+          // Owner booking-reply detection — check before trial/limit gates so owner
+          // responses always go through regardless of trial state.
+          {
+            const msgOwner = getUserByBusinessId(business.id);
+            const ownerDigits = (msgOwner?.phone || '').replace(/\D/g, '');
+            const senderDigits = customerPhone.replace(/\D/g, '');
+            if (ownerDigits && senderDigits === ownerDigits) {
+              const handled = await handleOwnerBookingReply({
+                business, ownerPhone: customerPhone, text, waCredentials,
+              });
+              if (handled) {
+                markAsRead(msg.id, waCredentials).catch(() => {});
+                continue;
+              }
+            }
+          }
+
           if (isTrialExpired(business)) {
             await sendWhatsAppMessage(customerPhone,
               `Hola! El período de prueba de ${business.name} terminó. Para seguir recibiendo respuestas automáticas, el negocio necesita activar su plan.`,
@@ -1099,6 +1117,25 @@ app.post('/auth/whatsapp/callback', requireAuth, async (req, res) => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
+
+// Booking timeout job — resolves business credentials for a given businessId
+async function getBookingCredentials(businessId) {
+  const business = getBusinessById(businessId);
+  const owner = business ? getUserByBusinessId(businessId) : null;
+  const waCredentials = business?.phone_number_id
+    ? { phoneNumberId: business.phone_number_id, accessToken: business.wa_access_token }
+    : null;
+  return { business, owner, waCredentials };
+}
+
+// Run once at startup (catches any expired bookings from before last restart),
+// then every 30 minutes.
+checkBookingTimeouts({ getCredentialsForBusiness: getBookingCredentials })
+  .catch(err => console.error('[booking-timeout-startup]', err.message));
+setInterval(() => {
+  checkBookingTimeouts({ getCredentialsForBusiness: getBookingCredentials })
+    .catch(err => console.error('[booking-timeout-job]', err.message));
+}, 30 * 60 * 1000);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
