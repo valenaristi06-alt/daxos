@@ -514,6 +514,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
 
   <script>
     let currentBusiness = null;
+    let audioOptionsLocked = false;
 
     // ── Redirect if not logged in ──
     (async () => {
@@ -736,16 +737,15 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       const audioKeyOption = document.getElementById('rm-audio-key-option');
       const rmHint = document.getElementById('rm-hint');
 
+      audioOptionsLocked = false;
+
       function disableAudioOptions(hintText) {
+        audioOptionsLocked = true;
         [audioOption, audioKeyOption].forEach(el => {
           el.classList.add('radio-option--disabled');
           el.classList.remove('selected');
           el.querySelector('input').disabled = true;
         });
-        const selected = document.querySelector('input[name="response_mode"]:checked')?.value;
-        if (!selected || selected === 'audio' || selected === 'audio_key') {
-          setRadio('response_mode', 'texto');
-        }
         rmHint.textContent = hintText;
         rmHint.style.display = '';
       }
@@ -855,7 +855,9 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         },
         pause_keywords: document.getElementById('pause_keywords').value.trim() || null,
         response_delay: parseInt(document.getElementById('response_delay').value, 10),
-        response_mode: document.querySelector('input[name="response_mode"]:checked')?.value || 'texto',
+        response_mode: audioOptionsLocked
+          ? (currentBusiness?.response_mode || 'texto')
+          : (document.querySelector('input[name="response_mode"]:checked')?.value || 'texto'),
         pricing_info: document.getElementById('pricing_info').value.trim() || null,
       };
 
