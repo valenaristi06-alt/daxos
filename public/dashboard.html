@@ -82,7 +82,6 @@
 
   <main class="app-main">
 
-    <p class="page-terminal">&gt; negocio.config</p>
     <h1 class="page-title">Configuración</h1>
 
     <div id="activation-panel" style="display:none"></div>
@@ -98,7 +97,7 @@
 
     <form id="form" novalidate style="display:none">
 
-      <!-- Identidad -->
+      <!-- Tu negocio -->
       <section class="section">
         <div class="section-label">
           <svg class="section-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -107,7 +106,7 @@
             <line x1="9" y1="7.5" x2="14" y2="7.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
             <line x1="9" y1="10.5" x2="13" y2="10.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
           </svg>
-          <span>Identidad</span>
+          <span>Tu negocio</span>
         </div>
 
         <div class="field">
@@ -117,7 +116,7 @@
 
         <div class="field">
           <label class="field-label">WhatsApp Business</label>
-          <span class="field-hint">Conectá tu cuenta de WhatsApp Business directamente desde Daxos para activar las respuestas automáticas.</span>
+          <span class="field-hint">Conectá tu número de WhatsApp Business. Esta conexión se guarda automáticamente al terminar — no necesitás apretar "Guardar todo".</span>
           <div id="wa-connect-status" style="display:none; align-items:center; gap:10px; margin-top:6px;">
             <span style="color:#22c55e; font-size:13px;">✓ Conectado</span>
             <span id="wa-connected-number" style="color:#888; font-size:13px;"></span>
@@ -130,8 +129,8 @@
           <p id="wa-step" style="display:none; color:#888; font-size:12px; margin-top:4px;"></p>
         </div>
         <div class="field">
-          <label class="field-label" for="business_context">Contexto del negocio</label>
-          <span class="field-hint">¿Qué hace o vende tu negocio? El asistente lo usará para responder preguntas generales sobre qué ofrecés.</span>
+          <label class="field-label" for="business_context">¿Qué hacés o vendés?</label>
+          <span class="field-hint">Describí tu negocio con tus palabras. Tu asistente lo usa para responder preguntas de clientes sobre qué ofrecés.</span>
           <textarea id="business_context" rows="3" placeholder="Ej: Vendemos departamentos en alquiler y venta en Montevideo, especializados en zona Pocitos y Punta Carretas."></textarea>
         </div>
 
@@ -146,10 +145,10 @@
 
         <div class="field">
           <label class="field-label" for="pricing_info">
-            Precios y servicios
+            Tus precios y servicios
             <span class="tag-optional">Opcional</span>
           </label>
-          <span class="field-hint">Cargá tus precios, planes o servicios principales. El asistente los usará para responder consultas de precio sin derivar a un humano.</span>
+          <span class="field-hint">Escribí lo que cobrás. Cuando un cliente pregunte por precio, tu asistente responde directamente con esta información.</span>
           <textarea id="pricing_info" rows="5" placeholder="Ej:
 Plan básico: $1.500/mes — incluye hasta 3 usuarios y soporte por email.
 Plan pro: $3.000/mes — usuarios ilimitados, soporte prioritario 24/7.
@@ -158,13 +157,14 @@ Consultoría puntual: $500 la hora."></textarea>
 
         <div class="field">
           <label class="field-label">
-            Documento adjunto
+            Catálogo o PDF
             <span class="tag-optional">Opcional</span>
           </label>
-          <span class="field-hint">Catálogo, lista de precios o info clave. Cuando el cliente lo pida, el asistente lo enviará automáticamente.</span>
+          <span class="field-hint">Si tenés un catálogo, lista de precios o ficha técnica en PDF, cargalo acá. Cuando un cliente lo pida, tu asistente lo envía automáticamente. <strong class="doc-autosave-note">El PDF se guarda solo al subirlo — no necesitás apretar "Guardar todo".</strong></span>
           <div class="doc-upload-area" id="doc-upload-area">
             <div id="doc-current" style="display:none" class="doc-current">
               <span class="doc-current-name" id="doc-name"></span>
+              <span class="doc-saved-badge">✓ Guardado</span>
               <button class="doc-delete-btn" id="doc-delete-btn" title="Eliminar documento">✕</button>
             </div>
             <label class="doc-upload-label" id="doc-upload-label">
@@ -174,22 +174,31 @@ Consultoría puntual: $500 la hora."></textarea>
             </label>
           </div>
         </div>
+
+        <div class="field" style="margin-top: 44px;">
+          <label class="field-label" for="owner_phone">
+            Tu número de WhatsApp
+            <span class="tag-optional">Para avisos</span>
+          </label>
+          <span class="field-hint">Cuando un cliente necesite que lo atiendas vos, te avisamos a este número.</span>
+          <input id="owner_phone" type="tel" placeholder="+598912345678" />
+        </div>
       </section>
 
       <hr class="divider" />
 
-      <!-- Voz y estilo -->
+      <!-- Cómo habla tu asistente -->
       <section class="section">
         <div class="section-label">
           <svg class="section-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M2 3C2 2 3 1 4 1H12C13 1 14 2 14 3V9C14 10 13 11 12 11H7L4 14V11C3 11 2 10 2 9V3Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
           </svg>
-          <span>Voz y estilo</span>
+          <span>Cómo habla tu asistente</span>
         </div>
 
         <div class="field">
-          <label class="field-label" for="sales_examples">Ejemplos de venta</label>
-          <span class="field-hint">Pegá mensajes reales que usás con tus clientes. Separá cada ejemplo con una línea en blanco. El asistente va a imitar este tono.</span>
+          <label class="field-label" for="sales_examples">Mensajes tuyos reales</label>
+          <span class="field-hint">Pegá acá mensajes que ya usás con tus clientes — como si hablaras por WhatsApp. Separá cada ejemplo con una línea en blanco. Tu asistente va a escribir igual que vos.</span>
           <textarea id="sales_examples" rows="8" placeholder="Ej:
 
 ¡Hola! Gracias por escribirnos. ¿En qué te puedo ayudar hoy?
@@ -202,7 +211,6 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       <div class="style-card" id="style-card" style="display:none">
         <div class="style-card-header">
           <div>
-            <p class="style-card-terminal">&gt; style.profile</p>
             <p class="style-card-title">Así hablás</p>
           </div>
           <button type="button" class="btn-reanalyze" id="btn-reanalyze">Volver a analizar</button>
@@ -212,7 +220,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
 
       <hr class="divider" />
 
-      <!-- Comportamiento -->
+      <!-- Cómo actúa tu asistente -->
       <section class="section">
         <div class="section-label">
           <svg class="section-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -223,17 +231,16 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
             <circle cx="10" cy="8" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
             <circle cx="6" cy="12" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
           </svg>
-          <span>Comportamiento</span>
+          <span>Cómo actúa tu asistente</span>
         </div>
 
         <div class="field">
-          <label class="field-label" for="objeciones_precio">Manejo de objeciones de precio</label>
-          <span class="field-hint">¿Cómo responde tu negocio cuando el cliente dice que es caro?</span>
+          <label class="field-label" for="objeciones_precio">¿Qué decís cuando te dicen que es caro?</label>
           <textarea id="objeciones_precio" rows="3" placeholder="Ej: Explicamos el valor del servicio y ofrecemos cuotas sin interés si es necesario."></textarea>
         </div>
 
         <div class="field subsection">
-          <label class="field-label">Prioridad al responder</label>
+          <label class="field-label">Cuando alguien escribe, ¿qué hace primero?</label>
           <div class="radio-group" id="prioridad-group">
             <label class="radio-option" data-value="cerrar_rapido">
               <input type="radio" name="prioridad" value="cerrar_rapido" />
@@ -254,7 +261,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         </div>
 
         <div class="field subsection">
-          <label class="field-label" for="sin_respuesta">Si el cliente no responde</label>
+          <label class="field-label" for="sin_respuesta">¿Qué hace si alguien no te responde?</label>
           <select id="sin_respuesta">
             <option value="">Seleccioná una opción</option>
             <option value="no_hacer_nada">No hacer nada, esperar</option>
@@ -265,7 +272,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         </div>
 
         <div class="field subsection">
-          <label class="field-label">Largo de mensajes</label>
+          <label class="field-label">¿Qué tan largos son los mensajes?</label>
           <div class="radio-group" id="largo-group">
             <label class="radio-option" data-value="corto">
               <input type="radio" name="largo_mensajes" value="corto" />
@@ -286,14 +293,14 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         </div>
 
         <div class="field subsection">
-          <label class="field-label" for="pause_keywords">Palabras clave de pausa</label>
-          <span class="field-hint">Si el cliente escribe alguna de estas palabras, el asistente se detiene y te avisamos por WhatsApp (o email si no podemos contactarte por WhatsApp). Separalas con comas. Ej: <code>hablar con una persona, urgente, cancelar</code></span>
+          <label class="field-label" for="pause_keywords">¿Cuándo querés que te avise?</label>
+          <span class="field-hint">Si un cliente escribe alguna de estas palabras, tu asistente para y te manda un aviso por WhatsApp. Escribilas separadas con comas.</span>
           <input id="pause_keywords" type="text" placeholder="Ej: hablar con una persona, urgente, cancelar" />
         </div>
 
         <div class="field subsection">
-          <label class="field-label" for="response_delay">Velocidad de respuesta</label>
-          <span class="field-hint">Cuánto espera el asistente antes de responder. 0 = instantáneo. 20 = respuesta más pausada.</span>
+          <label class="field-label" for="response_delay">¿Qué tan rápido responde?</label>
+          <span class="field-hint">Cuántos segundos espera antes de responder. En 0 responde al instante; en 20 espera un momento, como haría una persona.</span>
           <div class="delay-slider-wrap">
             <span class="delay-label">Instantáneo</span>
             <input type="range" id="response_delay" min="0" max="20" step="1" value="5" class="delay-slider" />
@@ -304,16 +311,15 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
 
       </section>
 
-      <!-- Probador de asistente -->
+      <!-- Probá tu asistente -->
       <div class="preview-chat">
-        <p class="preview-chat-terminal">&gt; asistente.test</p>
         <div class="preview-chat-header">
           <svg class="section-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M2 3C2 2 3 1 4 1H12C13 1 14 2 14 3V9C14 10 13 11 12 11H7L4 14V11C3 11 2 10 2 9V3Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
           </svg>
-          <h2 class="preview-chat-title">Probador de asistente</h2>
+          <h2 class="preview-chat-title">Probá tu asistente</h2>
         </div>
-        <p class="preview-chat-desc">Escribí como si fueras un cliente. El asistente responde con tu configuración actual — este historial no se guarda.</p>
+        <p class="preview-chat-desc">Escribí como si fueras un cliente y mirá cómo responde con la configuración que cargaste. Este historial no se guarda.</p>
         <div class="preview-chat-box">
           <div class="preview-chat-messages" id="preview-messages">
             <div class="preview-chat-empty" id="preview-empty">
@@ -339,9 +345,10 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         </div>
       </div>
 
-      <div class="actions">
-        <span class="save-status" id="save-status"></span>
-        <button type="submit" class="btn-save" id="btn-save">Guardar cambios</button>
+      <div class="actions" id="actions-bar">
+        <div id="save-success-banner" class="save-success-banner" style="display:none">✓ Todo guardado correctamente</div>
+        <div id="save-error-banner" class="save-error-banner" style="display:none"></div>
+        <button type="submit" class="btn-save" id="btn-save">Guardar todo</button>
       </div>
 
       <hr class="divider" />
@@ -359,10 +366,11 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         </div>
 
         <p class="voice-section-desc">Clonamos tu voz para que las respuestas por audio suenen como vos, no como un asistente genérico. Es opcional — si preferís, podés dejar todo en texto.</p>
+        <p class="voice-autosave-note">Tu voz se guarda automáticamente cuando confirmás la grabación. No necesitás apretar "Guardar todo".</p>
 
         <!-- Modo de respuesta -->
         <div class="field" style="margin-bottom: 20px;">
-          <label class="field-label">Modo de respuesta</label>
+          <label class="field-label">¿Cómo responde?</label>
           <div class="radio-group" id="response-mode-group">
             <label class="radio-option" id="rm-texto-option">
               <input type="radio" name="response_mode" value="texto" />
@@ -458,30 +466,6 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       </section>
 
     </form>
-
-    <hr class="divider" />
-
-    <section class="section" id="account-section">
-      <div class="section-label">
-        <svg class="section-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.4"/>
-          <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-        </svg>
-        <span>Cuenta</span>
-      </div>
-      <div class="field">
-        <label class="field-label" for="owner_phone">
-          Tu WhatsApp personal
-          <span class="tag-optional">Para notificaciones</span>
-        </label>
-        <span class="field-hint">Te avisamos por acá cuando una conversación necesita atención humana.</span>
-        <input id="owner_phone" type="tel" placeholder="+598912345678" />
-      </div>
-      <div class="form-actions">
-        <button type="button" class="btn-save" id="btn-save-account">Guardar cuenta</button>
-        <span class="save-status" id="save-status-account"></span>
-      </div>
-    </section>
 
   </main>
   </div><!-- /app-layout -->
@@ -768,6 +752,23 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       document.getElementById('owner_phone').value = u.phone || '';
     });
 
+    // ── Dirty state ──
+    let isDirty = false;
+    function markDirty() {
+      if (isDirty) return;
+      isDirty = true;
+      document.getElementById('btn-save').classList.add('btn-save--dirty');
+    }
+    function markClean() {
+      isDirty = false;
+      document.getElementById('btn-save').classList.remove('btn-save--dirty');
+    }
+    window.addEventListener('beforeunload', (e) => {
+      if (isDirty) { e.preventDefault(); e.returnValue = ''; }
+    });
+    document.getElementById('form').addEventListener('input', markDirty);
+    document.getElementById('form').addEventListener('change', markDirty);
+
     function normalizePhone(raw) {
       const s = raw.replace(/[\s\-().]/g, '');
       if (!s) return '';
@@ -782,63 +783,6 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       if (!val) return true; // empty = clear saved number, allowed
       return /^\+\d{8,15}$/.test(val);
     }
-
-    async function saveOwnerPhone(phone) {
-      const status = document.getElementById('save-status-account');
-      status.textContent = 'Guardando…';
-      status.className = 'save-status saving';
-      try {
-        const res = await fetch('/auth/me', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: phone || null }),
-        });
-        if (res.ok) {
-          toast('Cuenta actualizada', 'ok');
-          status.textContent = '';
-          status.className = 'save-status';
-        } else {
-          const d = await res.json();
-          toast(d.error || 'Error', 'error');
-          status.textContent = '';
-          status.className = 'save-status';
-        }
-      } catch {
-        status.textContent = '';
-        status.className = 'save-status';
-      }
-    }
-
-    document.getElementById('owner_phone').addEventListener('blur', async () => {
-      const input = document.getElementById('owner_phone');
-      const status = document.getElementById('save-status-account');
-      const normalized = normalizePhone(input.value.trim());
-      if (!validatePhone(normalized)) {
-        status.textContent = 'Formato inválido (ej: 098323308 o +59898323308)';
-        status.className = 'save-status error';
-        return;
-      }
-      input.value = normalized; // reflect canonical format back into field
-      status.textContent = '';
-      status.className = 'save-status';
-      await saveOwnerPhone(normalized);
-    });
-
-    document.getElementById('btn-save-account').addEventListener('click', async () => {
-      const btn = document.getElementById('btn-save-account');
-      const input = document.getElementById('owner_phone');
-      const status = document.getElementById('save-status-account');
-      const normalized = normalizePhone(input.value.trim());
-      if (!validatePhone(normalized)) {
-        status.textContent = 'Formato inválido (ej: 098323308 o +59898323308)';
-        status.className = 'save-status error';
-        return;
-      }
-      input.value = normalized;
-      btn.disabled = true;
-      await saveOwnerPhone(normalized);
-      btn.disabled = false;
-    });
 
     // ── Re-analyze button ──
     document.getElementById('btn-reanalyze').addEventListener('click', async () => {
@@ -857,15 +801,28 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
     });
 
     // ── Save ──
+    function showSaveBanner(type, msg) {
+      const success = document.getElementById('save-success-banner');
+      const error   = document.getElementById('save-error-banner');
+      if (type === 'ok') {
+        error.style.display = 'none';
+        success.style.display = 'block';
+        setTimeout(() => { success.style.display = 'none'; }, 3500);
+      } else {
+        success.style.display = 'none';
+        error.textContent = msg || 'No se pudo guardar. Intentá de nuevo.';
+        error.style.display = 'block';
+      }
+    }
+
     document.getElementById('form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('btn-save');
-      const status = document.getElementById('save-status');
 
       btn.disabled = true;
-      status.className = 'save-status saving';
-      status.textContent = 'Guardando…';
-      toast('Guardando…', 'info');
+      btn.textContent = 'Guardando…';
+      document.getElementById('save-success-banner').style.display = 'none';
+      document.getElementById('save-error-banner').style.display = 'none';
 
       const rawExamples = document.getElementById('sales_examples').value.trim();
       const sales_examples = rawExamples
@@ -892,28 +849,43 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         pricing_info: document.getElementById('pricing_info').value.trim() || null,
       };
 
-      const res = await fetch('/api/business', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      try {
+        const [bizRes] = await Promise.all([
+          fetch('/api/business', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }),
+          (async () => {
+            const rawPhone = document.getElementById('owner_phone').value.trim();
+            const normalized = normalizePhone(rawPhone);
+            if (validatePhone(normalized)) {
+              await fetch('/auth/me', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: normalized || null }),
+              });
+            }
+          })(),
+        ]);
 
-      btn.disabled = false;
-
-      if (res.ok) {
-        await res.json();
-        status.className = 'save-status';
-        toast('Cambios guardados', 'ok');
-        setTimeout(async () => {
-          const fresh = await fetch('/api/business');
-          const b = await fresh.json();
-          if (b?.style_profile) renderStyleProfile(b.style_profile);
-        }, 4000);
-      } else {
-        const data = await res.json();
-        status.className = 'save-status error';
-        status.textContent = data.error || 'Error al guardar';
-        toast(data.error || 'Error al guardar', 'err');
+        if (bizRes.ok) {
+          markClean();
+          showSaveBanner('ok');
+          setTimeout(async () => {
+            const fresh = await fetch('/api/business');
+            const b = await fresh.json();
+            if (b?.style_profile) renderStyleProfile(b.style_profile);
+          }, 4000);
+        } else {
+          const data = await bizRes.json();
+          showSaveBanner('err', data.error || 'No se pudo guardar. Intentá de nuevo.');
+        }
+      } catch {
+        showSaveBanner('err', 'Sin conexión. Revisá tu internet e intentá de nuevo.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Guardar todo';
       }
     });
 

@@ -476,28 +476,87 @@ select option { background: #1a1a1a; }
   vertical-align: middle;
 }
 
-/* ── Actions ── */
+/* ── Actions (sticky save bar) ── */
 
 .actions {
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 16px;
-  padding-top: 8px;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 0 20px;
+  position: sticky;
+  bottom: 0;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  z-index: 10;
+}
+
+.save-success-banner {
+  padding: 13px 18px;
+  background: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  border-radius: 6px;
+  color: #4ade80;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.save-error-banner {
+  padding: 13px 18px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  color: #f87171;
+  font-size: 14px;
+  text-align: center;
+}
+
+.btn-save--dirty {
+  box-shadow: 0 0 0 3px rgba(196, 92, 26, 0.35);
+}
+
+/* ── Doc upload feedback ── */
+
+.doc-autosave-note {
+  font-style: normal;
+  color: var(--muted-2);
+}
+
+.doc-saved-badge {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #4ade80;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+/* ── Voice autosave note ── */
+
+.voice-autosave-note {
+  font-size: 12px;
+  color: var(--muted-2);
+  font-style: italic;
+  margin-bottom: 20px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: rgba(74, 222, 128, 0.04);
 }
 
 .btn-save {
-  padding: 11px 28px;
+  padding: 13px 28px;
   background: var(--accent);
   color: #fff;
   border: none;
   border-radius: 4px;
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s, box-shadow 0.2s;
   letter-spacing: 0.01em;
+  width: 100%;
 }
 .btn-save:hover   { opacity: 0.88; }
 .btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
