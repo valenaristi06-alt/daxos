@@ -5,7 +5,7 @@ function getClient() {
   if (!_client) {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     console.log('[claude:getClient] apiKey present:', !!apiKey, '| length:', apiKey?.length ?? 0, '| prefix:', apiKey ? apiKey.slice(0, 8) : 'MISSING');
-    if (!apiKey) throw new Error('ANTHROPIC_API_KEY no está configurada en el servidor');
+    if (!apiKey) throw new Error(`ANTHROPIC_API_KEY ausente en getClient — typeof=${typeof apiKey}, length=${String(apiKey ?? '').length}, empty=${apiKey === ''}, undef=${apiKey === undefined}`);
     _client = new Anthropic({ apiKey });
     console.log('[claude:getClient] client created OK');
   }
