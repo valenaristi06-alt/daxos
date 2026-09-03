@@ -526,6 +526,7 @@ app.post('/api/business/preview-chat', (req, res, next) => {
 
     res.json({ reply, sent_doc, sent_audio, needs_human, audio_b64 });
   } catch (err) {
+    console.error('[preview-chat] ERROR:', err?.message, '| stack:', err?.stack?.split('\n').slice(0, 3).join(' | '));
     res.status(500).json({ error: err.message });
   }
 });
