@@ -393,10 +393,10 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         <p class="voice-section-desc">Clonamos tu voz para que las respuestas por audio suenen como vos, no como un asistente genérico. Es opcional — si preferís, podés dejar todo en texto.</p>
         <p class="voice-autosave-note">Tu voz se guarda automáticamente cuando confirmás la grabación. No necesitás apretar "Guardar todo".</p>
 
-        <!-- Bloqueo para plan Arranque -->
+        <!-- Upgrade de plan (arranque → crecimiento, crecimiento → a_medida) -->
         <div id="voice-plan-lock" style="display:none" class="voice-plan-lock">
-          <p class="voice-lock-msg">Esta función es parte del plan Crecimiento.</p>
-          <a href="https://wa.me/59892052508?text=Hola%2C%20quiero%20actualizar%20mi%20plan%20a%20Crecimiento" target="_blank" rel="noopener" class="voice-lock-link">Escribinos para actualizar tu plan →</a>
+          <p class="voice-lock-msg" id="voice-lock-msg"></p>
+          <a href="#" target="_blank" rel="noopener" class="voice-lock-link" id="voice-lock-cta"></a>
         </div>
 
         <div id="voice-status-saved" style="display:none" class="voice-cloned-badge">
@@ -723,9 +723,25 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       planBadge.textContent = PLAN_LABELS[b.plan] || b.plan;
       planBadge.style.display = 'inline-block';
 
-      // Voice section: lock if plan is 'arranque'
-      const planAllowsVoice = ['crecimiento', 'a_medida'].includes(b.plan?.toLowerCase()?.trim());
-      document.getElementById('voice-plan-lock').style.display = planAllowsVoice ? 'none' : 'block';
+      // Voice section: lock/nudge based on plan
+      const planLower = b.plan?.toLowerCase()?.trim() || 'arranque';
+      const planAllowsVoice = ['crecimiento', 'a_medida'].includes(planLower);
+      const lockEl  = document.getElementById('voice-plan-lock');
+      const lockMsg = document.getElementById('voice-lock-msg');
+      const lockCta = document.getElementById('voice-lock-cta');
+      if (planLower === 'arranque') {
+        lockEl.style.display = 'block';
+        lockMsg.textContent = 'La grabación de voz es parte del plan Crecimiento.';
+        lockCta.href = 'https://mpago.la/1PDxazc';
+        lockCta.textContent = 'Activar plan Crecimiento →';
+      } else if (planLower === 'crecimiento') {
+        lockEl.style.display = 'block';
+        lockMsg.textContent = '¿Necesitás más funciones o atención personalizada? Conocé el plan A medida.';
+        lockCta.href = 'https://wa.me/59892052508?text=Hola%2C%20me%20interesa%20el%20plan%20A%20medida';
+        lockCta.textContent = 'Escribinos →';
+      } else {
+        lockEl.style.display = 'none';
+      }
       document.getElementById('voice-input').style.display    = planAllowsVoice ? 'block' : 'none';
       document.getElementById('voice-confirm').style.display  = 'none';
 
@@ -754,6 +770,8 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         disableAudioOptions('Para enviar respuestas por audio necesitás el plan Crecimiento.');
       } else if (!b.voice_id) {
         disableAudioOptions('Primero grabás tu voz — después podés activar el modo audio.');
+      } else {
+        rmHint.style.display = 'none';
       }
     }
 
