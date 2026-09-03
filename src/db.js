@@ -122,6 +122,7 @@ if (!userCols.includes('phone')) db.exec('ALTER TABLE users ADD COLUMN phone TEX
 const convCols = db.prepare("PRAGMA table_info(conversations)").all().map(c => c.name);
 if (!convCols.includes('needs_attention'))      db.exec('ALTER TABLE conversations ADD COLUMN needs_attention INTEGER NOT NULL DEFAULT 0');
 if (!convCols.includes('label'))                db.exec('ALTER TABLE conversations ADD COLUMN label TEXT');
+if (!convCols.includes('booking_state'))        db.exec('ALTER TABLE conversations ADD COLUMN booking_state TEXT');
 
 const bizCols = db.prepare("PRAGMA table_info(businesses)").all().map(c => c.name);
 if (!bizCols.includes('document_path'))         db.exec('ALTER TABLE businesses ADD COLUMN document_path TEXT');
@@ -137,6 +138,26 @@ if (!bizCols.includes('waba_id'))                db.exec('ALTER TABLE businesses
 if (!bizCols.includes('phone_number_id'))         db.exec('ALTER TABLE businesses ADD COLUMN phone_number_id TEXT');
 if (!bizCols.includes('wa_access_token'))         db.exec('ALTER TABLE businesses ADD COLUMN wa_access_token TEXT');
 if (!bizCols.includes('wa_payment_confirmed'))    db.exec('ALTER TABLE businesses ADD COLUMN wa_payment_confirmed INTEGER NOT NULL DEFAULT 0');
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS pending_bookings (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    business_id     INTEGER NOT NULL REFERENCES businesses(id),
+    conversation_id INTEGER NOT NULL REFERENCES conversations(id),
+    customer_phone  TEXT NOT NULL,
+    client_name     TEXT NOT NULL,
+    reason          TEXT NOT NULL,
+    slots           TEXT NOT NULL,
+    slot_code       TEXT NOT NULL UNIQUE,
+    status          TEXT NOT NULL DEFAULT 'pending'
+                    CHECK(status IN ('pending','confirmed','rejected','expired')),
+    confirmed_slot  TEXT,
+    notified_at     TEXT,
+    reminder_sent_at TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS pending_payments (
@@ -597,6 +618,124 @@ function getPlanCounts() {
   return db.prepare('SELECT plan, COUNT(*) as count FROM businesses GROUP BY plan').all();
 }
 
+// --- pending_bookings ---
+
+function generateBookingCode() {
+  // Two uppercase letters, e.g. "AB". 676 combinations — sufficient for one business's open bookings.
+  return Array.from({ length: 2 }, () =>
+    String.fromCharCode(65 + Math.floor(Math.random() * 26))
+  ).join('');
+}
+
+function createBooking({ businessId, conversationId, customerPhone, clientName, reason, slots }) {
+  // slots: string[] — up to 3 free-text options the client proposed
+  let code;
+  let attempts = 0;
+  do {
+    code = generateBookingCode();
+    attempts++;
+    if (attempts > 50) throw new Error('Could not generate unique booking code after 50 attempts');
+  } while (db.prepare("SELECT 1 FROM pending_bookings WHERE slot_code = ? AND status = 'pending'").get(code));
+
+  const result = db.prepare(`
+    INSERT INTO pending_bookings
+      (business_id, conversation_id, customer_phone, client_name, reason, slots, slot_code)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(businessId, conversationId, customerPhone, clientName, reason, JSON.stringify(slots), code);
+
+  console.log(`[booking] created id=${result.lastInsertRowid} code=${code} business=${businessId} customer=${customerPhone}`);
+  return getBookingById(result.lastInsertRowid);
+}
+
+function getBookingById(id) {
+  const row = db.prepare('SELECT * FROM pending_bookings WHERE id = ?').get(id);
+  if (!row) return null;
+  return { ...row, slots: JSON.parse(row.slots) };
+}
+
+function getBookingByCode(code) {
+  const row = db.prepare("SELECT * FROM pending_bookings WHERE slot_code = ? AND status = 'pending'").get(code.toUpperCase());
+  if (!row) return null;
+  return { ...row, slots: JSON.parse(row.slots) };
+}
+
+function getPendingBookingsByBusiness(businessId) {
+  return db.prepare(`
+    SELECT * FROM pending_bookings WHERE business_id = ? AND status = 'pending' ORDER BY created_at ASC
+  `).all(businessId).map(r => ({ ...r, slots: JSON.parse(r.slots) }));
+}
+
+function confirmBooking(bookingId, confirmedSlot) {
+  db.prepare(`
+    UPDATE pending_bookings
+    SET status = 'confirmed', confirmed_slot = ?, updated_at = datetime('now')
+    WHERE id = ?
+  `).run(confirmedSlot, bookingId);
+  console.log(`[booking] confirmed id=${bookingId} slot="${confirmedSlot}"`);
+}
+
+function rejectBooking(bookingId) {
+  db.prepare(`
+    UPDATE pending_bookings
+    SET status = 'rejected', updated_at = datetime('now')
+    WHERE id = ?
+  `).run(bookingId);
+  console.log(`[booking] rejected id=${bookingId}`);
+}
+
+function expireBooking(bookingId) {
+  db.prepare(`
+    UPDATE pending_bookings
+    SET status = 'expired', updated_at = datetime('now')
+    WHERE id = ?
+  `).run(bookingId);
+  console.log(`[booking] expired id=${bookingId}`);
+}
+
+function markBookingNotified(bookingId) {
+  db.prepare(`
+    UPDATE pending_bookings SET notified_at = datetime('now'), updated_at = datetime('now') WHERE id = ?
+  `).run(bookingId);
+}
+
+function markBookingReminderSent(bookingId) {
+  db.prepare(`
+    UPDATE pending_bookings SET reminder_sent_at = datetime('now'), updated_at = datetime('now') WHERE id = ?
+  `).run(bookingId);
+}
+
+// Returns bookings that should trigger a timeout action.
+// firstTimeoutMinutes: minutes before sending reminder (default 240 = 4h)
+// expireMinutes: minutes before expiring after reminder (default 120 = 2h)
+function getBookingsNeedingTimeout({ firstTimeoutMinutes = 240, expireMinutes = 120 } = {}) {
+  return db.prepare(`
+    SELECT * FROM pending_bookings
+    WHERE status = 'pending'
+      AND (
+        (notified_at IS NOT NULL AND reminder_sent_at IS NULL
+          AND notified_at <= datetime('now', ? || ' minutes'))
+        OR
+        (reminder_sent_at IS NOT NULL
+          AND reminder_sent_at <= datetime('now', ? || ' minutes'))
+      )
+    ORDER BY created_at ASC
+  `).all(`-${firstTimeoutMinutes}`, `-${expireMinutes}`)
+    .map(r => ({ ...r, slots: JSON.parse(r.slots) }));
+}
+
+// --- booking_state on conversations ---
+
+function setBookingState(conversationId, state) {
+  db.prepare('UPDATE conversations SET booking_state = ? WHERE id = ?')
+    .run(state ? JSON.stringify(state) : null, conversationId);
+}
+
+function getBookingState(conversationId) {
+  const row = db.prepare('SELECT booking_state FROM conversations WHERE id = ?').get(conversationId);
+  if (!row?.booking_state) return null;
+  return JSON.parse(row.booking_state);
+}
+
 module.exports = {
   setUserPhone,
   setStyleProfile,
@@ -637,6 +776,18 @@ module.exports = {
   saveWabaCredentials,
   setWaPaymentConfirmed,
   getTrialMessageCount,
+  createBooking,
+  getBookingById,
+  getBookingByCode,
+  getPendingBookingsByBusiness,
+  confirmBooking,
+  rejectBooking,
+  expireBooking,
+  markBookingNotified,
+  markBookingReminderSent,
+  getBookingsNeedingTimeout,
+  setBookingState,
+  getBookingState,
   checkpoint,
   closeDb,
 };
