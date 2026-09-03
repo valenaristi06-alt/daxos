@@ -4,8 +4,10 @@ let _client = null;
 function getClient() {
   if (!_client) {
     const apiKey = process.env.ANTHROPIC_API_KEY;
+    console.log('[claude:getClient] apiKey present:', !!apiKey, '| length:', apiKey?.length ?? 0, '| prefix:', apiKey ? apiKey.slice(0, 8) : 'MISSING');
     if (!apiKey) throw new Error('ANTHROPIC_API_KEY no está configurada en el servidor');
     _client = new Anthropic({ apiKey });
+    console.log('[claude:getClient] client created OK');
   }
   return _client;
 }
@@ -146,7 +148,7 @@ async function generateReply(business, history, newMessage, label = null, bookin
       messages,
     });
   } catch (err) {
-    console.error('[claude] generateReply error:', err?.message);
+    console.error('[claude] generateReply error:', err?.status ?? 'no-status', err?.message, err?.stack?.split('\n')[1]);
     throw new Error('El asistente no está disponible en este momento. Intentá de nuevo en unos segundos.');
   }
 
