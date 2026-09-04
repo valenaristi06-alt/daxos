@@ -45,6 +45,11 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS runtime_config (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     business_id   INTEGER REFERENCES businesses(id),
@@ -802,11 +807,22 @@ module.exports = {
   getBookingsNeedingTimeout,
   setBookingState,
   getBookingState,
+  setRuntimeConfig,
+  getRuntimeConfig,
   logError,
   getRecentErrors,
   checkpoint,
   closeDb,
 };
+
+function setRuntimeConfig(key, value) {
+  db.prepare('INSERT OR REPLACE INTO runtime_config (key, value) VALUES (?, ?)').run(key, value);
+}
+
+function getRuntimeConfig(key) {
+  const row = db.prepare('SELECT value FROM runtime_config WHERE key = ?').get(key);
+  return row ? row.value : null;
+}
 
 function logError(context, err) {
   try {

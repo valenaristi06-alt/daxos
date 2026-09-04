@@ -5,8 +5,8 @@ globalThis.__DAXOS_ENV = Object.freeze({ ANTHROPIC_API_KEY: process.env.ANTHROPI
 require('dotenv').config({ path: '.env.local' });
 
 const _apiKey = process.env.ANTHROPIC_API_KEY;
-console.log('[startup] ANTHROPIC_API_KEY present:', !!_apiKey, '| length:', _apiKey?.length ?? 0, '| prefix:', _apiKey ? _apiKey.slice(0, 8) : 'MISSING');
-console.log('[startup] globalThis capture present:', !!globalThis.__DAXOS_ENV.ANTHROPIC_API_KEY, '| length:', globalThis.__DAXOS_ENV.ANTHROPIC_API_KEY?.length ?? 0);
+console.log('[startup] PID=' + process.pid + ' ANTHROPIC_API_KEY present:', !!_apiKey, '| length:', _apiKey?.length ?? 0, '| prefix:', _apiKey ? _apiKey.slice(0, 8) : 'MISSING');
+console.log('[startup] PID=' + process.pid + ' globalThis capture present:', !!globalThis.__DAXOS_ENV.ANTHROPIC_API_KEY, '| length:', globalThis.__DAXOS_ENV.ANTHROPIC_API_KEY?.length ?? 0);
 
 const TRIAL_MESSAGE_LIMIT = 200;
 const AUDIO_MAX_CHARS = 600;
@@ -20,7 +20,14 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, logError, getRecentErrors, checkpoint, closeDb } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb } = require('./db');
+
+// If startup process has the key but request-handler process doesn't,
+// persist it to the shared SQLite DB so getClient() can retrieve it.
+if (_apiKey) {
+  try { setRuntimeConfig('ANTHROPIC_API_KEY', _apiKey); } catch (_) {}
+  console.log('[startup] PID=' + process.pid + ' key saved to DB');
+}
 const { generateReply, analyzeStyle, summarizeWebsite, initAnthropicKey } = require('./claude');
 initAnthropicKey(_apiKey);
 const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = require('./bookings');
