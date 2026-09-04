@@ -3,9 +3,12 @@ const Anthropic = require('@anthropic-ai/sdk');
 function initAnthropicKey() {} // kept so server.js import doesn't break
 
 function getClient() {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  console.log('[claude:getClient] typeof=' + typeof apiKey + ' length=' + (apiKey?.length ?? 0) + ' val=' + (apiKey ? apiKey.slice(0, 12) + '...' : 'MISSING'));
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY undefined at request time — typeof=' + typeof apiKey);
+  const fromGlobal = globalThis.__DAXOS_ENV?.ANTHROPIC_API_KEY;
+  const fromEnv    = process.env.ANTHROPIC_API_KEY;
+  const apiKey     = fromGlobal || fromEnv;
+  console.log('[claude:getClient] global=' + (fromGlobal ? 'present(' + fromGlobal.length + ')' : 'MISSING') +
+              ' env=' + (fromEnv ? 'present(' + fromEnv.length + ')' : 'MISSING'));
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY missing in both globalThis.__DAXOS_ENV and process.env');
   return new Anthropic({ apiKey });
 }
 

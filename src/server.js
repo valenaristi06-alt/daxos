@@ -1,7 +1,12 @@
+// Capture BEFORE any require — even before dotenv — into a frozen global.
+// If dotenv or any library mutates process.env later, this value is safe.
+globalThis.__DAXOS_ENV = Object.freeze({ ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY });
+
 require('dotenv').config({ path: '.env.local' });
 
 const _apiKey = process.env.ANTHROPIC_API_KEY;
 console.log('[startup] ANTHROPIC_API_KEY present:', !!_apiKey, '| length:', _apiKey?.length ?? 0, '| prefix:', _apiKey ? _apiKey.slice(0, 8) : 'MISSING');
+console.log('[startup] globalThis capture present:', !!globalThis.__DAXOS_ENV.ANTHROPIC_API_KEY, '| length:', globalThis.__DAXOS_ENV.ANTHROPIC_API_KEY?.length ?? 0);
 
 const TRIAL_MESSAGE_LIMIT = 200;
 const AUDIO_MAX_CHARS = 600;
