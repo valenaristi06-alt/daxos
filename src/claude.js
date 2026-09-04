@@ -1,23 +1,12 @@
 const Anthropic = require('@anthropic-ai/sdk');
 
-let _client = null;
-
-// Called by server.js immediately after require('./claude'), passing the key
-// captured in server.js before any possible env mutation. claude.js never
-// reads process.env — the key is injected explicitly.
-function initAnthropicKey(apiKey) {
-  console.log('[claude:initAnthropicKey] key received — present:', !!apiKey, '| length:', apiKey?.length ?? 0);
-  if (apiKey) {
-    _client = new Anthropic({ apiKey });
-    console.log('[claude:initAnthropicKey] client created OK');
-  } else {
-    console.error('[claude:initAnthropicKey] ERROR — apiKey is falsy, client NOT created');
-  }
-}
+function initAnthropicKey() {} // kept so server.js import doesn't break
 
 function getClient() {
-  if (!_client) throw new Error('Anthropic client not initialized — initAnthropicKey() was not called with a valid key');
-  return _client;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  console.log('[claude:getClient] typeof=' + typeof apiKey + ' length=' + (apiKey?.length ?? 0) + ' val=' + (apiKey ? apiKey.slice(0, 12) + '...' : 'MISSING'));
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY undefined at request time — typeof=' + typeof apiKey);
+  return new Anthropic({ apiKey });
 }
 
 function buildSystemPrompt(business, label, bookingContext = null) {
