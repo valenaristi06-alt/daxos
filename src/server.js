@@ -15,7 +15,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, checkpoint, closeDb } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, logError, getRecentErrors, checkpoint, closeDb } = require('./db');
 const { generateReply, analyzeStyle, summarizeWebsite, initAnthropicKey } = require('./claude');
 initAnthropicKey(_apiKey);
 const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = require('./bookings');
@@ -528,13 +528,27 @@ app.post('/api/business/preview-chat', (req, res, next) => {
     res.json({ reply, sent_doc, sent_audio, needs_human, audio_b64 });
   } catch (err) {
     const root = err.cause ?? err;
-    console.error('[preview-chat] ERROR:', err?.message, '| cause:', root?.message);
-    res.status(500).json({
-      error: err.message,
-      debug: root?.message,
-      debugStack: root?.stack,
-    });
+    logError('preview-chat', root);
+    res.status(500).json({ error: 'Error al generar respuesta. Los detalles fueron guardados en /debug/errores.' });
   }
+});
+
+app.get('/debug/errores', requireAuth, (req, res) => {
+  const errors = getRecentErrors(20);
+  const rows = errors.map(e => `
+    <tr>
+      <td style="white-space:nowrap;padding:4px 8px">${e.created_at}</td>
+      <td style="padding:4px 8px">${e.context}</td>
+      <td style="padding:4px 8px">${e.message}</td>
+      <td style="padding:4px 8px;font-size:11px;max-width:600px;word-break:break-all">${(e.stack || '').replace(/\n/g, '<br>')}</td>
+    </tr>`).join('');
+  res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Error Log</title>
+    <style>body{font-family:monospace;padding:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;text-align:left;vertical-align:top}th{background:#f0f0f0}</style>
+    </head><body>
+    <h2>Últimos errores (${errors.length})</h2>
+    <table><thead><tr><th>Fecha</th><th>Contexto</th><th>Mensaje</th><th>Stack</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="4">Sin errores registrados</td></tr>'}</tbody></table>
+    </body></html>`);
 });
 
 app.post('/test/simulate', async (req, res) => {

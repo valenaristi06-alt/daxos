@@ -37,6 +37,14 @@ db.pragma('foreign_keys = ON');
 
 // Non-businesses tables (no migration needed)
 db.exec(`
+  CREATE TABLE IF NOT EXISTS error_log (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    context    TEXT NOT NULL,
+    message    TEXT NOT NULL,
+    stack      TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     business_id   INTEGER REFERENCES businesses(id),
@@ -794,9 +802,25 @@ module.exports = {
   getBookingsNeedingTimeout,
   setBookingState,
   getBookingState,
+  logError,
+  getRecentErrors,
   checkpoint,
   closeDb,
 };
+
+function logError(context, err) {
+  try {
+    db.prepare('INSERT INTO error_log (context, message, stack) VALUES (?, ?, ?)').run(
+      context,
+      String(err?.message ?? err),
+      String(err?.stack ?? '')
+    );
+  } catch (_) {}
+}
+
+function getRecentErrors(limit = 20) {
+  return db.prepare('SELECT * FROM error_log ORDER BY id DESC LIMIT ?').all(limit);
+}
 
 function checkpoint() {
   return db.pragma('wal_checkpoint(FULL)');
