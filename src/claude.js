@@ -1,17 +1,22 @@
 const Anthropic = require('@anthropic-ai/sdk');
 
-// Capture at module load time. server.js loads this module after its own
-// dotenv call, so process.env is fully populated here. Any later mutation
-// of process.env (Railway vault, dotenv override, etc.) won't affect this.
-const _ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-console.log('[claude:init] apiKey captured — present:', !!_ANTHROPIC_API_KEY, '| length:', _ANTHROPIC_API_KEY?.length ?? 0);
-
 let _client = null;
-function getClient() {
-  if (!_client) {
-    if (!_ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY no estaba disponible al cargar el módulo de Claude');
-    _client = new Anthropic({ apiKey: _ANTHROPIC_API_KEY });
+
+// Called by server.js immediately after require('./claude'), passing the key
+// captured in server.js before any possible env mutation. claude.js never
+// reads process.env — the key is injected explicitly.
+function initAnthropicKey(apiKey) {
+  console.log('[claude:initAnthropicKey] key received — present:', !!apiKey, '| length:', apiKey?.length ?? 0);
+  if (apiKey) {
+    _client = new Anthropic({ apiKey });
+    console.log('[claude:initAnthropicKey] client created OK');
+  } else {
+    console.error('[claude:initAnthropicKey] ERROR — apiKey is falsy, client NOT created');
   }
+}
+
+function getClient() {
+  if (!_client) throw new Error('Anthropic client not initialized — initAnthropicKey() was not called with a valid key');
   return _client;
 }
 
@@ -224,4 +229,4 @@ async function summarizeWebsite(text) {
   return response.content[0].text.trim();
 }
 
-module.exports = { generateReply, analyzeStyle, summarizeWebsite };
+module.exports = { initAnthropicKey, generateReply, analyzeStyle, summarizeWebsite };
