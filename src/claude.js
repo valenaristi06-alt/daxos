@@ -1,18 +1,23 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { getRuntimeConfig } = require('./db');
 
+let _localConfig = null;
+try { _localConfig = require('./config.local'); } catch (_) {}
+
 function initAnthropicKey() {} // kept so server.js import doesn't break
 
 function getClient() {
+  const fromFile   = _localConfig?.ANTHROPIC_API_KEY;
   const fromGlobal = globalThis.__DAXOS_ENV?.ANTHROPIC_API_KEY;
   const fromEnv    = process.env.ANTHROPIC_API_KEY;
-  const fromDB     = (!fromGlobal && !fromEnv) ? getRuntimeConfig('ANTHROPIC_API_KEY') : null;
-  const apiKey     = fromGlobal || fromEnv || fromDB;
+  const fromDB     = (!fromFile && !fromGlobal && !fromEnv) ? getRuntimeConfig('ANTHROPIC_API_KEY') : null;
+  const apiKey     = fromFile || fromGlobal || fromEnv || fromDB;
   console.log('[claude:getClient] PID=' + process.pid +
+    ' file=' + (fromFile ? 'present(' + fromFile.length + ')' : 'absent') +
     ' global=' + (fromGlobal ? 'present(' + fromGlobal.length + ')' : 'MISSING') +
     ' env=' + (fromEnv ? 'present(' + fromEnv.length + ')' : 'MISSING') +
-    ' db=' + (fromDB ? 'present(' + fromDB.length + ')' : (fromGlobal || fromEnv ? 'skipped' : 'MISSING')));
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not found in globalThis, process.env, or DB');
+    ' db=' + (fromDB != null ? 'present(' + fromDB.length + ')' : 'skipped/MISSING'));
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not found in config.local, globalThis, process.env, or DB');
   return new Anthropic({ apiKey });
 }
 
