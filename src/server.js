@@ -1271,11 +1271,12 @@ setInterval(() => {
   checkBookingTimeouts({ getCredentialsForBusiness: getBookingCredentials })
     .catch(err => console.error('[booking-timeout-job]', err.message));
 
-  // Send weekly summary once per week. Fires on Monday between 09:00 and 09:30 (server time).
-  // The interval is 30 min so this window is hit at most once per Monday.
+  // Send weekly summary once per week. Fires Monday 09:00-09:30 Uruguay time (UTC-3 year-round).
   const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
-  if (now.getDay() === 1 && now.getHours() === 9 && _lastWeeklySummaryDate !== todayStr) {
+  const uyHour = (now.getUTCHours() - 3 + 24) % 24;
+  const uyDay  = new Date(now.getTime() - 3 * 60 * 60 * 1000).getUTCDay();
+  const todayStr = new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  if (uyDay === 1 && uyHour === 9 && _lastWeeklySummaryDate !== todayStr) {
     _lastWeeklySummaryDate = todayStr;
     sendWeeklySummaries().catch(err => console.error('[weekly-summary-job]', err.message));
   }
