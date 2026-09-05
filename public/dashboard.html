@@ -342,6 +342,16 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           </label>
         </div>
 
+        <div class="field">
+          <label class="field-label">Resumen semanal por WhatsApp</label>
+          <span class="field-hint">Cada lunes a las 9:00 te mandamos un resumen de la semana: consultas respondidas, derivaciones y tiempo de respuesta promedio. Solo se envía si hubo actividad.</span>
+          <label class="toggle-row">
+            <input type="checkbox" id="weekly_summary_enabled" />
+            <span class="toggle-switch"></span>
+            <span class="toggle-label" id="weekly-summary-label">Activado</span>
+          </label>
+        </div>
+
       </section>
 
       <div class="actions" id="actions-bar">
@@ -714,6 +724,11 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       const bookingEl = document.getElementById('booking_enabled');
       bookingEl.checked = !!b.booking_enabled;
       document.getElementById('booking-label').textContent = b.booking_enabled ? 'Activado' : 'Apagado';
+
+      const weeklySummaryEl = document.getElementById('weekly_summary_enabled');
+      const weeklySummaryOn = b.weekly_summary_enabled !== 0;
+      weeklySummaryEl.checked = weeklySummaryOn;
+      document.getElementById('weekly-summary-label').textContent = weeklySummaryOn ? 'Activado' : 'Apagado';
 
       const delayVal = b.response_delay ?? 5;
       document.getElementById('response_delay').value = delayVal;
@@ -1281,6 +1296,27 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         this.checked = !enabled;
         document.getElementById('booking-label').textContent = !enabled ? 'Activado' : 'Apagado';
         console.error('[booking-toggle] network error:', err);
+      }
+    });
+
+    document.getElementById('weekly_summary_enabled').addEventListener('change', async function () {
+      const enabled = this.checked;
+      document.getElementById('weekly-summary-label').textContent = enabled ? 'Activado' : 'Apagado';
+      try {
+        const res = await fetch('/api/business/weekly-summary-enabled', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled }),
+        });
+        if (!res.ok) {
+          this.checked = !enabled;
+          document.getElementById('weekly-summary-label').textContent = !enabled ? 'Activado' : 'Apagado';
+          console.error('[weekly-summary-toggle] failed:', await res.text());
+        }
+      } catch (err) {
+        this.checked = !enabled;
+        document.getElementById('weekly-summary-label').textContent = !enabled ? 'Activado' : 'Apagado';
+        console.error('[weekly-summary-toggle] network error:', err);
       }
     });
 

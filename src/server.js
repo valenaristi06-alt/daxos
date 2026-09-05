@@ -20,7 +20,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -31,6 +31,7 @@ if (_apiKey) {
 const { generateReply, analyzeStyle, summarizeWebsite, initAnthropicKey } = require('./claude');
 initAnthropicKey(_apiKey);
 const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = require('./bookings');
+const { sendWeeklySummaries } = require('./weekly');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
 const { sendPauseEmail, sendUnmatchedPaymentAlert } = require('./email');
 
@@ -274,6 +275,15 @@ app.patch('/api/business/booking-enabled', requireAuth, (req, res) => {
   setBookingEnabled(user.business_id, enabled);
   console.log(`[booking-enabled] business=${user.business_id} enabled=${enabled}`);
   res.json({ ok: true, booking_enabled: enabled });
+});
+
+app.patch('/api/business/weekly-summary-enabled', requireAuth, (req, res) => {
+  const { enabled } = req.body;
+  if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be boolean' });
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'No business' });
+  setWeeklySummaryEnabled(user.business_id, enabled);
+  res.json({ ok: true, weekly_summary_enabled: enabled });
 });
 
 // Exact consent text — stored verbatim for legal record
@@ -1255,9 +1265,20 @@ async function getBookingCredentials(businessId) {
 // then every 30 minutes.
 checkBookingTimeouts({ getCredentialsForBusiness: getBookingCredentials })
   .catch(err => console.error('[booking-timeout-startup]', err.message));
+let _lastWeeklySummaryDate = null;
+
 setInterval(() => {
   checkBookingTimeouts({ getCredentialsForBusiness: getBookingCredentials })
     .catch(err => console.error('[booking-timeout-job]', err.message));
+
+  // Send weekly summary once per week. Fires on Monday between 09:00 and 09:30 (server time).
+  // The interval is 30 min so this window is hit at most once per Monday.
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  if (now.getDay() === 1 && now.getHours() === 9 && _lastWeeklySummaryDate !== todayStr) {
+    _lastWeeklySummaryDate = todayStr;
+    sendWeeklySummaries().catch(err => console.error('[weekly-summary-job]', err.message));
+  }
 }, 30 * 60 * 1000);
 
 app.listen(PORT, () => {

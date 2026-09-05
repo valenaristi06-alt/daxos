@@ -152,6 +152,7 @@ if (!bizCols.includes('phone_number_id'))         db.exec('ALTER TABLE businesse
 if (!bizCols.includes('wa_access_token'))         db.exec('ALTER TABLE businesses ADD COLUMN wa_access_token TEXT');
 if (!bizCols.includes('wa_payment_confirmed'))    db.exec('ALTER TABLE businesses ADD COLUMN wa_payment_confirmed INTEGER NOT NULL DEFAULT 0');
 if (!bizCols.includes('booking_enabled'))         db.exec('ALTER TABLE businesses ADD COLUMN booking_enabled INTEGER NOT NULL DEFAULT 0');
+if (!bizCols.includes('weekly_summary_enabled'))  db.exec('ALTER TABLE businesses ADD COLUMN weekly_summary_enabled INTEGER NOT NULL DEFAULT 1');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS pending_bookings (
@@ -807,6 +808,9 @@ module.exports = {
   getBookingsNeedingTimeout,
   setBookingState,
   getBookingState,
+  setWeeklySummaryEnabled,
+  getWeeklyStats,
+  getBusinessesWithWeeklySummary,
   setRuntimeConfig,
   getRuntimeConfig,
   logError,
@@ -814,6 +818,50 @@ module.exports = {
   checkpoint,
   closeDb,
 };
+
+function setWeeklySummaryEnabled(businessId, enabled) {
+  db.prepare('UPDATE businesses SET weekly_summary_enabled = ? WHERE id = ?').run(enabled ? 1 : 0, businessId);
+}
+
+function getWeeklyStats(businessId) {
+  const since = "datetime('now', '-7 days')";
+  const aiReplies = db.prepare(`
+    SELECT COUNT(*) as n FROM messages m
+    JOIN conversations c ON c.id = m.conversation_id
+    WHERE c.business_id = ? AND m.role = 'assistant' AND m.created_at >= ${since}
+  `).get(businessId).n;
+
+  const escalated = db.prepare(`
+    SELECT COUNT(DISTINCT c.id) as n FROM conversations c
+    JOIN messages m ON m.conversation_id = c.id
+    WHERE c.business_id = ? AND c.needs_attention = 1 AND m.created_at >= ${since}
+  `).get(businessId).n;
+
+  // Average seconds between consecutive user→assistant message pairs in the same conversation
+  const avgSeconds = db.prepare(`
+    SELECT AVG(diff) as avg FROM (
+      SELECT (julianday(a.created_at) - julianday(u.created_at)) * 86400 as diff
+      FROM messages u
+      JOIN messages a ON a.conversation_id = u.conversation_id AND a.id = (
+        SELECT id FROM messages
+        WHERE conversation_id = u.conversation_id AND role = 'assistant' AND id > u.id
+        ORDER BY id ASC LIMIT 1
+      )
+      JOIN conversations c ON c.id = u.conversation_id
+      WHERE c.business_id = ? AND u.role = 'user' AND u.created_at >= ${since}
+        AND (julianday(a.created_at) - julianday(u.created_at)) * 86400 < 120
+    )
+  `).get(businessId).avg;
+
+  return { aiReplies, escalated, avgSeconds: avgSeconds ? Math.round(avgSeconds) : null };
+}
+
+function getBusinessesWithWeeklySummary() {
+  return db.prepare('SELECT * FROM businesses WHERE weekly_summary_enabled = 1 AND phone_number_id IS NOT NULL').all().map(b => ({
+    ...b,
+    wa_access_token: b.wa_access_token && ENC_KEY ? decrypt(b.wa_access_token) : b.wa_access_token,
+  }));
+}
 
 function setRuntimeConfig(key, value) {
   db.prepare('INSERT OR REPLACE INTO runtime_config (key, value) VALUES (?, ?)').run(key, value);
