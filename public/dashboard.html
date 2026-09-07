@@ -1502,7 +1502,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
 
       // TODO: reemplazar metaConfig.whatsappConfigId con el config_id real cuando
       // Meta apruebe la Verificación de acceso en Meta Business Manager
-      const configId = metaConfig.whatsappConfigId;
+      const configId = metaConfig.whatsappConfigId || '2030575817573287';
 
       FB.login(function (response) {
         if (response.authResponse?.code) {

@@ -507,7 +507,7 @@ app.post('/api/business/preview-chat', (req, res, next) => {
   console.log('[preview-chat] HIT — sessionId:', req.session?.id, '| userId:', req.session?.userId ?? 'NONE');
 
   // Diagnostic requested by Railway support: log env var names (never values) on each request.
-  const MY_VARS = ['META_APP_ID','META_APP_SECRET','META_REDIRECT_URI','ENCRYPTION_KEY','WHATSAPP_CONFIG_ID','ADMIN_EMAIL','ANTHROPIC_API_KEY'];
+  const MY_VARS = ['META_APP_ID','META_APP_SECRET','META_REDIRECT_URI','ENCRYPTION_KEY','WHATSAPP_CONFIG_ID','ADMIN_EMAIL','ANTHROPIC_API_KEY','SESSION_SECRET','RESEND_API_KEY','ELEVENLABS_API_KEY','MERCADOPAGO_ACCESS_TOKEN','MERCADOPAGO_WEBHOOK_SECRET'];
   const allKeys = Object.keys(process.env);
   const railwayKeys = allKeys.filter(k => k.startsWith('RAILWAY_'));
   const myVarsPresent = MY_VARS.filter(k => k in process.env);
