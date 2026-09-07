@@ -1504,6 +1504,23 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       // Meta apruebe la Verificación de acceso en Meta Business Manager
       const configId = metaConfig.whatsappConfigId || '2030575817573287';
 
+      const fbLoginParams = {
+        config_id: configId,
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: {
+          setup: {},
+          featureType: 'coexistence',
+          sessionInfoVersion: '3',
+        },
+      };
+      console.log('[WA-signup] FB.init appId:', '1025010310140011');
+      console.log('[WA-signup] metaConfig from server:', JSON.stringify(metaConfig));
+      console.log('[WA-signup] configId resolved:', configId);
+      console.log('[WA-signup] FB.login params:', JSON.stringify(fbLoginParams));
+      console.log('[WA-signup] FB SDK loaded:', typeof FB !== "undefined");
+      console.log('[WA-signup] FB.getLoginStatus callable:', typeof FB?.getLoginStatus);
+
       FB.login(function (response) {
         if (response.authResponse?.code) {
           pendingEsCode = response.authResponse.code;
@@ -1518,14 +1535,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           }
         }
       }, {
-        config_id: configId,           // TODO: pendiente aprobación Meta
-        response_type: 'code',
-        override_default_response_type: true,
-        extras: {
-          setup: {},
-          featureType: 'coexistence',
-          sessionInfoVersion: '3',
-        },
+        ...fbLoginParams,
       });
     });
 
