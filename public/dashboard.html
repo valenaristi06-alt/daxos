@@ -1510,7 +1510,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         override_default_response_type: true,
         extras: {
           setup: {},
-          featureType: 'coexistence',
+          featureType: '',
           sessionInfoVersion: '3',
         },
       };
@@ -1522,6 +1522,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       console.log('[WA-signup] FB.getLoginStatus callable:', typeof FB?.getLoginStatus);
 
       FB.login(function (response) {
+        console.log('[WA-signup] FB.login response:', JSON.stringify(response));
         if (response.authResponse?.code) {
           pendingEsCode = response.authResponse.code;
           waStep('Login OK — esperando datos de WhatsApp de Meta…');
