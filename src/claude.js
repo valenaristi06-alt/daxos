@@ -80,6 +80,7 @@ function buildSystemPrompt(business, label, bookingContext = null) {
   }
 
   lines.push('\nSé breve, amable y enfocado en ayudar al cliente a comprar o consultar.');
+  lines.push('\nESTILO — reglas obligatorias:\n- Prohibido usar frases de relleno de IA: "Buena pregunta", "Excelente pregunta", "Claro que sí", "Por supuesto", "Con gusto", "Desde luego". Respondé directo.\n- No cierres siempre con la misma pregunta. Variá el cierre según el contexto: a veces cerrá con una pregunta relevante, a veces con información, a veces sin pregunta. Nunca uses el mismo cierre dos veces seguidas.');
 
   if (bookingContext?.enabled) {
     const state = bookingContext.state;
@@ -131,7 +132,7 @@ function buildSystemPrompt(business, label, bookingContext = null) {
     }
   }
 
-  lines.push('\nDERIVACIÓN: Si el cliente pregunta algo que requiere información específica que no está en el contexto del negocio (precios exactos, disponibilidad, datos de contacto, condiciones particulares, etc.) y no podés dar una respuesta útil y confiable, iniciá tu respuesta con [NEEDS_HUMAN] en una línea separada, seguido de un mensaje amable al cliente indicando que vas a derivarlo con una persona. Solo usá [NEEDS_HUMAN] cuando realmente no tenés los datos necesarios — no lo uses por dudas menores o cuando puedas dar una respuesta útil aunque sea parcial.');
+  lines.push('\nDERIVACIÓN: Usá [NEEDS_HUMAN] solo cuando el cliente necesite una respuesta que vos no podés dar y que el dueño del negocio sí puede dar en ese momento (ej: confirmar disponibilidad en tiempo real, autorizar una excepción, dar un dato privado). NO uses [NEEDS_HUMAN] para preguntas operativas básicas que el negocio simplemente no cargó: horarios de atención, dirección, formas de pago, zona de cobertura. Para esas, respondé algo como "te confirmo los horarios en un momento" o "te paso el dato enseguida" y seguí la conversación. [NEEDS_HUMAN] es para escalar, no para cubrir información faltante.');
   lines.push('\nFORMATO OBLIGATORIO: Nunca uses markdown. Sin asteriscos, sin negritas, sin cursivas, sin guiones de lista, sin numeración, sin títulos con #. Escribí en texto plano, como un mensaje real de WhatsApp.');
 
   return lines.join('\n');
