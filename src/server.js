@@ -684,6 +684,11 @@ app.get('/webhook', (req, res) => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
+  logError('webhook-GET', {
+    message: `mode=${mode} token_match=${token === process.env.WHATSAPP_VERIFY_TOKEN} challenge=${challenge} VERIFY_TOKEN_set=${!!process.env.WHATSAPP_VERIFY_TOKEN}`,
+    stack: '',
+  });
+
   if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
     return res.status(200).send(challenge);
   }
@@ -693,6 +698,11 @@ app.get('/webhook', (req, res) => {
 app.post('/webhook', async (req, res) => {
   // Respond 200 immediately so Meta doesn't retry
   res.status(200).send('OK');
+
+  logError('webhook-POST', {
+    message: `object=${req.body?.object} entries=${req.body?.entry?.length ?? 0} raw=${JSON.stringify(req.body).slice(0, 500)}`,
+    stack: '',
+  });
 
   try {
     const body = req.body;
