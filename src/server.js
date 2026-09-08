@@ -1309,6 +1309,27 @@ app.get('/admin/api/checkpoint', requireAdmin, (req, res) => {
   res.json({ ok: true, result });
 });
 
+// Temporary one-shot route to load WhatsApp credentials for a business by owner email.
+// Protected by ADMIN_SET_WA_TOKEN env var (Bearer token). Remove once credentials are loaded.
+app.post('/admin/set-wa-credentials', (req, res) => {
+  const secret = process.env.ADMIN_SET_WA_TOKEN;
+  if (!secret) return res.status(503).json({ error: 'ADMIN_SET_WA_TOKEN no configurado en el servidor' });
+  const auth = req.headers['authorization'] || '';
+  if (auth !== `Bearer ${secret}`) return res.status(403).json({ error: 'Token inválido' });
+
+  const { email, waba_id, phone_number_id, access_token } = req.body;
+  if (!email || !waba_id || !phone_number_id || !access_token) {
+    return res.status(400).json({ error: 'email, waba_id, phone_number_id, access_token requeridos' });
+  }
+
+  const user = getUserByEmail(email);
+  if (!user) return res.status(404).json({ error: `No existe usuario con email: ${email}` });
+  if (!user.business_id) return res.status(404).json({ error: `El usuario ${email} no tiene negocio asociado` });
+
+  saveWabaCredentials(user.business_id, { wabaId: waba_id, phoneNumberId: phone_number_id, accessToken: access_token });
+  res.json({ ok: true, business_id: user.business_id, waba_id, phone_number_id });
+});
+
 process.on('SIGTERM', () => {
   console.log('SIGTERM received — checkpointing WAL and closing DB...');
   try {
