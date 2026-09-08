@@ -20,7 +20,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -718,9 +718,12 @@ app.post('/webhook', async (req, res) => {
 
         if (!messages.length) continue;
 
-        const business = getBusinessByWhatsappNumber(phoneNumberId);
+        const business = getBusinessByPhoneNumberId(phoneNumberId);
+        logError('webhook-lookup', {
+          message: `phone_number_id=${phoneNumberId} found=${!!business} business_id=${business?.id ?? 'null'}`,
+          stack: '',
+        });
         if (!business) {
-          console.warn(`No business found for phone_number_id: ${phoneNumberId}`);
           continue;
         }
 
@@ -821,13 +824,24 @@ app.post('/webhook', async (req, res) => {
           const delayMs = (business.response_delay ?? 5) * 1000;
           const sleep = (ms) => new Promise(r => setTimeout(r, ms));
           const currentBookingState = business.booking_enabled ? getBookingState(conversation.id) : null;
-          const [rawReply] = await Promise.all([
-            generateReply(business, history, text, conversation.label || null, {
-              enabled: !!business.booking_enabled,
-              state: currentBookingState,
-            }),
-            sleep(delayMs),
-          ]);
+          logError('webhook-claude-call', {
+            message: `business_id=${business.id} customer=${customerPhone} text=${text.slice(0, 100)}`,
+            stack: '',
+          });
+          let rawReply;
+          try {
+            [rawReply] = await Promise.all([
+              generateReply(business, history, text, conversation.label || null, {
+                enabled: !!business.booking_enabled,
+                state: currentBookingState,
+              }),
+              sleep(delayMs),
+            ]);
+            logError('webhook-claude-ok', { message: `business_id=${business.id} reply_length=${rawReply.length}`, stack: '' });
+          } catch (claudeErr) {
+            logError('webhook-claude-error', claudeErr);
+            continue;
+          }
 
           let sendDoc = false;
           let needsHuman = false;
@@ -937,18 +951,21 @@ app.post('/webhook', async (req, res) => {
                 const ogg = await convertToOgg(mp3);
                 const mediaId = await uploadMedia(ogg, 'reply.ogg', 'audio/ogg', waCredentials);
                 await sendWhatsAppAudio(customerPhone, mediaId, waCredentials);
+                logError('webhook-send-ok', { message: `mode=audio business_id=${business.id} to=${customerPhone}`, stack: '' });
               } catch (audioErr) {
-                console.error('[audio-reply] failed, falling back to text:', audioErr.message);
-                await sendWhatsAppMessage(customerPhone, reply, waCredentials);
+                logError('webhook-audio-fallback', { message: audioErr.message, stack: audioErr.stack || '' });
+                const sendResult = await sendWhatsAppMessage(customerPhone, reply, waCredentials);
+                logError('webhook-send-result', { message: `mode=text(audio-fallback) body=${JSON.stringify(sendResult).slice(0, 300)}`, stack: '' });
               }
             } else {
               if (wantsAudio && !replyFitsAudio) {
-                console.log(`[audio-skip] reply too long (${reply.length} chars > ${AUDIO_MAX_CHARS}), sending as text`);
+                logError('webhook-audio-skip', { message: `reply too long (${reply.length} chars)`, stack: '' });
               }
-              await sendWhatsAppMessage(customerPhone, reply, waCredentials);
+              const sendResult = await sendWhatsAppMessage(customerPhone, reply, waCredentials);
+              logError('webhook-send-result', { message: `mode=text body=${JSON.stringify(sendResult).slice(0, 300)}`, stack: '' });
             }
           } catch (sendErr) {
-            console.error('[reply-send] failed:', sendErr.message);
+            logError('webhook-send-error', sendErr);
           }
 
           // Derivación por incertidumbre — no dispara si la conversación ya estaba pausada

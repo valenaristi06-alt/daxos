@@ -348,9 +348,16 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
 }
 
 const stmtGetBusinessByPhone = db.prepare('SELECT * FROM businesses WHERE whatsapp_number = ?');
+const stmtGetBusinessByPhoneNumberId = db.prepare('SELECT * FROM businesses WHERE phone_number_id = ?');
 
 function getBusinessByWhatsappNumber(number) {
   const row = stmtGetBusinessByPhone.get(String(number));
+  if (!row) return null;
+  return deserializeBusiness(row);
+}
+
+function getBusinessByPhoneNumberId(phoneNumberId) {
+  const row = stmtGetBusinessByPhoneNumberId.get(String(phoneNumberId));
   if (!row) return null;
   return deserializeBusiness(row);
 }
@@ -767,6 +774,7 @@ module.exports = {
   upsertBusiness,
   getBusinessById,
   getBusinessByWhatsappNumber,
+  getBusinessByPhoneNumberId,
   getBusinessByUserId,
   setUserBusiness,
   getConversationsByBusinessId,
