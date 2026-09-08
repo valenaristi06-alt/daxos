@@ -62,7 +62,7 @@ function buildSystemPrompt(business, label, bookingContext = null) {
   if (business.survey_answers && Object.keys(business.survey_answers).length > 0) {
     lines.push('\nInformación del negocio:');
     for (const [key, val] of Object.entries(business.survey_answers)) {
-      lines.push(`- ${key}: ${val}`);
+      if (val !== null && val !== undefined && val !== '') lines.push(`- ${key}: ${val}`);
     }
   }
 
