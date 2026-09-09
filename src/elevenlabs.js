@@ -52,7 +52,7 @@ function ttsBody(text) {
     text: normalizeTtsText(text),
     model_id: TTS_MODEL,
     speed: 1.1,
-    voice_settings: { stability: 0.25, similarity_boost: 0.85, style: 0.4, use_speaker_boost: true },
+    voice_settings: { stability: 0.5, similarity_boost: 0.85, style: 0.2, use_speaker_boost: true },
   });
 }
 

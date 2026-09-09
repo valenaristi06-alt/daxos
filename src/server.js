@@ -947,8 +947,11 @@ app.post('/webhook', async (req, res) => {
           try {
             if (wantsAudio && business.voice_id && planAllowsAudio && replyFitsAudio) {
               try {
+                logError('tts-text', { message: `business_id=${business.id} text=${JSON.stringify(reply)}`, stack: '' });
                 const mp3 = await generateAudioBuffer(business.voice_id, reply);
+                logError('tts-buffers', { message: `mp3=${mp3.length}b`, stack: '' });
                 const ogg = await convertToOgg(mp3);
+                logError('tts-buffers', { message: `ogg=${ogg.length}b mime=audio/ogg; codecs=opus`, stack: '' });
                 const mediaId = await uploadMedia(ogg, 'reply.ogg', 'audio/ogg; codecs=opus', waCredentials);
                 await sendWhatsAppAudio(customerPhone, mediaId, waCredentials);
                 logError('webhook-send-ok', { message: `mode=audio business_id=${business.id} to=${customerPhone}`, stack: '' });
