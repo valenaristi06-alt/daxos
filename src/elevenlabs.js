@@ -34,12 +34,25 @@ async function cloneVoice(name, fileBuffer) {
   return data.voice_id;
 }
 
+function normalizeTtsText(text) {
+  // Strip markdown that ElevenLabs reads literally (*bold*, _italic_, etc.)
+  let t = text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/_([^_]+)_/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .trim();
+  // Ensure terminal punctuation so ElevenLabs closes the intonation curve
+  if (t && !/[.!?…]$/.test(t)) t += '.';
+  return t;
+}
+
 function ttsBody(text) {
   return JSON.stringify({
-    text,
+    text: normalizeTtsText(text),
     model_id: TTS_MODEL,
     speed: 1.1,
-    voice_settings: { stability: 0.25, similarity_boost: 0.85, style: 0.5, use_speaker_boost: true },
+    voice_settings: { stability: 0.25, similarity_boost: 0.85, style: 0.4, use_speaker_boost: true },
   });
 }
 
