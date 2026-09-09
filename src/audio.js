@@ -38,7 +38,7 @@ function convertToOgg(buffer) {
     ffmpeg(input)
       .audioCodec('libopus')
       .audioChannels(1)
-      .audioFrequency(48000)
+      .audioFrequency(16000)
       .audioBitrate('16k')
       .outputOptions([
         '-application voip',
