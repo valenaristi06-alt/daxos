@@ -949,7 +949,7 @@ app.post('/webhook', async (req, res) => {
               try {
                 const mp3 = await generateAudioBuffer(business.voice_id, reply);
                 const ogg = await convertToOgg(mp3);
-                const mediaId = await uploadMedia(ogg, 'reply.ogg', 'audio/ogg', waCredentials);
+                const mediaId = await uploadMedia(ogg, 'reply.ogg', 'audio/ogg; codecs=opus', waCredentials);
                 await sendWhatsAppAudio(customerPhone, mediaId, waCredentials);
                 logError('webhook-send-ok', { message: `mode=audio business_id=${business.id} to=${customerPhone}`, stack: '' });
               } catch (audioErr) {

@@ -38,7 +38,7 @@ function ttsBody(text) {
   return JSON.stringify({
     text,
     model_id: TTS_MODEL,
-    voice_settings: { stability: 0.5, similarity_boost: 0.95 },
+    voice_settings: { stability: 0.35, similarity_boost: 0.85, style: 0.35, use_speaker_boost: true },
   });
 }
 

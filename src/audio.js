@@ -37,6 +37,9 @@ function convertToOgg(buffer) {
 
     ffmpeg(input)
       .audioCodec('libopus')
+      .audioChannels(1)
+      .audioFrequency(48000)
+      .audioBitrate('64k')
       .format('ogg')
       .on('error', reject)
       .pipe(output);
