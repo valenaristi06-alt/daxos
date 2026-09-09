@@ -39,7 +39,12 @@ function convertToOgg(buffer) {
       .audioCodec('libopus')
       .audioChannels(1)
       .audioFrequency(48000)
-      .audioBitrate('64k')
+      .audioBitrate('16k')
+      .outputOptions([
+        '-application voip',
+        '-vbr off',
+        '-map_metadata -1',
+      ])
       .format('ogg')
       .on('error', reject)
       .pipe(output);
