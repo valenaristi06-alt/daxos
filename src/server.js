@@ -1357,6 +1357,29 @@ app.post('/admin/set-wa-credentials', (req, res) => {
   res.json({ ok: true, business_id: user.business_id, waba_id, phone_number_id });
 });
 
+// Protected by ADMIN_SET_WA_TOKEN env var (Bearer token). Temporary route to set plan/status.
+app.post('/admin/set-plan', (req, res) => {
+  const secret = process.env.ADMIN_SET_WA_TOKEN;
+  if (!secret) return res.status(503).json({ error: 'ADMIN_SET_WA_TOKEN no configurado en el servidor' });
+  const auth = req.headers['authorization'] || '';
+  if (auth !== `Bearer ${secret}`) return res.status(403).json({ error: 'Token inválido' });
+
+  const { email, plan, subscription_status } = req.body;
+  if (!email || !plan) return res.status(400).json({ error: 'email y plan requeridos' });
+
+  const VALID_PLANS = ['arranque', 'crecimiento', 'a_medida'];
+  if (!VALID_PLANS.includes(plan)) return res.status(400).json({ error: `plan debe ser uno de: ${VALID_PLANS.join(', ')}` });
+
+  const user = getUserByEmail(email);
+  if (!user) return res.status(404).json({ error: `No existe usuario con email: ${email}` });
+  if (!user.business_id) return res.status(404).json({ error: `El usuario ${email} no tiene negocio asociado` });
+
+  upgradePlan(user.business_id, plan, new Date().toISOString(), null);
+  if (subscription_status) setSubscriptionStatus(user.business_id, subscription_status);
+
+  res.json({ ok: true, business_id: user.business_id, plan, subscription_status: subscription_status || 'active' });
+});
+
 process.on('SIGTERM', () => {
   console.log('SIGTERM received — checkpointing WAL and closing DB...');
   try {
