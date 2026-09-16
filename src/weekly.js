@@ -17,6 +17,7 @@ function buildSummaryText(stats, weekLabel) {
   ];
   const avg = formatAvgResponse(stats.avgSeconds);
   if (avg) lines.push(`- Tiempo promedio de respuesta: ${avg}`);
+  if (stats.autoResumed > 0) lines.push(`- Conversaciones reactivadas automáticamente (tras 24h de pausa): ${stats.autoResumed}`);
   lines.push(``, `Tu asistente está activo.`);
   return lines.join('\n');
 }

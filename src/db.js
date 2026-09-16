@@ -136,6 +136,8 @@ const convCols = db.prepare("PRAGMA table_info(conversations)").all().map(c => c
 if (!convCols.includes('needs_attention'))      db.exec('ALTER TABLE conversations ADD COLUMN needs_attention INTEGER NOT NULL DEFAULT 0');
 if (!convCols.includes('label'))                db.exec('ALTER TABLE conversations ADD COLUMN label TEXT');
 if (!convCols.includes('booking_state'))        db.exec('ALTER TABLE conversations ADD COLUMN booking_state TEXT');
+if (!convCols.includes('paused_at'))            db.exec('ALTER TABLE conversations ADD COLUMN paused_at INTEGER');
+if (!convCols.includes('auto_resumed_at'))      db.exec('ALTER TABLE conversations ADD COLUMN auto_resumed_at INTEGER');
 
 const bizCols = db.prepare("PRAGMA table_info(businesses)").all().map(c => c.name);
 if (!bizCols.includes('document_path'))         db.exec('ALTER TABLE businesses ADD COLUMN document_path TEXT');
@@ -293,11 +295,19 @@ function getBusinessById(id) {
 }
 
 function markConversationPaused(conversationId) {
-  db.prepare('UPDATE conversations SET needs_attention = 1 WHERE id = ?').run(conversationId);
+  db.prepare('UPDATE conversations SET needs_attention = 1, paused_at = unixepoch() WHERE id = ?').run(conversationId);
 }
 
 function markConversationResumed(conversationId) {
-  db.prepare('UPDATE conversations SET needs_attention = 0 WHERE id = ?').run(conversationId);
+  db.prepare('UPDATE conversations SET needs_attention = 0, paused_at = NULL WHERE id = ?').run(conversationId);
+}
+
+function autoResumeExpiredConversations() {
+  const cutoff = Math.floor(Date.now() / 1000) - 24 * 60 * 60;
+  const result = db.prepare(
+    'UPDATE conversations SET needs_attention = 0, paused_at = NULL, auto_resumed_at = unixepoch() WHERE needs_attention = 1 AND paused_at IS NOT NULL AND paused_at < ?'
+  ).run(cutoff);
+  return result.changes;
 }
 
 function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = null, survey_answers = null, business_context = null, website_url = null, response_mode = 'texto', pause_keywords = null, response_delay = 5, pricing_info = null }) {
@@ -786,6 +796,7 @@ module.exports = {
   getConversationHistory,
   markConversationPaused,
   markConversationResumed,
+  autoResumeExpiredConversations,
   getDailyConversationStats,
   getTodayStats,
   getDailyMessageStats,
@@ -861,7 +872,12 @@ function getWeeklyStats(businessId) {
     )
   `).get(businessId).avg;
 
-  return { aiReplies, escalated, avgSeconds: avgSeconds ? Math.round(avgSeconds) : null };
+  const autoResumed = db.prepare(`
+    SELECT COUNT(*) as n FROM conversations
+    WHERE business_id = ? AND auto_resumed_at >= unixepoch('now', '-7 days')
+  `).get(businessId).n;
+
+  return { aiReplies, escalated, avgSeconds: avgSeconds ? Math.round(avgSeconds) : null, autoResumed };
 }
 
 function getBusinessesWithWeeklySummary() {
