@@ -516,10 +516,8 @@ html, body {
 /* ── Stat bar ── */
 
 .stat-bar {
-  background: #111;
-  border-top: 1px solid rgba(255,255,255,0.06);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  padding: 48px 24px;
+  background: radial-gradient(ellipse at 30% 50%, rgba(196,92,26,0.10) 0%, transparent 60%), var(--bg);
+  padding: 28px 24px;
 }
 
 .stat-bar-inner {
@@ -528,25 +526,24 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   text-align: center;
 }
 
 .stat-number {
   font-family: var(--serif);
-  font-size: clamp(64px, 12vw, 120px);
+  font-size: clamp(46px, 7.5vw, 82px);
   font-weight: 400;
-  line-height: 1;
-  letter-spacing: -0.03em;
+  line-height: 1.04;
+  letter-spacing: -0.025em;
   color: var(--accent);
 }
 
 .stat-label {
-  font-family: var(--sans);
-  font-size: clamp(15px, 2vw, 18px);
+  font-size: clamp(15px, 1.8vw, 17px);
   color: var(--muted-2);
-  letter-spacing: 0.01em;
-  max-width: 340px;
+  line-height: 1.72;
+  max-width: 400px;
 }
 
 /* ── Empleado cero ── */
