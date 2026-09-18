@@ -22,6 +22,15 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+body {
+  background:
+    radial-gradient(ellipse at 80% 8%,  rgba(196,92,26,0.07) 0%, transparent 45%),
+    radial-gradient(ellipse at 15% 38%, rgba(196,92,26,0.05) 0%, transparent 40%),
+    radial-gradient(ellipse at 70% 72%, rgba(196,92,26,0.06) 0%, transparent 42%),
+    radial-gradient(ellipse at 25% 95%, rgba(196,92,26,0.05) 0%, transparent 38%),
+    var(--bg);
+}
+
 /* ── Scroll animations ── */
 
 @media (prefers-reduced-motion: no-preference) {
@@ -229,6 +238,7 @@ html, body {
 .how-section {
   border-top: 1px solid #1a1a1a;
   padding: 96px 40px 112px;
+  background: radial-gradient(ellipse at 15% 60%, rgba(196,92,26,0.07) 0%, transparent 50%);
 }
 
 .how-inner {
@@ -657,6 +667,7 @@ html, body {
 .pricing-section {
   border-top: 1px solid #1a1a1a;
   padding: 96px 40px 120px;
+  background: radial-gradient(ellipse at 85% 40%, rgba(196,92,26,0.07) 0%, transparent 48%);
 }
 
 .pricing-inner {
@@ -675,11 +686,12 @@ html, body {
   position: relative;
   display: flex;
   flex-direction: column;
-  background: #111111;
-  border: 1px solid #2a2a2a;
+  background: #131313;
+  border: 1px solid #2e2e2e;
   border-radius: 8px;
   padding: 32px 28px;
   gap: 0;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04);
 }
 
 .pricing-card--featured {
@@ -819,6 +831,7 @@ html, body {
 .faq-section {
   border-top: 1px solid #1a1a1a;
   padding: 96px 40px 112px;
+  background: radial-gradient(ellipse at 20% 50%, rgba(196,92,26,0.06) 0%, transparent 45%);
 }
 
 .faq-inner {
@@ -950,6 +963,7 @@ details[open] .faq-question::after {
   border-top: 1px solid #1a1a1a;
   padding: 72px 40px 80px;
   text-align: center;
+  background: radial-gradient(ellipse at 50% 60%, rgba(196,92,26,0.09) 0%, transparent 50%);
 }
 
 .closing-inner {
