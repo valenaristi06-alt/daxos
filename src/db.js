@@ -155,6 +155,7 @@ if (!bizCols.includes('wa_access_token'))         db.exec('ALTER TABLE businesse
 if (!bizCols.includes('wa_payment_confirmed'))    db.exec('ALTER TABLE businesses ADD COLUMN wa_payment_confirmed INTEGER NOT NULL DEFAULT 0');
 if (!bizCols.includes('booking_enabled'))         db.exec('ALTER TABLE businesses ADD COLUMN booking_enabled INTEGER NOT NULL DEFAULT 0');
 if (!bizCols.includes('weekly_summary_enabled'))  db.exec('ALTER TABLE businesses ADD COLUMN weekly_summary_enabled INTEGER NOT NULL DEFAULT 1');
+if (!bizCols.includes('wa_provider'))             db.exec("ALTER TABLE businesses ADD COLUMN wa_provider TEXT NOT NULL DEFAULT 'meta'");
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS pending_bookings (
@@ -247,21 +248,22 @@ function deserializeBusiness(row) {
   };
 }
 
-function saveWabaCredentials(businessId, { wabaId, phoneNumberId, accessToken }) {
+function saveWabaCredentials(businessId, { wabaId, phoneNumberId, accessToken = null, provider = 'meta' }) {
   // Only start the trial clock on first connection — don't reset if already connected
   const existing = db.prepare('SELECT trial_starts_at FROM businesses WHERE id = ?').get(businessId);
+  const encToken = accessToken ? encrypt(accessToken) : null;
   if (existing && !existing.trial_starts_at) {
     db.prepare(`
       UPDATE businesses
-      SET waba_id = ?, phone_number_id = ?, wa_access_token = ?,
+      SET waba_id = ?, phone_number_id = ?, wa_access_token = ?, wa_provider = ?,
           trial_starts_at = datetime('now'),
           trial_ends_at   = datetime('now', '+14 days')
       WHERE id = ?
-    `).run(wabaId, phoneNumberId, encrypt(accessToken), businessId);
+    `).run(wabaId, phoneNumberId, encToken, provider, businessId);
   } else {
     db.prepare(`
-      UPDATE businesses SET waba_id = ?, phone_number_id = ?, wa_access_token = ? WHERE id = ?
-    `).run(wabaId, phoneNumberId, encrypt(accessToken), businessId);
+      UPDATE businesses SET waba_id = ?, phone_number_id = ?, wa_access_token = ?, wa_provider = ? WHERE id = ?
+    `).run(wabaId, phoneNumberId, encToken, provider, businessId);
   }
 }
 

@@ -45,7 +45,7 @@ async function sendWeeklySummaries() {
       const owner = getUserByBusinessId(business.id);
       if (!owner?.phone) { skipped++; continue; }
 
-      const waCredentials = { phoneNumberId: business.phone_number_id, accessToken: business.wa_access_token };
+      const waCredentials = { phoneNumberId: business.phone_number_id, accessToken: business.wa_access_token, provider: business.wa_provider || 'meta' };
       const text = buildSummaryText(stats, getWeekLabel());
       await sendWhatsAppMessage(owner.phone, text, waCredentials);
       sent++;

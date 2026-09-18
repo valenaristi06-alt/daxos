@@ -64,7 +64,11 @@ fs.mkdirSync(path.join(__dirname, '../data/uploads'), { recursive: true });
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
+app.use(express.json({
+  verify: (req, _res, buf) => {
+    if (req.path === '/webhook/kapso') req.rawBody = buf;
+  },
+}));
 const sessionsDb = new Database(path.join(__dirname, '../data/sessions.db'));
 
 app.use(session({
@@ -677,6 +681,258 @@ async function maybeSendDisclosure(business, conversationId, history, recipientP
   addMessage(conversationId, 'assistant', notice);
 }
 
+// --- Shared incoming-message pipeline ---
+
+async function processIncomingMessage(business, waCredentials, { msgId, customerPhone, text }) {
+  const sendCtxOk  = waCredentials.provider === 'kapso' ? 'kapso-send-ok'  : 'webhook-send-ok';
+  const sendCtxErr = waCredentials.provider === 'kapso' ? 'kapso-send-err' : 'webhook-send-error';
+
+  // Owner booking-reply detection — check before trial/limit gates so owner
+  // responses always go through regardless of trial state.
+  {
+    const msgOwner = getUserByBusinessId(business.id);
+    const ownerDigits = (msgOwner?.phone || '').replace(/\D/g, '');
+    const senderDigits = customerPhone.replace(/\D/g, '');
+    if (ownerDigits && senderDigits === ownerDigits) {
+      const handled = await handleOwnerBookingReply({
+        business, ownerPhone: customerPhone, text, waCredentials,
+      });
+      if (handled) {
+        markAsRead(msgId, waCredentials).catch(() => {});
+        return;
+      }
+    }
+  }
+
+  if (isTrialExpired(business)) {
+    await sendWhatsAppMessage(customerPhone,
+      `Hola! El período de prueba de ${business.name} terminó. Para seguir recibiendo respuestas automáticas, el negocio necesita activar su plan.`,
+      waCredentials
+    );
+    return;
+  }
+
+  if (business.plan === 'arranque' && business.trial_starts_at) {
+    const trialCount = getTrialMessageCount(business.id, business.trial_starts_at);
+    if (trialCount >= TRIAL_MESSAGE_LIMIT) {
+      const conv = getOrCreateConversation(business.id, customerPhone);
+      if (!conv.needs_attention) {
+        const limitMsg = `Hola! Por el momento no podemos responder automáticamente. Alguien de ${business.name} te va a contestar a la brevedad.`;
+        await sendWhatsAppMessage(customerPhone, limitMsg, waCredentials).catch(() => {});
+        addMessage(conv.id, 'user', text);
+        addMessage(conv.id, 'assistant', limitMsg);
+        markConversationPaused(conv.id);
+        const owner = getUserByBusinessId(business.id);
+        notifyOwnerOfPause({
+          business, owner, channel: 'whatsapp', contactId: customerPhone,
+          messageText: text, conversationId: conv.id, waCredentials,
+        }).catch(err => console.error('[trial-limit-notify]', err.message));
+        console.log(`[trial-limit] business ${business.id} hit limit (${trialCount}/${TRIAL_MESSAGE_LIMIT}), notified customer ${customerPhone} and owner`);
+      } else {
+        addMessage(conv.id, 'user', text);
+      }
+      return;
+    }
+  }
+
+  const conversation = getOrCreateConversation(business.id, customerPhone);
+  const history = getConversationHistory(conversation.id, 20);
+
+  // Conversation paused — record message so owner sees it, but no AI reply
+  if (conversation.needs_attention) {
+    addMessage(conversation.id, 'user', text);
+    markAsRead(msgId, waCredentials).catch(() => {});
+    return;
+  }
+
+  // Pause keyword check — before any network call so WA errors can't skip it
+  if (business.pause_keywords) {
+    const keywords = business.pause_keywords
+      .split(',')
+      .map(k => k.trim().toLowerCase())
+      .filter(Boolean);
+    const lowerText = text.toLowerCase();
+    const matched = keywords.find(k => lowerText.includes(k));
+    if (matched) {
+      addMessage(conversation.id, 'user', text);
+      markConversationPaused(conversation.id);
+      const owner = getUserByBusinessId(business.id);
+      notifyOwnerOfPause({
+        business, owner, channel: 'whatsapp', contactId: customerPhone,
+        messageText: text, conversationId: conversation.id, waCredentials,
+      }).catch(err => console.error('[notify-pause]', err.message));
+      return;
+    }
+  }
+
+  await maybeSendDisclosure(business, conversation.id, history, customerPhone, waCredentials);
+
+  // Mark as read + show typing indicator immediately
+  markAsRead(msgId, waCredentials).catch(() => {});
+  sendTypingIndicator(customerPhone, waCredentials).catch(() => {});
+
+  // Generate reply and enforce minimum delay in parallel
+  const delayMs = (business.response_delay ?? 5) * 1000;
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const currentBookingState = business.booking_enabled ? getBookingState(conversation.id) : null;
+  logError('webhook-claude-call', {
+    message: `business_id=${business.id} customer=${customerPhone} text=${text.slice(0, 100)}`,
+    stack: '',
+  });
+  let rawReply;
+  try {
+    [rawReply] = await Promise.all([
+      generateReply(business, history, text, conversation.label || null, {
+        enabled: !!business.booking_enabled,
+        state: currentBookingState,
+      }),
+      sleep(delayMs),
+    ]);
+    logError('webhook-claude-ok', { message: `business_id=${business.id} reply_length=${rawReply.length}`, stack: '' });
+  } catch (claudeErr) {
+    logError('webhook-claude-error', claudeErr);
+    return;
+  }
+
+  let sendDoc = false;
+  let needsHuman = false;
+  let reply = rawReply;
+  if (reply.startsWith('[NEEDS_HUMAN]')) {
+    needsHuman = true;
+    reply = reply.replace(/^\[NEEDS_HUMAN\]\n?/, '');
+  }
+  if (reply.startsWith('[SEND_DOC]')) {
+    sendDoc = true;
+    reply = reply.replace(/^\[SEND_DOC\]\n?/, '');
+  }
+
+  // Booking state machine — parse tags, update state, strip tags from reply
+  if (business.booking_enabled) {
+    let nextBookingState = currentBookingState;
+
+    if (/\[WANTS_BOOKING\]/.test(reply)) {
+      nextBookingState = { step: 'collecting_name' };
+      console.log(`[booking-flow] WANTS_BOOKING conversation=${conversation.id}`);
+    }
+    if (/\[CANCEL_BOOKING\]/.test(reply)) {
+      nextBookingState = null;
+      console.log(`[booking-flow] CANCEL_BOOKING conversation=${conversation.id}`);
+    }
+
+    const nameMatch = reply.match(/\[BOOKING_NAME:\s*([^\]]+)\]/);
+    if (nameMatch) {
+      const name = nameMatch[1].trim();
+      nextBookingState = { ...(currentBookingState || {}), step: 'collecting_reason', name };
+      console.log(`[booking-flow] collected name="${name}" conversation=${conversation.id}`);
+    }
+
+    const reasonMatch = reply.match(/\[BOOKING_REASON:\s*([^\]]+)\]/);
+    if (reasonMatch) {
+      const reason = reasonMatch[1].trim();
+      nextBookingState = { ...(currentBookingState || {}), step: 'collecting_slots', reason };
+      console.log(`[booking-flow] collected reason="${reason}" conversation=${conversation.id}`);
+    }
+
+    const slotsMatch = reply.match(/\[BOOKING_SLOTS:\s*([^\]]+)\]/);
+    if (slotsMatch) {
+      const slots = slotsMatch[1].split('|').map(s => s.trim()).filter(Boolean);
+      if (slots.length > 0 && currentBookingState?.name && currentBookingState?.reason) {
+        try {
+          const bookingOwner = getUserByBusinessId(business.id);
+          const booking = createBooking({
+            businessId: business.id,
+            conversationId: conversation.id,
+            customerPhone,
+            clientName: currentBookingState.name,
+            reason: currentBookingState.reason,
+            slots,
+          });
+          nextBookingState = { step: 'waiting_owner', bookingId: booking.id, name: currentBookingState.name };
+          notifyOwnerOfBooking({ business, owner: bookingOwner, booking, waCredentials })
+            .catch(err => console.error(`[booking-flow] notifyOwnerOfBooking failed booking=${booking.id}: ${err.message}`));
+          console.log(`[booking-flow] booking created id=${booking.id} code=${booking.slot_code} conversation=${conversation.id}`);
+        } catch (bookingErr) {
+          nextBookingState = null;
+          console.error(`[booking-flow] createBooking failed conversation=${conversation.id}: ${bookingErr.message}`);
+        }
+      } else {
+        console.error(`[booking-flow] BOOKING_SLOTS found but state missing name/reason — state=${JSON.stringify(currentBookingState)}`);
+        nextBookingState = null;
+      }
+    }
+
+    // Strip all booking tags from the reply the client will see
+    reply = reply
+      .replace(/\[WANTS_BOOKING\]\n?/g, '')
+      .replace(/\[CANCEL_BOOKING\]\n?/g, '')
+      .replace(/\[BOOKING_NAME:[^\]]*\]\n?/g, '')
+      .replace(/\[BOOKING_REASON:[^\]]*\]\n?/g, '')
+      .replace(/\[BOOKING_SLOTS:[^\]]*\]\n?/g, '');
+
+    // Persist state only if it changed
+    if (JSON.stringify(nextBookingState) !== JSON.stringify(currentBookingState)) {
+      setBookingState(conversation.id, nextBookingState);
+    }
+  }
+
+  reply = reply.trim();
+
+  addMessage(conversation.id, 'user', text);
+  addMessage(conversation.id, 'assistant', reply);
+
+  if (sendDoc && business.document_path && fs.existsSync(business.document_path)) {
+    try {
+      const docBuffer = fs.readFileSync(business.document_path);
+      const docMediaId = await uploadMedia(docBuffer, business.document_name, 'application/pdf', waCredentials);
+      await sendWhatsAppDocument(customerPhone, docMediaId, business.document_name, waCredentials);
+    } catch (docErr) {
+      console.error('[doc-send] failed:', docErr.message);
+    }
+  }
+
+  const planAllowsAudio = ['crecimiento', 'a_medida'].includes(business.plan);
+  const replyFitsAudio = reply.length <= AUDIO_MAX_CHARS;
+  const isFirstMessage = history.length === 0;
+  const wantsAudio = business.response_mode === 'audio' ||
+                     (business.response_mode === 'audio_key' && isFirstMessage);
+  try {
+    if (wantsAudio && business.voice_id && planAllowsAudio && replyFitsAudio) {
+      try {
+        logError('tts-text', { message: `business_id=${business.id} text=${JSON.stringify(reply)}`, stack: '' });
+        const mp3 = await generateAudioBuffer(business.voice_id, reply);
+        logError('tts-buffers', { message: `mp3=${mp3.length}b`, stack: '' });
+        const ogg = await convertToOgg(mp3);
+        logError('tts-buffers', { message: `ogg=${ogg.length}b mime=audio/ogg; codecs=opus`, stack: '' });
+        const mediaId = await uploadMedia(ogg, 'reply.ogg', 'audio/ogg; codecs=opus', waCredentials);
+        await sendWhatsAppAudio(customerPhone, mediaId, waCredentials);
+        logError(sendCtxOk, { message: `mode=audio business_id=${business.id} to=${customerPhone}`, stack: '' });
+      } catch (audioErr) {
+        logError('webhook-audio-fallback', { message: audioErr.message, stack: audioErr.stack || '' });
+        const sendResult = await sendWhatsAppMessage(customerPhone, reply, waCredentials);
+        logError('webhook-send-result', { message: `mode=text(audio-fallback) body=${JSON.stringify(sendResult).slice(0, 300)}`, stack: '' });
+      }
+    } else {
+      if (wantsAudio && !replyFitsAudio) {
+        logError('webhook-audio-skip', { message: `reply too long (${reply.length} chars)`, stack: '' });
+      }
+      const sendResult = await sendWhatsAppMessage(customerPhone, reply, waCredentials);
+      logError('webhook-send-result', { message: `mode=text body=${JSON.stringify(sendResult).slice(0, 300)}`, stack: '' });
+    }
+  } catch (sendErr) {
+    logError(sendCtxErr, sendErr);
+  }
+
+  // Derivación por incertidumbre — no dispara si la conversación ya estaba pausada
+  if (needsHuman && !conversation.needs_attention) {
+    markConversationPaused(conversation.id);
+    const owner = getUserByBusinessId(business.id);
+    notifyOwnerOfPause({
+      business, owner, channel: 'whatsapp', contactId: customerPhone,
+      messageText: text, conversationId: conversation.id, waCredentials,
+    }).catch(err => console.error('[notify-pause]', err.message));
+  }
+}
+
 // --- WhatsApp webhook ---
 
 app.get('/webhook', (req, res) => {
@@ -727,264 +983,91 @@ app.post('/webhook', async (req, res) => {
           continue;
         }
 
-        const waCredentials = { phoneNumberId: business.phone_number_id, accessToken: business.wa_access_token };
+        const waCredentials = { phoneNumberId: business.phone_number_id, accessToken: business.wa_access_token, provider: business.wa_provider || 'meta' };
 
         for (const msg of messages) {
           if (msg.type !== 'text') continue;
-
           const customerPhone = msg.from;
           const text = msg.text?.body;
           if (!text) continue;
-
-          // Owner booking-reply detection — check before trial/limit gates so owner
-          // responses always go through regardless of trial state.
-          {
-            const msgOwner = getUserByBusinessId(business.id);
-            const ownerDigits = (msgOwner?.phone || '').replace(/\D/g, '');
-            const senderDigits = customerPhone.replace(/\D/g, '');
-            if (ownerDigits && senderDigits === ownerDigits) {
-              const handled = await handleOwnerBookingReply({
-                business, ownerPhone: customerPhone, text, waCredentials,
-              });
-              if (handled) {
-                markAsRead(msg.id, waCredentials).catch(() => {});
-                continue;
-              }
-            }
-          }
-
-          if (isTrialExpired(business)) {
-            await sendWhatsAppMessage(customerPhone,
-              `Hola! El período de prueba de ${business.name} terminó. Para seguir recibiendo respuestas automáticas, el negocio necesita activar su plan.`,
-              waCredentials
-            );
-            continue;
-          }
-
-          if (business.plan === 'arranque' && business.trial_starts_at) {
-            const trialCount = getTrialMessageCount(business.id, business.trial_starts_at);
-            if (trialCount >= TRIAL_MESSAGE_LIMIT) {
-              const conv = getOrCreateConversation(business.id, customerPhone);
-              if (!conv.needs_attention) {
-                const limitMsg = `Hola! Por el momento no podemos responder automáticamente. Alguien de ${business.name} te va a contestar a la brevedad.`;
-                await sendWhatsAppMessage(customerPhone, limitMsg, waCredentials).catch(() => {});
-                addMessage(conv.id, 'user', text);
-                addMessage(conv.id, 'assistant', limitMsg);
-                markConversationPaused(conv.id);
-                const owner = getUserByBusinessId(business.id);
-                notifyOwnerOfPause({
-                  business, owner, channel: 'whatsapp', contactId: customerPhone,
-                  messageText: text, conversationId: conv.id, waCredentials,
-                }).catch(err => console.error('[trial-limit-notify]', err.message));
-                console.log(`[trial-limit] business ${business.id} hit limit (${trialCount}/${TRIAL_MESSAGE_LIMIT}), notified customer ${customerPhone} and owner`);
-              } else {
-                addMessage(conv.id, 'user', text);
-              }
-              continue;
-            }
-          }
-
-          const conversation = getOrCreateConversation(business.id, customerPhone);
-          const history = getConversationHistory(conversation.id, 20);
-
-          // Conversation paused — record message so owner sees it, but no AI reply
-          if (conversation.needs_attention) {
-            addMessage(conversation.id, 'user', text);
-            markAsRead(msg.id, waCredentials).catch(() => {});
-            continue;
-          }
-
-          // Pause keyword check — before any network call so WA errors can't skip it
-          if (business.pause_keywords) {
-            const keywords = business.pause_keywords
-              .split(',')
-              .map(k => k.trim().toLowerCase())
-              .filter(Boolean);
-            const lowerText = text.toLowerCase();
-            const matched = keywords.find(k => lowerText.includes(k));
-            if (matched) {
-              addMessage(conversation.id, 'user', text);
-              markConversationPaused(conversation.id);
-              const owner = getUserByBusinessId(business.id);
-              notifyOwnerOfPause({
-                business, owner, channel: 'whatsapp', contactId: customerPhone,
-                messageText: text, conversationId: conversation.id, waCredentials,
-              }).catch(err => console.error('[notify-pause]', err.message));
-              continue;
-            }
-          }
-
-          await maybeSendDisclosure(business, conversation.id, history, customerPhone, waCredentials);
-
-          // Mark as read + show typing indicator immediately
-          markAsRead(msg.id, waCredentials).catch(() => {});
-          sendTypingIndicator(customerPhone, waCredentials).catch(() => {});
-
-          // Generate reply and enforce minimum delay in parallel
-          const delayMs = (business.response_delay ?? 5) * 1000;
-          const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-          const currentBookingState = business.booking_enabled ? getBookingState(conversation.id) : null;
-          logError('webhook-claude-call', {
-            message: `business_id=${business.id} customer=${customerPhone} text=${text.slice(0, 100)}`,
-            stack: '',
-          });
-          let rawReply;
-          try {
-            [rawReply] = await Promise.all([
-              generateReply(business, history, text, conversation.label || null, {
-                enabled: !!business.booking_enabled,
-                state: currentBookingState,
-              }),
-              sleep(delayMs),
-            ]);
-            logError('webhook-claude-ok', { message: `business_id=${business.id} reply_length=${rawReply.length}`, stack: '' });
-          } catch (claudeErr) {
-            logError('webhook-claude-error', claudeErr);
-            continue;
-          }
-
-          let sendDoc = false;
-          let needsHuman = false;
-          let reply = rawReply;
-          if (reply.startsWith('[NEEDS_HUMAN]')) {
-            needsHuman = true;
-            reply = reply.replace(/^\[NEEDS_HUMAN\]\n?/, '');
-          }
-          if (reply.startsWith('[SEND_DOC]')) {
-            sendDoc = true;
-            reply = reply.replace(/^\[SEND_DOC\]\n?/, '');
-          }
-
-          // Booking state machine — parse tags, update state, strip tags from reply
-          if (business.booking_enabled) {
-            let nextBookingState = currentBookingState;
-
-            if (/\[WANTS_BOOKING\]/.test(reply)) {
-              nextBookingState = { step: 'collecting_name' };
-              console.log(`[booking-flow] WANTS_BOOKING conversation=${conversation.id}`);
-            }
-            if (/\[CANCEL_BOOKING\]/.test(reply)) {
-              nextBookingState = null;
-              console.log(`[booking-flow] CANCEL_BOOKING conversation=${conversation.id}`);
-            }
-
-            const nameMatch = reply.match(/\[BOOKING_NAME:\s*([^\]]+)\]/);
-            if (nameMatch) {
-              const name = nameMatch[1].trim();
-              nextBookingState = { ...(currentBookingState || {}), step: 'collecting_reason', name };
-              console.log(`[booking-flow] collected name="${name}" conversation=${conversation.id}`);
-            }
-
-            const reasonMatch = reply.match(/\[BOOKING_REASON:\s*([^\]]+)\]/);
-            if (reasonMatch) {
-              const reason = reasonMatch[1].trim();
-              nextBookingState = { ...(currentBookingState || {}), step: 'collecting_slots', reason };
-              console.log(`[booking-flow] collected reason="${reason}" conversation=${conversation.id}`);
-            }
-
-            const slotsMatch = reply.match(/\[BOOKING_SLOTS:\s*([^\]]+)\]/);
-            if (slotsMatch) {
-              const slots = slotsMatch[1].split('|').map(s => s.trim()).filter(Boolean);
-              if (slots.length > 0 && currentBookingState?.name && currentBookingState?.reason) {
-                try {
-                  const bookingOwner = getUserByBusinessId(business.id);
-                  const booking = createBooking({
-                    businessId: business.id,
-                    conversationId: conversation.id,
-                    customerPhone,
-                    clientName: currentBookingState.name,
-                    reason: currentBookingState.reason,
-                    slots,
-                  });
-                  nextBookingState = { step: 'waiting_owner', bookingId: booking.id, name: currentBookingState.name };
-                  notifyOwnerOfBooking({ business, owner: bookingOwner, booking, waCredentials })
-                    .catch(err => console.error(`[booking-flow] notifyOwnerOfBooking failed booking=${booking.id}: ${err.message}`));
-                  console.log(`[booking-flow] booking created id=${booking.id} code=${booking.slot_code} conversation=${conversation.id}`);
-                } catch (bookingErr) {
-                  nextBookingState = null;
-                  console.error(`[booking-flow] createBooking failed conversation=${conversation.id}: ${bookingErr.message}`);
-                }
-              } else {
-                console.error(`[booking-flow] BOOKING_SLOTS found but state missing name/reason — state=${JSON.stringify(currentBookingState)}`);
-                nextBookingState = null;
-              }
-            }
-
-            // Strip all booking tags from the reply the client will see
-            reply = reply
-              .replace(/\[WANTS_BOOKING\]\n?/g, '')
-              .replace(/\[CANCEL_BOOKING\]\n?/g, '')
-              .replace(/\[BOOKING_NAME:[^\]]*\]\n?/g, '')
-              .replace(/\[BOOKING_REASON:[^\]]*\]\n?/g, '')
-              .replace(/\[BOOKING_SLOTS:[^\]]*\]\n?/g, '');
-
-            // Persist state only if it changed
-            if (JSON.stringify(nextBookingState) !== JSON.stringify(currentBookingState)) {
-              setBookingState(conversation.id, nextBookingState);
-            }
-          }
-
-          reply = reply.trim();
-
-          addMessage(conversation.id, 'user', text);
-          addMessage(conversation.id, 'assistant', reply);
-
-          if (sendDoc && business.document_path && fs.existsSync(business.document_path)) {
-            try {
-              const docBuffer = fs.readFileSync(business.document_path);
-              const docMediaId = await uploadMedia(docBuffer, business.document_name, 'application/pdf', waCredentials);
-              await sendWhatsAppDocument(customerPhone, docMediaId, business.document_name, waCredentials);
-            } catch (docErr) {
-              console.error('[doc-send] failed:', docErr.message);
-            }
-          }
-
-          const planAllowsAudio = ['crecimiento', 'a_medida'].includes(business.plan);
-          const replyFitsAudio = reply.length <= AUDIO_MAX_CHARS;
-          const isFirstMessage = history.length === 0;
-          const wantsAudio = business.response_mode === 'audio' ||
-                             (business.response_mode === 'audio_key' && isFirstMessage);
-          try {
-            if (wantsAudio && business.voice_id && planAllowsAudio && replyFitsAudio) {
-              try {
-                logError('tts-text', { message: `business_id=${business.id} text=${JSON.stringify(reply)}`, stack: '' });
-                const mp3 = await generateAudioBuffer(business.voice_id, reply);
-                logError('tts-buffers', { message: `mp3=${mp3.length}b`, stack: '' });
-                const ogg = await convertToOgg(mp3);
-                logError('tts-buffers', { message: `ogg=${ogg.length}b mime=audio/ogg; codecs=opus`, stack: '' });
-                const mediaId = await uploadMedia(ogg, 'reply.ogg', 'audio/ogg; codecs=opus', waCredentials);
-                await sendWhatsAppAudio(customerPhone, mediaId, waCredentials);
-                logError('webhook-send-ok', { message: `mode=audio business_id=${business.id} to=${customerPhone}`, stack: '' });
-              } catch (audioErr) {
-                logError('webhook-audio-fallback', { message: audioErr.message, stack: audioErr.stack || '' });
-                const sendResult = await sendWhatsAppMessage(customerPhone, reply, waCredentials);
-                logError('webhook-send-result', { message: `mode=text(audio-fallback) body=${JSON.stringify(sendResult).slice(0, 300)}`, stack: '' });
-              }
-            } else {
-              if (wantsAudio && !replyFitsAudio) {
-                logError('webhook-audio-skip', { message: `reply too long (${reply.length} chars)`, stack: '' });
-              }
-              const sendResult = await sendWhatsAppMessage(customerPhone, reply, waCredentials);
-              logError('webhook-send-result', { message: `mode=text body=${JSON.stringify(sendResult).slice(0, 300)}`, stack: '' });
-            }
-          } catch (sendErr) {
-            logError('webhook-send-error', sendErr);
-          }
-
-          // Derivación por incertidumbre — no dispara si la conversación ya estaba pausada
-          if (needsHuman && !conversation.needs_attention) {
-            markConversationPaused(conversation.id);
-            const owner = getUserByBusinessId(business.id);
-            notifyOwnerOfPause({
-              business, owner, channel: 'whatsapp', contactId: customerPhone,
-              messageText: text, conversationId: conversation.id, waCredentials,
-            }).catch(err => console.error('[notify-pause]', err.message));
-          }
+          await processIncomingMessage(business, waCredentials, { msgId: msg.id, customerPhone, text });
         }
       }
     }
   } catch (err) {
     console.error('Webhook processing error:', err.message);
+  }
+});
+
+// --- Kapso webhook ---
+
+app.get('/webhook/kapso', (_req, res) => res.status(200).send('OK'));
+
+app.post('/webhook/kapso', async (req, res) => {
+  res.status(200).send('OK');
+
+  const rawBody = req.rawBody;
+  const sig     = req.headers['x-webhook-signature'] || '';
+  const secret  = process.env.KAPSO_WEBHOOK_SECRET;
+
+  logError('kapso-webhook', {
+    message: `sig_present=${!!sig} secret_set=${!!secret} raw_len=${rawBody?.length ?? 0} preview=${rawBody?.toString().slice(0, 200) ?? ''}`,
+    stack: '',
+  });
+
+  if (secret) {
+    if (!rawBody) {
+      logError('kapso-webhook', { message: 'rawBody missing — verify middleware order', stack: '' });
+      return;
+    }
+    const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+    const expBuf   = Buffer.from(expected, 'utf8');
+    const sigBuf   = Buffer.from(sig.length === expected.length ? sig : '', 'utf8');
+    if (sigBuf.length === 0 || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      logError('kapso-webhook', { message: 'invalid HMAC signature — rejected', stack: '' });
+      return;
+    }
+  } else {
+    logError('kapso-webhook', { message: 'KAPSO_WEBHOOK_SECRET not set — skipping signature check', stack: '' });
+  }
+
+  try {
+    const payload = req.body;
+    const msg     = payload?.message;
+    if (!msg) return;
+
+    const phoneNumberId = String(payload.phone_number_id || '');
+    const business      = getBusinessByPhoneNumberId(phoneNumberId);
+
+    logError('kapso-webhook', {
+      message: `phone_number_id=${phoneNumberId} found=${!!business} business_id=${business?.id ?? 'null'}`,
+      stack: '',
+    });
+
+    if (!business) return;
+
+    const waCredentials = {
+      phoneNumberId: business.phone_number_id,
+      accessToken:   business.wa_access_token,
+      provider:      business.wa_provider || 'meta',
+    };
+
+    let text;
+    if (msg.type === 'text') {
+      text = msg.text?.body;
+    } else if (msg.type === 'audio' && msg.kapso?.transcript?.text) {
+      text = msg.kapso.transcript.text;
+    }
+
+    if (!text?.trim()) return;
+
+    await processIncomingMessage(business, waCredentials, {
+      msgId:         msg.id,
+      customerPhone: msg.from,
+      text:          text.trim(),
+    });
+  } catch (err) {
+    logError('kapso-webhook', err);
   }
 });
 
@@ -1302,7 +1385,7 @@ async function getBookingCredentials(businessId) {
   const business = getBusinessById(businessId);
   const owner = business ? getUserByBusinessId(businessId) : null;
   const waCredentials = business?.phone_number_id
-    ? { phoneNumberId: business.phone_number_id, accessToken: business.wa_access_token }
+    ? { phoneNumberId: business.phone_number_id, accessToken: business.wa_access_token, provider: business.wa_provider || 'meta' }
     : null;
   return { business, owner, waCredentials };
 }
@@ -1350,17 +1433,27 @@ app.post('/admin/set-wa-credentials', (req, res) => {
   const auth = req.headers['authorization'] || '';
   if (auth !== `Bearer ${secret}`) return res.status(403).json({ error: 'Token inválido' });
 
-  const { email, waba_id, phone_number_id, access_token } = req.body;
-  if (!email || !waba_id || !phone_number_id || !access_token) {
-    return res.status(400).json({ error: 'email, waba_id, phone_number_id, access_token requeridos' });
+  const { email, waba_id, phone_number_id, access_token, wa_provider } = req.body;
+  const provider = wa_provider || 'meta';
+
+  if (!email || !phone_number_id) {
+    return res.status(400).json({ error: 'email y phone_number_id requeridos' });
+  }
+  if (provider === 'meta' && !access_token) {
+    return res.status(400).json({ error: 'access_token requerido para provider=meta' });
   }
 
   const user = getUserByEmail(email);
   if (!user) return res.status(404).json({ error: `No existe usuario con email: ${email}` });
   if (!user.business_id) return res.status(404).json({ error: `El usuario ${email} no tiene negocio asociado` });
 
-  saveWabaCredentials(user.business_id, { wabaId: waba_id, phoneNumberId: phone_number_id, accessToken: access_token });
-  res.json({ ok: true, business_id: user.business_id, waba_id, phone_number_id });
+  saveWabaCredentials(user.business_id, {
+    wabaId: waba_id || null,
+    phoneNumberId: phone_number_id,
+    accessToken: access_token || null,
+    provider,
+  });
+  res.json({ ok: true, business_id: user.business_id, waba_id, phone_number_id, provider });
 });
 
 // Protected by ADMIN_SET_WA_TOKEN env var (Bearer token). Temporary route to set plan/status.
