@@ -7,6 +7,67 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Conversaciones — Daxos</title>
   <link rel="stylesheet" href="/dashboard.css" />
+  <style>
+    .btn-pause-toggle {
+      font-size: 12px;
+      font-family: var(--mono, monospace);
+      padding: 4px 10px;
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--muted, #888);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn-pause-toggle:hover { border-color: var(--accent, #C45C1A); color: var(--accent, #C45C1A); }
+
+    .needs-human-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 16px;
+      background: rgba(196,92,26,0.08);
+      border-top: 1px solid rgba(196,92,26,0.2);
+      font-size: 13px;
+      color: var(--muted-2, #888);
+      flex-wrap: wrap;
+    }
+
+    .panel-reply-box {
+      display: flex;
+      gap: 8px;
+      padding: 10px 16px;
+      border-top: 1px solid #1e1e1e;
+      background: #0f0f0f;
+    }
+    .panel-reply-textarea {
+      flex: 1;
+      resize: none;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 4px;
+      color: var(--text, #f0ede8);
+      font-size: 13px;
+      font-family: var(--sans, system-ui);
+      padding: 8px 10px;
+      line-height: 1.5;
+    }
+    .panel-reply-textarea:focus { outline: none; border-color: var(--accent, #C45C1A); }
+    .btn-panel-send {
+      align-self: flex-end;
+      padding: 8px 16px;
+      background: var(--accent, #C45C1A);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn-panel-send:disabled { opacity: 0.5; cursor: not-allowed; }
+  </style>
 </head>
 <body>
 
@@ -153,21 +214,36 @@
       }
       const { conversation, messages } = await res.json();
 
+      const isPaused   = !!conversation.needs_attention;
+      const needsHuman = !!conversation.needs_human;
+
       document.getElementById('thread-header').innerHTML = `
         <div class="thread-header-top">
           <span class="thread-phone">${formatPhone(conversation.customer_id)}</span>
           <span class="thread-meta">${messages.length} mensaje${messages.length !== 1 ? 's' : ''} · iniciado ${formatDate(conversation.created_at)}</span>
-          <select class="conv-label-select" id="label-select" onchange="setLabel(${id}, this.value)">
-            <option value="">Sin etiqueta</option>
-            <option value="cliente"       ${conversation.label === 'cliente'       ? 'selected' : ''}>Cliente</option>
-            <option value="prospecto"     ${conversation.label === 'prospecto'     ? 'selected' : ''}>Prospecto</option>
-            <option value="no_interesado" ${conversation.label === 'no_interesado' ? 'selected' : ''}>No interesado</option>
-          </select>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select class="conv-label-select" id="label-select" onchange="setLabel(${id}, this.value)">
+              <option value="">Sin etiqueta</option>
+              <option value="cliente"       ${conversation.label === 'cliente'       ? 'selected' : ''}>Cliente</option>
+              <option value="prospecto"     ${conversation.label === 'prospecto'     ? 'selected' : ''}>Prospecto</option>
+              <option value="no_interesado" ${conversation.label === 'no_interesado' ? 'selected' : ''}>No interesado</option>
+            </select>
+            ${!isPaused ? `<button class="btn-pause-toggle" onclick="pauseConv(${id})">Pausar bot</button>` : ''}
+          </div>
         </div>
-        ${conversation.needs_attention ? `
+        ${needsHuman && !isPaused ? `
+        <div class="needs-human-banner" id="needs-human-banner">
+          <span>ℹ️ El asistente notificó al equipo — sigue respondiendo automáticamente</span>
+          <button class="btn-pause-toggle" onclick="pauseConv(${id})">Tomar conversación</button>
+        </div>` : ''}
+        ${isPaused ? `
         <div class="pause-banner" id="pause-banner">
-          <span class="pause-banner-text">⚠️ Asistente pausado — esta conversación requiere atención humana</span>
-          <button class="btn-resume" onclick="resumeConv(${id})">Reanudar asistente</button>
+          <span class="pause-banner-text">⚠️ Asistente pausado — respondé al cliente desde acá</span>
+          <button class="btn-resume" onclick="resumeConv(${id})">Reanudar bot</button>
+        </div>
+        <div class="panel-reply-box" id="panel-reply-box">
+          <textarea class="panel-reply-textarea" id="panel-reply-text" rows="3" placeholder="Escribí tu respuesta al cliente…"></textarea>
+          <button class="btn-panel-send" onclick="sendFromPanel(${id})">Enviar</button>
         </div>` : ''}
       `;
 
@@ -195,8 +271,60 @@
       const res = await fetch(`/api/conversations/${id}/resume`, { method: 'PATCH' });
       if (!res.ok) return;
       document.getElementById('pause-banner')?.remove();
+      document.getElementById('panel-reply-box')?.remove();
+      document.getElementById('needs-human-banner')?.remove();
       const dot = document.querySelector(`.conv-item[data-id="${id}"] .conv-attention-dot`);
       if (dot) dot.remove();
+      // Re-add pause button
+      const topRow = document.querySelector('.thread-header-top div');
+      if (topRow && !topRow.querySelector('.btn-pause-toggle')) {
+        const btn = document.createElement('button');
+        btn.className = 'btn-pause-toggle';
+        btn.textContent = 'Pausar bot';
+        btn.onclick = () => pauseConv(id);
+        topRow.appendChild(btn);
+      }
+    }
+
+    // ── Pause conversation (manual) ──
+    async function pauseConv(id) {
+      const res = await fetch(`/api/conversations/${id}/pause`, { method: 'PATCH' });
+      if (!res.ok) return;
+      // Reload thread to show reply box
+      const btn = document.querySelector(`.conv-item[data-id="${id}"]`);
+      if (btn) openConv(id, btn);
+    }
+
+    // ── Send from panel ──
+    async function sendFromPanel(id) {
+      const ta  = document.getElementById('panel-reply-text');
+      const text = ta?.value?.trim();
+      if (!text) return;
+
+      const sendBtn = document.querySelector('.btn-panel-send');
+      if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Enviando…'; }
+
+      const res = await fetch(`/api/conversations/${id}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+
+      if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Enviar'; }
+
+      if (!res.ok) {
+        alert('No se pudo enviar el mensaje. Revisá la conexión de WhatsApp.');
+        return;
+      }
+
+      // Append message to thread
+      const msgList = document.getElementById('thread-messages');
+      const row = document.createElement('div');
+      row.className = 'bubble-row row-ai';
+      row.innerHTML = `<div class="bubble bubble-ai"><p>${escapeHtml(text)}</p><span class="bubble-time">ahora</span></div>`;
+      msgList.appendChild(row);
+      msgList.scrollTop = msgList.scrollHeight;
+      ta.value = '';
     }
 
     // ── Label helpers ──

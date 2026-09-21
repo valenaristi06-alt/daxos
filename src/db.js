@@ -138,6 +138,8 @@ if (!convCols.includes('label'))                db.exec('ALTER TABLE conversatio
 if (!convCols.includes('booking_state'))        db.exec('ALTER TABLE conversations ADD COLUMN booking_state TEXT');
 if (!convCols.includes('paused_at'))            db.exec('ALTER TABLE conversations ADD COLUMN paused_at INTEGER');
 if (!convCols.includes('auto_resumed_at'))      db.exec('ALTER TABLE conversations ADD COLUMN auto_resumed_at INTEGER');
+if (!convCols.includes('needs_human'))          db.exec('ALTER TABLE conversations ADD COLUMN needs_human INTEGER NOT NULL DEFAULT 0');
+if (!convCols.includes('human_paused_at'))      db.exec('ALTER TABLE conversations ADD COLUMN human_paused_at INTEGER');
 
 const bizCols = db.prepare("PRAGMA table_info(businesses)").all().map(c => c.name);
 if (!bizCols.includes('document_path'))         db.exec('ALTER TABLE businesses ADD COLUMN document_path TEXT');
@@ -156,6 +158,9 @@ if (!bizCols.includes('wa_payment_confirmed'))    db.exec('ALTER TABLE businesse
 if (!bizCols.includes('booking_enabled'))         db.exec('ALTER TABLE businesses ADD COLUMN booking_enabled INTEGER NOT NULL DEFAULT 0');
 if (!bizCols.includes('weekly_summary_enabled'))  db.exec('ALTER TABLE businesses ADD COLUMN weekly_summary_enabled INTEGER NOT NULL DEFAULT 1');
 if (!bizCols.includes('wa_provider'))             db.exec("ALTER TABLE businesses ADD COLUMN wa_provider TEXT NOT NULL DEFAULT 'meta'");
+if (!bizCols.includes('human_resume_timeout'))    db.exec('ALTER TABLE businesses ADD COLUMN human_resume_timeout INTEGER NOT NULL DEFAULT 7200');
+if (!bizCols.includes('business_hours_start'))    db.exec('ALTER TABLE businesses ADD COLUMN business_hours_start TEXT');
+if (!bizCols.includes('business_hours_end'))      db.exec('ALTER TABLE businesses ADD COLUMN business_hours_end TEXT');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS pending_bookings (
@@ -301,7 +306,31 @@ function markConversationPaused(conversationId) {
 }
 
 function markConversationResumed(conversationId) {
-  db.prepare('UPDATE conversations SET needs_attention = 0, paused_at = NULL WHERE id = ?').run(conversationId);
+  db.prepare('UPDATE conversations SET needs_attention = 0, paused_at = NULL, needs_human = 0, human_paused_at = NULL WHERE id = ?').run(conversationId);
+}
+
+function setNeedsHuman(conversationId, val) {
+  db.prepare('UPDATE conversations SET needs_human = ? WHERE id = ?').run(val ? 1 : 0, conversationId);
+}
+
+// Called when a human actively takes over from the panel — pauses bot, starts human-timeout clock.
+// Clears paused_at so the 24h auto-resume job doesn't interfere.
+function setHumanPaused(conversationId) {
+  db.prepare('UPDATE conversations SET needs_attention = 1, paused_at = NULL, human_paused_at = unixepoch(), needs_human = 0 WHERE id = ?').run(conversationId);
+}
+
+// Resumes a human-paused conversation (timeout or business-hours triggered).
+function clearHumanPause(conversationId) {
+  db.prepare('UPDATE conversations SET needs_attention = 0, paused_at = NULL, human_paused_at = NULL, needs_human = 0, auto_resumed_at = unixepoch() WHERE id = ?').run(conversationId);
+}
+
+function getConversationsNeedingHumanResume() {
+  return db.prepare(`
+    SELECT c.id, c.human_paused_at, b.human_resume_timeout, b.business_hours_start, b.business_hours_end
+    FROM conversations c
+    JOIN businesses b ON b.id = c.business_id
+    WHERE c.needs_attention = 1 AND c.human_paused_at IS NOT NULL
+  `).all();
 }
 
 function autoResumeExpiredConversations() {
@@ -798,6 +827,10 @@ module.exports = {
   getConversationHistory,
   markConversationPaused,
   markConversationResumed,
+  setNeedsHuman,
+  setHumanPaused,
+  clearHumanPause,
+  getConversationsNeedingHumanResume,
   autoResumeExpiredConversations,
   getDailyConversationStats,
   getTodayStats,

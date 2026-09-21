@@ -20,7 +20,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -474,7 +474,49 @@ app.patch('/api/conversations/:id/resume', requireAuth, (req, res) => {
   const conv = getConversationById(parseInt(req.params.id));
   if (!conv || conv.business_id !== user.business_id) return res.status(404).json({ error: 'Conversación no encontrada.' });
 
-  markConversationResumed(conv.id);
+  markConversationResumed(conv.id); // also clears needs_human, human_paused_at
+  res.json({ ok: true });
+});
+
+app.patch('/api/conversations/:id/pause', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+
+  const conv = getConversationById(parseInt(req.params.id));
+  if (!conv || conv.business_id !== user.business_id) return res.status(404).json({ error: 'Conversación no encontrada.' });
+
+  setHumanPaused(conv.id);
+  res.json({ ok: true });
+});
+
+app.post('/api/conversations/:id/send', requireAuth, async (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+
+  const conv = getConversationById(parseInt(req.params.id));
+  if (!conv || conv.business_id !== user.business_id) return res.status(404).json({ error: 'Conversación no encontrada.' });
+
+  const { text } = req.body;
+  if (!text?.trim()) return res.status(400).json({ error: 'text requerido.' });
+
+  const business = getBusinessById(user.business_id);
+  if (!business?.phone_number_id) return res.status(400).json({ error: 'WhatsApp no conectado.' });
+
+  const waCredentials = {
+    phoneNumberId: business.phone_number_id,
+    accessToken:   business.wa_access_token,
+    provider:      business.wa_provider || 'meta',
+  };
+
+  try {
+    await sendWhatsAppMessage(conv.customer_id, text.trim(), waCredentials);
+  } catch (err) {
+    logError('panel-send-error', err);
+    return res.status(502).json({ error: 'No se pudo enviar el mensaje por WhatsApp.' });
+  }
+
+  addMessage(conv.id, 'assistant', text.trim());
+  setHumanPaused(conv.id); // pausa el bot, inicia el reloj de 2h
   res.json({ ok: true });
 });
 
@@ -683,6 +725,11 @@ async function maybeSendDisclosure(business, conversationId, history, recipientP
 
 // --- Shared incoming-message pipeline ---
 
+// Uruguay is UTC-3, no DST.
+function getMvdDate() {
+  return new Date(Date.now() - 3 * 60 * 60 * 1000);
+}
+
 async function processIncomingMessage(business, waCredentials, { msgId, customerPhone, text }) {
   const sendCtxOk  = waCredentials.provider === 'kapso' ? 'kapso-send-ok'  : 'webhook-send-ok';
   const sendCtxErr = waCredentials.provider === 'kapso' ? 'kapso-send-err' : 'webhook-send-error';
@@ -775,6 +822,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   const delayMs = (business.response_delay ?? 5) * 1000;
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const currentBookingState = business.booking_enabled ? getBookingState(conversation.id) : null;
+  const runtimeCtx = { now: getMvdDate(), needsHuman: !!conversation.needs_human };
   logError('webhook-claude-call', {
     message: `business_id=${business.id} customer=${customerPhone} text=${text.slice(0, 100)}`,
     stack: '',
@@ -785,7 +833,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
       generateReply(business, history, text, conversation.label || null, {
         enabled: !!business.booking_enabled,
         state: currentBookingState,
-      }),
+      }, runtimeCtx),
       sleep(delayMs),
     ]);
     logError('webhook-claude-ok', { message: `business_id=${business.id} reply_length=${rawReply.length}`, stack: '' });
@@ -922,14 +970,14 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     logError(sendCtxErr, sendErr);
   }
 
-  // Derivación por incertidumbre — no dispara si la conversación ya estaba pausada
-  if (needsHuman && !conversation.needs_attention) {
-    markConversationPaused(conversation.id);
+  // Derivación: notificar al dueño pero NO pausar el bot — sigue respondiendo
+  if (needsHuman && !conversation.needs_human) {
+    setNeedsHuman(conversation.id, 1);
     const owner = getUserByBusinessId(business.id);
     notifyOwnerOfPause({
       business, owner, channel: 'whatsapp', contactId: customerPhone,
       messageText: text, conversationId: conversation.id, waCredentials,
-    }).catch(err => console.error('[notify-pause]', err.message));
+    }).catch(err => console.error('[notify-human]', err.message));
   }
 }
 
@@ -1390,11 +1438,46 @@ async function getBookingCredentials(businessId) {
   return { business, owner, waCredentials };
 }
 
+function resumeHumanTimedOut() {
+  const convs = getConversationsNeedingHumanResume();
+  if (!convs.length) return;
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const mvd    = getMvdDate();
+  const nowMin = mvd.getUTCHours() * 60 + mvd.getUTCMinutes(); // minutes since midnight in Montevideo
+  let resumed  = 0;
+
+  for (const conv of convs) {
+    const timeout = typeof conv.human_resume_timeout === 'number' ? conv.human_resume_timeout : 7200;
+    const timeoutExpired = nowSec - conv.human_paused_at >= timeout;
+
+    let outsideHours = false;
+    if (conv.business_hours_start && conv.business_hours_end) {
+      const [sh, sm] = conv.business_hours_start.split(':').map(Number);
+      const [eh, em] = conv.business_hours_end.split(':').map(Number);
+      outsideHours = nowMin < sh * 60 + sm || nowMin >= eh * 60 + em;
+    }
+
+    if (timeoutExpired || outsideHours) {
+      clearHumanPause(conv.id);
+      resumed++;
+    }
+  }
+
+  if (resumed > 0) console.log(`[human-resume-job] resumed=${resumed} conversations after timeout/hours`);
+}
+
 // Run once at startup (catches any expired bookings from before last restart),
 // then every 30 minutes.
 checkBookingTimeouts({ getCredentialsForBusiness: getBookingCredentials })
   .catch(err => console.error('[booking-timeout-startup]', err.message));
+
+resumeHumanTimedOut();
+
 let _lastWeeklySummaryDate = null;
+
+// Human-pause timeout check — every 5 minutes
+setInterval(resumeHumanTimedOut, 5 * 60 * 1000);
 
 setInterval(() => {
   checkBookingTimeouts({ getCredentialsForBusiness: getBookingCredentials })

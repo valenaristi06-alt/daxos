@@ -21,11 +21,19 @@ function getClient() {
   return new Anthropic({ apiKey });
 }
 
-function buildSystemPrompt(business, label, bookingContext = null) {
+function buildSystemPrompt(business, label, bookingContext = null, runtimeCtx = null) {
   const lines = [
     `Sos el asistente de ventas de "${business.name}".`,
     `Respondé siempre en el idioma que usa el cliente.`,
   ];
+
+  if (runtimeCtx?.now) {
+    const d = runtimeCtx.now; // Date already offset to Montevideo (UTC-3)
+    const days   = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+    const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    const timeStr = `${days[d.getUTCDay()]} ${d.getUTCDate()} de ${months[d.getUTCMonth()]} de ${d.getUTCFullYear()}, ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+    lines.push(`Fecha y hora actual en Montevideo: ${timeStr}.`);
+  }
 
   if (business.business_context) {
     lines.push(`\nContexto del negocio: ${business.business_context}`);
@@ -132,14 +140,18 @@ function buildSystemPrompt(business, label, bookingContext = null) {
     }
   }
 
+  if (runtimeCtx?.needsHuman) {
+    lines.push('\nATENCIÓN: Ya avisaste al equipo del negocio sobre esta conversación. Seguí respondiendo lo que puedas con la información disponible. Si el cliente pregunta por la consulta que requería atención humana, recordale brevemente que ya avisaste y que alguien del equipo se va a comunicar. NO vuelvas a emitir [NEEDS_HUMAN] — ya está registrado.');
+  }
+
   lines.push('\nDERIVACIÓN: Usá [NEEDS_HUMAN] solo cuando el cliente necesite una respuesta que vos no podés dar y que el dueño del negocio sí puede dar en ese momento (ej: confirmar disponibilidad en tiempo real, autorizar una excepción, dar un dato privado). NO uses [NEEDS_HUMAN] para preguntas operativas básicas que el negocio simplemente no cargó: horarios de atención, dirección, formas de pago, zona de cobertura. Para esas, reconocé que no tenés el dato y decí que alguien del equipo se lo va a confirmar — no hables en primera persona como si vos fueras a confirmarlo, porque eso no va a pasar automáticamente. Ejemplos válidos: "eso te lo confirma alguien del equipo", "los horarios te los paso por acá en breve", "eso lo tiene que confirmar el equipo directamente". NO digas "te lo confirmo enseguida", "dame un momento", "ya te averiguo" — implican que la respuesta llega en segundos y no es honesto. Si en un mensaje posterior el cliente vuelve a preguntar por ese mismo dato que no llegó, ahí sí usá [NEEDS_HUMAN] para que el dueño lo atienda directamente.');
   lines.push('\nFORMATO OBLIGATORIO: Nunca uses markdown. Sin asteriscos, sin negritas, sin cursivas, sin guiones de lista, sin numeración, sin títulos con #. Escribí en texto plano, como un mensaje real de WhatsApp.');
 
   return lines.join('\n');
 }
 
-async function generateReply(business, history, newMessage, label = null, bookingContext = null) {
-  const systemPrompt = buildSystemPrompt(business, label, bookingContext);
+async function generateReply(business, history, newMessage, label = null, bookingContext = null, runtimeCtx = null) {
+  const systemPrompt = buildSystemPrompt(business, label, bookingContext, runtimeCtx);
 
   const messages = [
     ...history.map((msg) => ({
