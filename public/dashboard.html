@@ -1499,18 +1499,59 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       }
     });
 
-    // Mostrar resultado de redirección Kapso (?wa=ok / ?wa=error)
+    // Resultado de redirección Kapso (?wa=ok / ?wa=error)
     (function () {
       const params = new URLSearchParams(window.location.search);
       const wa = params.get('wa');
-      if (wa === 'ok') {
-        toast('WhatsApp conectado correctamente ✓', 'ok');
-        history.replaceState(null, '', '/dashboard');
-      } else if (wa === 'error') {
+      history.replaceState(null, '', '/dashboard');
+
+      if (wa === 'error') {
         document.getElementById('wa-connect-error').textContent = 'Hubo un error al conectar tu WhatsApp con Kapso. Intentá de nuevo.';
         document.getElementById('wa-connect-error').style.display = 'block';
-        history.replaceState(null, '', '/dashboard');
+        return;
       }
+
+      if (wa !== 'ok') return;
+
+      // Kapso redirigió con ?wa=ok — polling hasta confirmar que el número quedó guardado
+      const MAX_ATTEMPTS = 10;
+      const INTERVAL_MS  = 3000;
+      let attempts = 0;
+
+      waStep('Verificando conexión con Kapso…');
+      document.getElementById('btn-wa-connect').disabled = true;
+
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const r    = await fetch('/api/whatsapp/status');
+          const data = await r.json();
+
+          if (data.connected) {
+            clearInterval(poll);
+            waStep('');
+            document.getElementById('btn-wa-connect').disabled = false;
+            toast('WhatsApp conectado correctamente ✓', 'ok');
+            // Refresh business state to show connected status
+            fetch('/api/business').then(r => r.json()).then(b => {
+              if (b && b.id) { currentBusiness = b; renderWaConnectionStatus(b); }
+            }).catch(() => {});
+            return;
+          }
+
+          if (attempts >= MAX_ATTEMPTS) {
+            clearInterval(poll);
+            waStep('La conexión está en proceso — recargá la página en unos minutos para confirmar.');
+            document.getElementById('btn-wa-connect').disabled = false;
+          }
+        } catch {
+          if (attempts >= MAX_ATTEMPTS) {
+            clearInterval(poll);
+            waStep('No se pudo verificar la conexión. Recargá la página.');
+            document.getElementById('btn-wa-connect').disabled = false;
+          }
+        }
+      }, INTERVAL_MS);
     })();
 
   </script>

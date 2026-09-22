@@ -20,7 +20,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, getBusinessByKapsoCustomerId } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -1552,16 +1552,119 @@ app.post('/api/whatsapp/connect', requireAuth, async (req, res) => {
       return res.status(502).json({ error: 'No se pudo generar el link de configuración', detail: linkData });
     }
 
-    const url = linkData?.data?.url || linkData?.url;
+    // Log full response once so we can verify id/url field names with a real call
+    logError('kapso-onboarding-link', { message: `full_response=${JSON.stringify(linkData)}`, stack: '' });
+
+    const url          = linkData?.data?.url  || linkData?.url;
+    const setupLinkId  = linkData?.data?.id   || linkData?.id;
+
     if (!url) {
       logError('kapso-onboarding-link', { message: `url missing in response: ${JSON.stringify(linkData)}`, stack: '' });
       return res.status(502).json({ error: 'Kapso no devolvió una URL', detail: linkData });
     }
 
-    logError('kapso-onboarding-link', { message: `business_id=${business.id} kapso_customer_id=${kapsoCustomerId} url_ok=true`, stack: '' });
+    if (setupLinkId) setKapsoSetupLinkId(business.id, String(setupLinkId));
+
+    logError('kapso-onboarding-link', {
+      message: `business_id=${business.id} kapso_customer_id=${kapsoCustomerId} setup_link_id=${setupLinkId ?? 'NOT_FOUND'} url_ok=true`,
+      stack: '',
+    });
     res.json({ url });
   } catch (err) {
     logError('kapso-onboarding-link', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Kapso onboarding — poll setup link status after redirect
+// GET /api/whatsapp/status
+app.get('/api/whatsapp/status', requireAuth, async (req, res) => {
+  const business = getBusinessByUserId(req.session.userId);
+  if (!business) return res.status(400).json({ error: 'Negocio no encontrado' });
+
+  // Already connected
+  if (business.phone_number_id && business.wa_provider === 'kapso') {
+    return res.json({ connected: true });
+  }
+
+  const { kapso_customer_id: kapsoCustomerId, kapso_setup_link_id: setupLinkId } = business;
+  if (!kapsoCustomerId || !setupLinkId) {
+    return res.json({ connected: false, reason: 'no_setup_link' });
+  }
+
+  const apiKey = process.env.KAPSO_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'KAPSO_API_KEY no configurada' });
+
+  try {
+    // Try specific setup link first; fall back to list if 404
+    let linkData = null;
+
+    const singleRes = await fetch(
+      `https://api.kapso.ai/platform/v1/customers/${kapsoCustomerId}/setup_links/${setupLinkId}`,
+      { headers: { 'X-API-Key': apiKey } },
+    );
+
+    if (singleRes.ok) {
+      const raw = await singleRes.json();
+      // Log full response once so field names / status values are visible in /debug/errores
+      logError('kapso-onboarding-status', { message: `single_response=${JSON.stringify(raw)}`, stack: '' });
+      linkData = raw?.data || raw;
+    } else {
+      // Fallback: fetch the list and find by id
+      const listRes = await fetch(
+        `https://api.kapso.ai/platform/v1/customers/${kapsoCustomerId}/setup_links`,
+        { headers: { 'X-API-Key': apiKey } },
+      );
+      if (listRes.ok) {
+        const listRaw = await listRes.json();
+        logError('kapso-onboarding-status', { message: `list_response=${JSON.stringify(listRaw)}`, stack: '' });
+        const items = listRaw?.data || listRaw;
+        const arr   = Array.isArray(items) ? items : [];
+        linkData = arr.find(l => String(l.id) === String(setupLinkId)) || arr[0] || null;
+      }
+    }
+
+    if (!linkData) {
+      logError('kapso-onboarding-status', { message: `setup_link not found customer=${kapsoCustomerId} link=${setupLinkId}`, stack: '' });
+      return res.json({ connected: false, reason: 'not_found' });
+    }
+
+    // Log raw status value so we learn the exact string from the first real case
+    const rawStatus    = linkData.status;
+    const phoneNumberId = linkData.phone_number_id || linkData.phoneNumberId;
+    const wabaId        = linkData.waba_id         || linkData.wabaId;
+
+    logError('kapso-onboarding-status', {
+      message: `status=${JSON.stringify(rawStatus)} phone_number_id=${phoneNumberId} waba_id=${wabaId}`,
+      stack: '',
+    });
+
+    // Accept any status that looks like completion AND has a phone_number_id
+    // We don't hardcode the string — once we see the real value we'll tighten this
+    const looksComplete = phoneNumberId && (
+      String(rawStatus).toLowerCase().includes('complet') ||
+      String(rawStatus).toLowerCase().includes('connect') ||
+      String(rawStatus).toLowerCase().includes('activ')
+    );
+
+    if (looksComplete) {
+      saveWabaCredentials(business.id, {
+        wabaId:        wabaId || null,
+        phoneNumberId: String(phoneNumberId),
+        accessToken:   null,
+        provider:      'kapso',
+      });
+      logError('kapso-onboarding-status', {
+        message: `saved business_id=${business.id} phone_number_id=${phoneNumberId} provider=kapso`,
+        stack: '',
+      });
+      return res.json({ connected: true });
+    }
+
+    res.json({ connected: false, status: rawStatus });
+  } catch (err) {
+    logError('kapso-onboarding-status', err);
     res.status(500).json({ error: err.message });
   }
 });
