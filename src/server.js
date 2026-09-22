@@ -20,7 +20,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, getBusinessByKapsoCustomerId } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -66,7 +66,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json({
   verify: (req, _res, buf) => {
-    if (req.path === '/webhook/kapso') req.rawBody = buf;
+    if (req.path === '/webhook/kapso' || req.path === '/webhook/kapso-platform') req.rawBody = buf;
   },
 }));
 const sessionsDb = new Database(path.join(__dirname, '../data/sessions.db'));
@@ -1119,6 +1119,82 @@ app.post('/webhook/kapso', async (req, res) => {
   }
 });
 
+// --- Kapso platform webhook (onboarding events: phone_number.created) ---
+
+app.post('/webhook/kapso-platform', async (req, res) => {
+  res.status(200).send('OK');
+
+  const rawBody = req.rawBody;
+  const sig     = req.headers['x-webhook-signature'] || '';
+  const secret  = process.env.KAPSO_PLATFORM_WEBHOOK_SECRET;
+
+  logError('kapso-onboarding-webhook', {
+    message: `sig_present=${!!sig} secret_set=${!!secret} raw_len=${rawBody?.length ?? 0} preview=${rawBody?.toString().slice(0, 400) ?? ''}`,
+    stack: '',
+  });
+
+  if (secret) {
+    if (!rawBody) {
+      logError('kapso-onboarding-webhook', { message: 'rawBody missing', stack: '' });
+      return;
+    }
+    const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+    const expBuf   = Buffer.from(expected, 'utf8');
+    const sigBuf   = Buffer.from(sig.length === expected.length ? sig : '', 'utf8');
+    if (sigBuf.length === 0 || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      logError('kapso-onboarding-webhook', { message: 'invalid HMAC — rejected', stack: '' });
+      return;
+    }
+  }
+
+  try {
+    const payload = req.body;
+    logError('kapso-onboarding-webhook', { message: `full_payload=${JSON.stringify(payload)}`, stack: '' });
+
+    const eventType = payload?.event || payload?.type;
+    if (eventType !== 'phone_number.created' && eventType !== 'whatsapp.phone_number.created') return;
+
+    // Defensive extraction — log full payload on first event to verify schema
+    const data             = payload?.data || payload;
+    const phoneNumberId    = data?.phone_number_id || data?.phoneNumberId;
+    const wabaId           = data?.waba_id || data?.wabaId;
+    const extCustomerId    = data?.customer?.external_customer_id
+                          || data?.external_customer_id
+                          || payload?.customer?.external_customer_id;
+
+    logError('kapso-onboarding-webhook', {
+      message: `event=${eventType} phone_number_id=${phoneNumberId} waba_id=${wabaId} ext_customer_id=${extCustomerId}`,
+      stack: '',
+    });
+
+    if (!phoneNumberId || !extCustomerId) {
+      logError('kapso-onboarding-webhook', { message: 'missing phone_number_id or external_customer_id — skipping', stack: '' });
+      return;
+    }
+
+    const businessId = Number(extCustomerId);
+    const business   = getBusinessById(businessId);
+    if (!business) {
+      logError('kapso-onboarding-webhook', { message: `business not found for external_customer_id=${extCustomerId}`, stack: '' });
+      return;
+    }
+
+    saveWabaCredentials(businessId, {
+      wabaId:        wabaId || null,
+      phoneNumberId: String(phoneNumberId),
+      accessToken:   null,
+      provider:      'kapso',
+    });
+
+    logError('kapso-onboarding-webhook', {
+      message: `saved business_id=${businessId} phone_number_id=${phoneNumberId} provider=kapso`,
+      stack: '',
+    });
+  } catch (err) {
+    logError('kapso-onboarding-webhook', err);
+  }
+});
+
 // --- Mercado Pago webhook ---
 
 app.post('/webhook/mercadopago', async (req, res) => {
@@ -1422,6 +1498,70 @@ app.post('/auth/whatsapp/callback', requireAuth, async (req, res) => {
     res.json({ ok: true, waba_id, phone_number_id, subscribed: subRes.ok });
   } catch (err) {
     console.error('[whatsapp-callback]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Kapso onboarding — connect WhatsApp in one click
+// POST /api/whatsapp/connect
+app.post('/api/whatsapp/connect', requireAuth, async (req, res) => {
+  const business = getBusinessByUserId(req.session.userId);
+  if (!business) return res.status(400).json({ error: 'Negocio no encontrado' });
+
+  const apiKey = process.env.KAPSO_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'KAPSO_API_KEY no configurada' });
+
+  try {
+    let kapsoCustomerId = business.kapso_customer_id;
+
+    if (!kapsoCustomerId) {
+      const createRes = await fetch('https://api.kapso.ai/platform/v1/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+        body: JSON.stringify({ name: business.name, external_customer_id: String(business.id) }),
+      });
+      const createData = await createRes.json();
+      if (!createRes.ok) {
+        logError('kapso-onboarding-created', { message: `HTTP ${createRes.status}: ${JSON.stringify(createData)}`, stack: '' });
+        return res.status(502).json({ error: 'No se pudo crear el cliente en Kapso', detail: createData });
+      }
+      kapsoCustomerId = createData?.data?.id || createData?.id;
+      if (!kapsoCustomerId) {
+        logError('kapso-onboarding-created', { message: `id missing in response: ${JSON.stringify(createData)}`, stack: '' });
+        return res.status(502).json({ error: 'Kapso no devolvió un id de cliente', detail: createData });
+      }
+      setKapsoCustomerId(business.id, kapsoCustomerId);
+      logError('kapso-onboarding-created', { message: `business_id=${business.id} kapso_customer_id=${kapsoCustomerId}`, stack: '' });
+    }
+
+    const linkRes = await fetch(`https://api.kapso.ai/platform/v1/customers/${kapsoCustomerId}/setup_links`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+      body: JSON.stringify({
+        language: 'es',
+        allowed_connection_types: ['coexistence'],
+        meta_billing_mode: 'owner_managed',
+        success_redirect_url: 'https://daxos.lat/dashboard?wa=ok',
+        failure_redirect_url: 'https://daxos.lat/dashboard?wa=error',
+      }),
+    });
+    const linkData = await linkRes.json();
+    if (!linkRes.ok) {
+      logError('kapso-onboarding-link', { message: `HTTP ${linkRes.status}: ${JSON.stringify(linkData)}`, stack: '' });
+      return res.status(502).json({ error: 'No se pudo generar el link de configuración', detail: linkData });
+    }
+
+    const url = linkData?.data?.url || linkData?.url;
+    if (!url) {
+      logError('kapso-onboarding-link', { message: `url missing in response: ${JSON.stringify(linkData)}`, stack: '' });
+      return res.status(502).json({ error: 'Kapso no devolvió una URL', detail: linkData });
+    }
+
+    logError('kapso-onboarding-link', { message: `business_id=${business.id} kapso_customer_id=${kapsoCustomerId} url_ok=true`, stack: '' });
+    res.json({ url });
+  } catch (err) {
+    logError('kapso-onboarding-link', err);
     res.status(500).json({ error: err.message });
   }
 });

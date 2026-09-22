@@ -161,6 +161,7 @@ if (!bizCols.includes('wa_provider'))             db.exec("ALTER TABLE businesse
 if (!bizCols.includes('human_resume_timeout'))    db.exec('ALTER TABLE businesses ADD COLUMN human_resume_timeout INTEGER NOT NULL DEFAULT 7200');
 if (!bizCols.includes('business_hours_start'))    db.exec('ALTER TABLE businesses ADD COLUMN business_hours_start TEXT');
 if (!bizCols.includes('business_hours_end'))      db.exec('ALTER TABLE businesses ADD COLUMN business_hours_end TEXT');
+if (!bizCols.includes('kapso_customer_id'))       db.exec('ALTER TABLE businesses ADD COLUMN kapso_customer_id TEXT');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS pending_bookings (
@@ -871,10 +872,20 @@ module.exports = {
   getRecentErrors,
   checkpoint,
   closeDb,
+  setKapsoCustomerId,
+  getBusinessByKapsoCustomerId,
 };
 
 function setWeeklySummaryEnabled(businessId, enabled) {
   db.prepare('UPDATE businesses SET weekly_summary_enabled = ? WHERE id = ?').run(enabled ? 1 : 0, businessId);
+}
+
+function setKapsoCustomerId(businessId, kapsoCustomerId) {
+  db.prepare('UPDATE businesses SET kapso_customer_id = ? WHERE id = ?').run(kapsoCustomerId, businessId);
+}
+
+function getBusinessByKapsoCustomerId(kapsoCustomerId) {
+  return db.prepare('SELECT * FROM businesses WHERE kapso_customer_id = ?').get(kapsoCustomerId);
 }
 
 function getWeeklyStats(businessId) {

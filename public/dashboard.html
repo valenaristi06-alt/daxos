@@ -1473,12 +1473,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       }
     });
 
-    document.getElementById('btn-wa-connect').addEventListener('click', function () {
-      if (!window.FB) {
-        document.getElementById('wa-connect-error').textContent = 'El SDK de Meta no cargó todavía. Recargá la página e intentá de nuevo.';
-        document.getElementById('wa-connect-error').style.display = 'block';
-        return;
-      }
+    document.getElementById('btn-wa-connect').addEventListener('click', async function () {
       if (!currentBusiness?.id) {
         document.getElementById('wa-connect-error').textContent = 'Guardá tu negocio antes de conectar WhatsApp.';
         document.getElementById('wa-connect-error').style.display = 'block';
@@ -1488,57 +1483,35 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       const btn = this;
       btn.disabled = true;
       document.getElementById('wa-connect-error').style.display = 'none';
-      pendingEsCode = null;
-      waStep('Abriendo ventana de Meta…');
+      waStep('Generando enlace de conexión…');
 
-      // Fallback: re-habilita el botón si WA_EMBEDDED_SIGNUP nunca llega
-      const fallbackTimer = setTimeout(() => {
-        if (btn.disabled) {
-          btn.disabled = false;
-          pendingEsCode = null;
-          waStep('Tiempo agotado sin respuesta de Meta. Intentá de nuevo.');
-        }
-      }, 60000);
-
-      // TODO: reemplazar metaConfig.whatsappConfigId con el config_id real cuando
-      // Meta apruebe la Verificación de acceso en Meta Business Manager
-      const configId = metaConfig.whatsappConfigId || '2030575817573287';
-
-      const fbLoginParams = {
-        config_id: configId,
-        response_type: 'code',
-        override_default_response_type: true,
-        extras: {
-          setup: {},
-          featureType: '',
-          sessionInfoVersion: '3',
-        },
-      };
-      console.log('[WA-signup] FB.init appId:', '1025010310140011');
-      console.log('[WA-signup] metaConfig from server:', JSON.stringify(metaConfig));
-      console.log('[WA-signup] configId resolved:', configId);
-      console.log('[WA-signup] FB.login params:', JSON.stringify(fbLoginParams));
-      console.log('[WA-signup] FB SDK loaded:', typeof FB !== "undefined");
-      console.log('[WA-signup] FB.getLoginStatus callable:', typeof FB?.getLoginStatus);
-
-      FB.login(function (response) {
-        console.log('[WA-signup] FB.login response:', JSON.stringify(response));
-        if (response.authResponse?.code) {
-          pendingEsCode = response.authResponse.code;
-          waStep('Login OK — esperando datos de WhatsApp de Meta…');
-        } else {
-          clearTimeout(fallbackTimer);
-          btn.disabled = false;
-          waStep('');
-          if (!response.authResponse) {
-            document.getElementById('wa-connect-error').textContent = 'Inicio de sesión cancelado o ventana cerrada.';
-            document.getElementById('wa-connect-error').style.display = 'block';
-          }
-        }
-      }, {
-        ...fbLoginParams,
-      });
+      try {
+        const r = await fetch('/api/whatsapp/connect', { method: 'POST' });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'Error desconocido');
+        waStep('Redirigiendo a Kapso…');
+        window.location.href = data.url;
+      } catch (err) {
+        document.getElementById('wa-connect-error').textContent = `Error al iniciar la conexión: ${err.message}`;
+        document.getElementById('wa-connect-error').style.display = 'block';
+        waStep('');
+        btn.disabled = false;
+      }
     });
+
+    // Mostrar resultado de redirección Kapso (?wa=ok / ?wa=error)
+    (function () {
+      const params = new URLSearchParams(window.location.search);
+      const wa = params.get('wa');
+      if (wa === 'ok') {
+        toast('WhatsApp conectado correctamente ✓', 'ok');
+        history.replaceState(null, '', '/dashboard');
+      } else if (wa === 'error') {
+        document.getElementById('wa-connect-error').textContent = 'Hubo un error al conectar tu WhatsApp con Kapso. Intentá de nuevo.';
+        document.getElementById('wa-connect-error').style.display = 'block';
+        history.replaceState(null, '', '/dashboard');
+      }
+    })();
 
   </script>
 
