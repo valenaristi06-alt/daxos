@@ -1519,7 +1519,7 @@ app.post('/api/whatsapp/connect', requireAuth, async (req, res) => {
       const createRes = await fetch('https://api.kapso.ai/platform/v1/customers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
-        body: JSON.stringify({ name: business.name, external_customer_id: String(business.id) }),
+        body: JSON.stringify({ customer: { name: business.name, external_customer_id: String(business.id) } }),
       });
       const createData = await createRes.json();
       if (!createRes.ok) {
