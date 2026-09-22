@@ -1542,7 +1542,7 @@ app.post('/api/whatsapp/connect', requireAuth, async (req, res) => {
         setup_link: {
           language: 'es',
           allowed_connection_types: ['coexistence'],
-          meta_billing_mode: 'owner_managed',
+          meta_billing_mode: 'customer_managed',
           success_redirect_url: 'https://daxos.lat/dashboard?wa=ok',
           failure_redirect_url: 'https://daxos.lat/dashboard?wa=error',
         },
