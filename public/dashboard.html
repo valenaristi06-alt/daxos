@@ -121,10 +121,33 @@
             <span style="color:#22c55e; font-size:13px;">✓ Conectado</span>
             <span id="wa-connected-number" style="color:#888; font-size:13px;"></span>
           </div>
-          <button id="btn-wa-connect" type="button" class="btn-wa-connect" style="margin-top:8px;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex-shrink:0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.855L.057 23.886a.5.5 0 0 0 .608.617l6.224-1.633A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.686-.528-5.208-1.44l-.374-.22-3.894 1.022 1.001-3.804-.242-.392A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
-            Conectar WhatsApp Business
-          </button>
+          <div style="display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap;">
+            <button id="btn-wa-connect" type="button" class="btn-wa-connect">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex-shrink:0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.855L.057 23.886a.5.5 0 0 0 .608.617l6.224-1.633A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.686-.528-5.208-1.44l-.374-.22-3.894 1.022 1.001-3.804-.242-.392A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+              Conectar WhatsApp Business
+            </button>
+            <button id="btn-wa-help" type="button" style="font-size:12px; padding:5px 10px; border:1px solid #2e2e2e; border-radius:4px; background:transparent; color:#888; cursor:pointer; white-space:nowrap; transition:color .15s,border-color .15s;" onmouseover="this.style.color='#ccc';this.style.borderColor='#555'" onmouseout="this.style.color='#888';this.style.borderColor='#2e2e2e'">? Ver paso a paso</button>
+          </div>
+
+          <div id="wa-help-panel" style="display:none; margin-top:14px; padding:16px 18px; background:#111; border:1px solid #222; border-radius:6px; font-size:13px; color:#aaa; line-height:1.65;">
+            <strong style="color:#e5e0d8; font-size:13px; display:block; margin-bottom:10px;">Cómo conectar tu WhatsApp Business</strong>
+            <ol style="margin:0; padding-left:18px; display:flex; flex-direction:column; gap:8px;">
+              <li><strong style="color:#d4cfc8;">Antes de empezar:</strong> tené a mano tu celular con la app de <strong style="color:#d4cfc8;">WhatsApp Business</strong> instalada y con el número que vas a conectar. No hace falta cerrar la app ni borrar nada — vas a seguir usándola normalmente.</li>
+              <li>Tocá <strong style="color:#d4cfc8;">"Conectar WhatsApp Business"</strong>. Se va a abrir una ventana nueva.</li>
+              <li>Iniciá sesión con tu cuenta de <strong style="color:#d4cfc8;">Facebook</strong> (la que uses para tu negocio).</li>
+              <li>Cuando te pregunte cómo querés conectar, elegí <strong style="color:#d4cfc8;">"Conectar la app de WhatsApp Business"</strong> — no "número dedicado" ni "número nuevo". Así conservás tu WhatsApp de siempre.</li>
+              <li>Ingresá tu número de teléfono con el código de país (<strong style="color:#d4cfc8;">Uruguay: +598</strong>, sin el 0 inicial) y confirmá.</li>
+              <li>Te va a llegar un mensaje en tu celular con un <strong style="color:#d4cfc8;">código QR</strong>. Tocalo.</li>
+              <li>Escaneá ese código QR con la cámara desde tu celular, apuntando a la pantalla donde apareció.</li>
+              <li>Esperá unos segundos. Vas a ver un mensaje de "conectado" y podés cerrar esa ventana.</li>
+              <li>Volvé a esta pantalla de Daxos: en unos segundos debería aparecer <strong style="color:#22c55e;">WhatsApp conectado ✓</strong>. Si no aparece, esperá un minuto y recargá la página.</li>
+            </ol>
+            <p style="margin:14px 0 4px; padding-top:12px; border-top:1px solid #222; color:#888;">
+              <strong style="color:#d4cfc8;">Importante:</strong> para mantener la conexión activa, mandá al menos un mensaje desde la app de WhatsApp Business cada 14 días.<br><br>
+              Si en algún paso aparece un error, tocá <strong style="color:#d4cfc8;">"Reportar error a Kapso"</strong> en esa misma pantalla y avisanos — no vas a poder resolverlo solo si es un bloqueo de Meta, y te ayudamos desde acá.
+            </p>
+          </div>
+
           <p id="wa-connect-error" style="display:none; color:#ef4444; font-size:12px; margin-top:6px;"></p>
           <p id="wa-step" style="display:none; color:#888; font-size:12px; margin-top:4px;"></p>
         </div>
@@ -1553,6 +1576,13 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         }
       }, INTERVAL_MS);
     })();
+
+    document.getElementById('btn-wa-help').addEventListener('click', function () {
+      const panel = document.getElementById('wa-help-panel');
+      const open  = panel.style.display !== 'none';
+      panel.style.display = open ? 'none' : 'block';
+      this.textContent = open ? '? Ver paso a paso' : '✕ Cerrar';
+    });
 
   </script>
 
