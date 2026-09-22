@@ -76,10 +76,11 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'dev-secret-change-in-prod',
   resave: false,
   saveUninitialized: false,
+  rolling: true,
   cookie: {
     httpOnly: true,
     sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 días, se renueva en cada request
   },
 }));
 app.get('/', (req, res) => {
