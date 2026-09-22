@@ -1539,11 +1539,13 @@ app.post('/api/whatsapp/connect', requireAuth, async (req, res) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
       body: JSON.stringify({
-        language: 'es',
-        allowed_connection_types: ['coexistence'],
-        meta_billing_mode: 'owner_managed',
-        success_redirect_url: 'https://daxos.lat/dashboard?wa=ok',
-        failure_redirect_url: 'https://daxos.lat/dashboard?wa=error',
+        setup_link: {
+          language: 'es',
+          allowed_connection_types: ['coexistence'],
+          meta_billing_mode: 'owner_managed',
+          success_redirect_url: 'https://daxos.lat/dashboard?wa=ok',
+          failure_redirect_url: 'https://daxos.lat/dashboard?wa=error',
+        },
       }),
     });
     const linkData = await linkRes.json();
