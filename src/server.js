@@ -20,7 +20,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, addBusinessImage, getBusinessImages, deleteBusinessImage } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, addBusinessImage, getBusinessImages, deleteBusinessImage, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -476,6 +476,49 @@ app.patch('/api/conversations/:id/label', requireAuth, (req, res) => {
 
   setConversationLabel(conv.id, label || null);
   res.json({ ok: true });
+});
+
+// --- Tags ---
+
+app.get('/api/tags', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+  res.json(getTagsByBusiness(user.business_id));
+});
+
+app.post('/api/tags', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+  const { name, color } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: 'name requerido.' });
+  const ALLOWED_COLORS = ['#3b82f6','#eab308','#22c55e','#6b7280','#f97316','#ef4444','#a855f7','#06b6d4'];
+  if (!ALLOWED_COLORS.includes(color)) return res.status(400).json({ error: 'Color no permitido.' });
+  try {
+    const tag = createTag(user.business_id, name.trim(), color);
+    res.json(tag);
+  } catch (e) {
+    if (e.message?.includes('UNIQUE')) return res.status(409).json({ error: 'Ya existe una etiqueta con ese nombre.' });
+    throw e;
+  }
+});
+
+app.delete('/api/tags/:id', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+  const result = deleteTag(user.business_id, Number(req.params.id));
+  if (result === false) return res.status(404).json({ error: 'Etiqueta no encontrada.' });
+  if (result === 'default') return res.status(403).json({ error: 'Las etiquetas predeterminadas no se pueden eliminar.' });
+  res.json({ ok: true });
+});
+
+app.put('/api/conversations/:id/tags', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+  const conv = getConversationById(parseInt(req.params.id));
+  if (!conv || conv.business_id !== user.business_id) return res.status(404).json({ error: 'Conversación no encontrada.' });
+  const tagIds = Array.isArray(req.body.tagIds) ? req.body.tagIds.map(Number) : [];
+  setConversationTags(conv.id, tagIds);
+  res.json({ ok: true, tags: getConversationTags(conv.id) });
 });
 
 app.patch('/api/conversations/:id/resume', requireAuth, (req, res) => {

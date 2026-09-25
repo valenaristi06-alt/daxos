@@ -175,6 +175,39 @@ db.exec(`
 `);
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS tags (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    business_id INTEGER NOT NULL REFERENCES businesses(id),
+    name        TEXT NOT NULL,
+    color       TEXT NOT NULL DEFAULT '#6b7280',
+    is_default  INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(business_id, name)
+  );
+  CREATE TABLE IF NOT EXISTS conversation_tags (
+    conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    tag_id          INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (conversation_id, tag_id)
+  );
+`);
+
+const DEFAULT_TAGS = [
+  { name: 'Nuevo',            color: '#3b82f6' },
+  { name: 'En conversación',  color: '#eab308' },
+  { name: 'Compró',           color: '#22c55e' },
+  { name: 'Perdido',          color: '#6b7280' },
+];
+
+function ensureDefaultTags(businessId) {
+  const stmt = db.prepare(
+    'INSERT OR IGNORE INTO tags (business_id, name, color, is_default) VALUES (?, ?, ?, 1)'
+  );
+  for (const t of DEFAULT_TAGS) stmt.run(businessId, t.name, t.color);
+}
+
+// Seed existing businesses on startup
+db.prepare('SELECT id FROM businesses').all().forEach(b => ensureDefaultTags(b.id));
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS pending_bookings (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     business_id     INTEGER NOT NULL REFERENCES businesses(id),
@@ -397,6 +430,7 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
     INSERT INTO businesses (name, sales_examples, survey_answers, business_context, website_url, response_mode, response_delay, pricing_info)
     VALUES (@name, @sales_examples, @survey_answers, @business_context, @website_url, @response_mode, @response_delay, @pricing_info)
   `).run(serialized);
+  ensureDefaultTags(result.lastInsertRowid);
   return getBusinessById(result.lastInsertRowid);
 }
 
@@ -438,9 +472,44 @@ function getUserByBusinessId(businessId) {
 const stmtGetConversationsByBusiness = db.prepare(`
   SELECT * FROM conversations WHERE business_id = ? ORDER BY created_at DESC
 `);
+const stmtGetTagsForConversation = db.prepare(`
+  SELECT t.id, t.name, t.color FROM tags t
+  JOIN conversation_tags ct ON ct.tag_id = t.id
+  WHERE ct.conversation_id = ?
+`);
 
 function getConversationsByBusinessId(businessId) {
-  return stmtGetConversationsByBusiness.all(businessId);
+  const convs = stmtGetConversationsByBusiness.all(businessId);
+  return convs.map(c => ({ ...c, tags: stmtGetTagsForConversation.all(c.id) }));
+}
+
+function getTagsByBusiness(businessId) {
+  return db.prepare('SELECT * FROM tags WHERE business_id = ? ORDER BY is_default DESC, id ASC').all(businessId);
+}
+
+function createTag(businessId, name, color) {
+  const result = db.prepare(
+    'INSERT INTO tags (business_id, name, color, is_default) VALUES (?, ?, ?, 0)'
+  ).run(businessId, name, color);
+  return { id: result.lastInsertRowid, business_id: businessId, name, color, is_default: 0 };
+}
+
+function deleteTag(businessId, tagId) {
+  const tag = db.prepare('SELECT * FROM tags WHERE id = ? AND business_id = ?').get(tagId, businessId);
+  if (!tag) return false;
+  if (tag.is_default) return 'default';
+  db.prepare('DELETE FROM tags WHERE id = ?').run(tagId);
+  return true;
+}
+
+function setConversationTags(conversationId, tagIds) {
+  db.prepare('DELETE FROM conversation_tags WHERE conversation_id = ?').run(conversationId);
+  const ins = db.prepare('INSERT OR IGNORE INTO conversation_tags (conversation_id, tag_id) VALUES (?, ?)');
+  for (const tid of tagIds) ins.run(conversationId, tid);
+}
+
+function getConversationTags(conversationId) {
+  return stmtGetTagsForConversation.all(conversationId);
 }
 
 const stmtGetConversationById = db.prepare('SELECT * FROM conversations WHERE id = ?');
@@ -889,6 +958,12 @@ module.exports = {
   addBusinessImage,
   getBusinessImages,
   deleteBusinessImage,
+  getTagsByBusiness,
+  createTag,
+  deleteTag,
+  setConversationTags,
+  getConversationTags,
+  ensureDefaultTags,
 };
 
 function setWeeklySummaryEnabled(businessId, enabled) {
