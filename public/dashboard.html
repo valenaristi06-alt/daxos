@@ -974,12 +974,14 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         ]);
 
         if (bizRes.ok) {
+          const b = await bizRes.json();
+          currentBusiness = b;
           markClean();
           showSaveBanner('ok');
           setTimeout(async () => {
             const fresh = await fetch('/api/business');
-            const b = await fresh.json();
-            if (b?.style_profile) renderStyleProfile(b.style_profile);
+            const freshB = await fresh.json();
+            if (freshB?.style_profile) renderStyleProfile(freshB.style_profile);
           }, 4000);
         } else {
           const data = await bizRes.json();
