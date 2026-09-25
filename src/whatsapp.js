@@ -92,6 +92,24 @@ async function sendWhatsAppDocument(to, mediaId, filename, creds) {
   return data;
 }
 
+async function sendWhatsAppImage(to, mediaId, caption, creds) {
+  const { messagesUrl, jsonHeaders } = getApiConfig(creds);
+  const res = await fetch(messagesUrl(creds.phoneNumberId), {
+    method: 'POST',
+    headers: jsonHeaders,
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to,
+      type: 'image',
+      image: { id: mediaId, ...(caption ? { caption } : {}) },
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`WhatsApp API error ${res.status}: ${JSON.stringify(data)}`);
+  return data;
+}
+
 async function markAsRead(messageId, creds) {
   const { messagesUrl, jsonHeaders } = getApiConfig(creds);
   await fetch(messagesUrl(creds.phoneNumberId), {
@@ -120,4 +138,4 @@ async function sendTypingIndicator(to, creds) {
   }).catch(() => {});
 }
 
-module.exports = { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, markAsRead, sendTypingIndicator };
+module.exports = { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator };

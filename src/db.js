@@ -165,6 +165,16 @@ if (!bizCols.includes('kapso_customer_id'))       db.exec('ALTER TABLE businesse
 if (!bizCols.includes('kapso_setup_link_id'))     db.exec('ALTER TABLE businesses ADD COLUMN kapso_setup_link_id TEXT');
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS business_images (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    business_id INTEGER NOT NULL REFERENCES businesses(id),
+    label       TEXT NOT NULL,
+    file_path   TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS pending_bookings (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     business_id     INTEGER NOT NULL REFERENCES businesses(id),
@@ -876,10 +886,34 @@ module.exports = {
   setKapsoCustomerId,
   setKapsoSetupLinkId,
   getBusinessByKapsoCustomerId,
+  addBusinessImage,
+  getBusinessImages,
+  deleteBusinessImage,
 };
 
 function setWeeklySummaryEnabled(businessId, enabled) {
   db.prepare('UPDATE businesses SET weekly_summary_enabled = ? WHERE id = ?').run(enabled ? 1 : 0, businessId);
+}
+
+function addBusinessImage(businessId, label, filePath) {
+  return db.prepare(
+    'INSERT INTO business_images (business_id, label, file_path) VALUES (?, ?, ?)'
+  ).run(businessId, label, filePath);
+}
+
+function getBusinessImages(businessId) {
+  return db.prepare(
+    'SELECT id, label, file_path, created_at FROM business_images WHERE business_id = ? ORDER BY created_at ASC'
+  ).all(businessId);
+}
+
+function deleteBusinessImage(businessId, imageId) {
+  const row = db.prepare(
+    'SELECT file_path FROM business_images WHERE id = ? AND business_id = ?'
+  ).get(imageId, businessId);
+  if (!row) return null;
+  db.prepare('DELETE FROM business_images WHERE id = ? AND business_id = ?').run(imageId, businessId);
+  return row.file_path;
 }
 
 function setKapsoCustomerId(businessId, kapsoCustomerId) {

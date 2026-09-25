@@ -199,6 +199,29 @@ Turno con seña: $200 (se descuenta del total)"></textarea>
           </div>
         </div>
 
+        <div class="field" style="margin-top:32px;">
+          <label class="field-label">
+            Imágenes para enviar
+            <span class="tag-optional">Opcional</span>
+          </label>
+          <span class="field-hint">Subí fotos del local, productos, o personas del equipo. Tu asistente las puede enviar cuando el cliente las pida o cuando ayude a la venta. Máximo 20 imágenes.</span>
+
+          <div id="images-list" style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px;"></div>
+
+          <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-top:4px;">
+            <div style="display:flex; flex-direction:column; gap:4px; flex:1; min-width:160px;">
+              <input id="img-label-input" type="text" placeholder="Ej: Foto del local" maxlength="80" style="font-size:13px; padding:6px 8px; background:#1a1a1a; border:1px solid #2a2a2a; border-radius:4px; color:#f0ede8;" />
+            </div>
+            <label id="img-upload-label" style="display:inline-flex; align-items:center; gap:6px; font-size:13px; padding:6px 12px; border:1px solid #2e2e2e; border-radius:4px; background:transparent; color:#ccc; cursor:pointer; white-space:nowrap;">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1v10M4 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+              Subir imagen
+              <input type="file" id="img-file-input" accept="image/jpeg,image/png" style="display:none">
+            </label>
+          </div>
+          <p id="img-upload-error" style="display:none; color:#ef4444; font-size:12px; margin-top:6px;"></p>
+          <p id="img-upload-ok" style="display:none; color:#22c55e; font-size:12px; margin-top:4px;"></p>
+        </div>
+
         <div class="field" style="margin-top: 44px;">
           <label class="field-label" for="owner_phone">
             Tu número de WhatsApp
@@ -1379,6 +1402,85 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         }
       } catch {
         toast('Error de conexión', 'err');
+      }
+    });
+
+    // ── Business images ──
+
+    function renderImagesList(images) {
+      const list = document.getElementById('images-list');
+      list.innerHTML = '';
+      images.forEach(img => {
+        const filename = img.file_path.split('/').pop();
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:6px 8px;background:#111;border:1px solid #222;border-radius:4px;';
+        row.innerHTML = `
+          <img src="/uploads/${filename}" alt="${img.label}" style="width:44px;height:44px;object-fit:cover;border-radius:3px;flex-shrink:0;background:#1a1a1a;">
+          <span style="flex:1;font-size:13px;color:#d4cfc8;">${img.label}</span>
+          <button data-id="${img.id}" style="font-size:11px;padding:3px 8px;border:1px solid #3a3a3a;border-radius:3px;background:transparent;color:#888;cursor:pointer;" class="img-delete-btn">Eliminar</button>
+        `;
+        list.appendChild(row);
+      });
+      list.querySelectorAll('.img-delete-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.dataset.id;
+          try {
+            const res = await fetch(`/api/business/images/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+              await loadImages();
+              toast('Imagen eliminada', 'ok');
+            } else {
+              const d = await res.json().catch(() => ({}));
+              toast(d.error || 'Error al eliminar', 'err');
+            }
+          } catch { toast('Error de conexión', 'err'); }
+        });
+      });
+    }
+
+    async function loadImages() {
+      try {
+        const res = await fetch('/api/business/images');
+        if (res.ok) renderImagesList(await res.json());
+      } catch {}
+    }
+
+    loadImages();
+
+    document.getElementById('img-file-input').addEventListener('change', async function () {
+      const file  = this.files[0];
+      const label = document.getElementById('img-label-input').value.trim();
+      const errEl = document.getElementById('img-upload-error');
+      const okEl  = document.getElementById('img-upload-ok');
+      errEl.style.display = 'none';
+      okEl.style.display  = 'none';
+
+      if (!file) return;
+      if (!label) {
+        errEl.textContent = 'Escribí un nombre para la imagen antes de subirla.';
+        errEl.style.display = 'block';
+        this.value = '';
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('label', label);
+
+      try {
+        const res = await fetch('/api/business/images', { method: 'POST', body: formData });
+        const d   = await res.json();
+        if (!res.ok) throw new Error(d.error || 'Error desconocido');
+        document.getElementById('img-label-input').value = '';
+        this.value = '';
+        await loadImages();
+        okEl.textContent = `"${label}" subida correctamente.`;
+        okEl.style.display = 'block';
+        setTimeout(() => { okEl.style.display = 'none'; }, 3000);
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.style.display = 'block';
+        this.value = '';
       }
     });
 

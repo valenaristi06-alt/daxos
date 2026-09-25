@@ -20,7 +20,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, addBusinessImage, getBusinessImages, deleteBusinessImage } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -54,8 +54,17 @@ const documentUpload = multer({
   },
 });
 
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!['image/jpeg', 'image/png'].includes(file.mimetype)) return cb(new Error('Solo se aceptan imágenes JPG o PNG'));
+    cb(null, true);
+  },
+});
+
 const fs = require('fs');
-const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, markAsRead, sendTypingIndicator } = require('./whatsapp');
+const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator } = require('./whatsapp');
 const { generateAudioBuffer } = require('./elevenlabs');
 const { convertToOgg } = require('./audio');
 
@@ -88,6 +97,7 @@ app.get('/', (req, res) => {
 });
 
 app.use(express.static(path.join(__dirname, '../public')));
+app.use('/uploads', express.static(path.join(__dirname, '../data/uploads')));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
@@ -550,6 +560,49 @@ app.delete('/api/business/document', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// --- Business images ---
+
+const IMAGE_LIMIT = 20;
+
+app.get('/api/business/images', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+  res.json(getBusinessImages(user.business_id));
+});
+
+app.post('/api/business/images', requireAuth, imageUpload.single('image'), async (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+  if (!req.file) return res.status(400).json({ error: 'Archivo requerido.' });
+
+  const label = (req.body.label || '').trim();
+  if (!label) return res.status(400).json({ error: 'El label es requerido.' });
+
+  const existing = getBusinessImages(user.business_id);
+  if (existing.length >= IMAGE_LIMIT) {
+    return res.status(400).json({ error: `Límite de ${IMAGE_LIMIT} imágenes alcanzado.` });
+  }
+
+  const ext      = req.file.mimetype === 'image/png' ? 'png' : 'jpg';
+  const filename = `img-${user.business_id}-${Date.now()}.${ext}`;
+  const filePath = path.join(__dirname, '../data/uploads', filename);
+  fs.writeFileSync(filePath, req.file.buffer);
+
+  const result = addBusinessImage(user.business_id, label, filePath);
+  res.json({ id: result.lastInsertRowid, label, file_path: filePath, filename });
+});
+
+app.delete('/api/business/images/:id', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+
+  const filePath = deleteBusinessImage(user.business_id, Number(req.params.id));
+  if (!filePath) return res.status(404).json({ error: 'Imagen no encontrada.' });
+
+  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  res.json({ ok: true });
+});
+
 app.post('/api/business/preview-chat', (req, res, next) => {
   console.log('[preview-chat] HIT — sessionId:', req.session?.id, '| userId:', req.session?.userId ?? 'NONE');
 
@@ -823,7 +876,8 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   const delayMs = (business.response_delay ?? 5) * 1000;
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const currentBookingState = business.booking_enabled ? getBookingState(conversation.id) : null;
-  const runtimeCtx = { now: getMvdDate(), needsHuman: !!conversation.needs_human };
+  const businessImages = getBusinessImages(business.id);
+  const runtimeCtx = { now: getMvdDate(), needsHuman: !!conversation.needs_human, images: businessImages };
   logError('webhook-claude-call', {
     message: `business_id=${business.id} customer=${customerPhone} text=${text.slice(0, 100)}`,
     stack: '',
@@ -853,6 +907,24 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   if (reply.startsWith('[SEND_DOC]')) {
     sendDoc = true;
     reply = reply.replace(/^\[SEND_DOC\]\n?/, '');
+  }
+
+  let imageToSend = null;
+  const imageMatch = reply.match(/\[ENVIAR_IMAGEN:\s*(.+?)\]/);
+  if (imageMatch) {
+    const requestedLabel = imageMatch[1].trim();
+    const found = businessImages.find(
+      img => img.label.toLowerCase() === requestedLabel.toLowerCase()
+    );
+    if (found) {
+      imageToSend = found;
+    } else {
+      logError('image-send-notfound', {
+        message: `business_id=${business.id} requested="${requestedLabel}" available=${JSON.stringify(businessImages.map(i => i.label))}`,
+        stack: '',
+      });
+    }
+    reply = reply.replace(/\[ENVIAR_IMAGEN:\s*.+?\]\n?/g, '').trim();
   }
 
   // Booking state machine — parse tags, update state, strip tags from reply
@@ -936,6 +1008,18 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
       await sendWhatsAppDocument(customerPhone, docMediaId, business.document_name, waCredentials);
     } catch (docErr) {
       console.error('[doc-send] failed:', docErr.message);
+    }
+  }
+
+  if (imageToSend && fs.existsSync(imageToSend.file_path)) {
+    try {
+      const imgBuffer  = fs.readFileSync(imageToSend.file_path);
+      const mimeType   = imageToSend.file_path.endsWith('.png') ? 'image/png' : 'image/jpeg';
+      const imgMediaId = await uploadMedia(imgBuffer, path.basename(imageToSend.file_path), mimeType, waCredentials);
+      await sendWhatsAppImage(customerPhone, imgMediaId, null, waCredentials);
+      logError('image-send-ok', { message: `business_id=${business.id} label="${imageToSend.label}"`, stack: '' });
+    } catch (imgErr) {
+      logError('image-send-error', { message: imgErr.message, stack: imgErr.stack || '' });
     }
   }
 
