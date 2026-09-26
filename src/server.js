@@ -20,7 +20,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, addBusinessImage, getBusinessImages, deleteBusinessImage, setSalesScript, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -65,6 +65,7 @@ const imageUpload = multer({
 
 const SCRIPT_MIMES = [
   'text/plain',
+  'text/markdown',
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/msword',
@@ -75,12 +76,33 @@ const scriptUpload = multer({
   fileFilter: (req, file, cb) => {
     const ok = SCRIPT_MIMES.includes(file.mimetype) ||
                file.originalname.endsWith('.txt') ||
+               file.originalname.endsWith('.md') ||
                file.originalname.endsWith('.pdf') ||
                file.originalname.endsWith('.docx');
-    if (!ok) return cb(new Error('Solo se aceptan archivos .txt, .pdf o .docx'));
+    if (!ok) return cb(new Error('Solo se aceptan archivos .txt, .md, .pdf o .docx'));
     cb(null, true);
   },
 });
+
+async function extractTextFromFile(buffer, mimetype, originalname) {
+  const mime = mimetype;
+  const name = originalname.toLowerCase();
+  if (mime === 'application/pdf' || name.endsWith('.pdf')) {
+    const pdfParse = require('pdf-parse');
+    const result = await pdfParse(buffer);
+    return result.text;
+  }
+  if (
+    mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    mime === 'application/msword' ||
+    name.endsWith('.docx')
+  ) {
+    const mammoth = require('mammoth');
+    const result = await mammoth.extractRawText({ buffer });
+    return result.value;
+  }
+  return buffer.toString('utf8');
+}
 
 const fs = require('fs');
 const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator } = require('./whatsapp');
@@ -665,46 +687,51 @@ app.delete('/api/business/images/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/business/sales-script', requireAuth, scriptUpload.single('script'), async (req, res) => {
+app.get('/api/business/documents', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+  const docs = getBusinessDocuments(user.business_id);
+  const total = docs.reduce((s, d) => s + d.charCount, 0);
+  res.json({ docs, totalChars: total, capChars: 12000 });
+});
+
+app.post('/api/business/documents', requireAuth, scriptUpload.single('doc'), async (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   if (!req.file) return res.status(400).json({ error: 'Sin archivo.' });
 
-  let text = '';
-  const mime = req.file.mimetype;
-  const name = req.file.originalname.toLowerCase();
+  const docName = (req.body.name || '').trim();
+  if (!docName) return res.status(400).json({ error: 'El nombre del documento es requerido.' });
 
+  let rawText = '';
   try {
-    if (mime === 'application/pdf' || name.endsWith('.pdf')) {
-      const pdfParse = require('pdf-parse');
-      const result = await pdfParse(req.file.buffer);
-      text = result.text;
-    } else if (
-      mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-      mime === 'application/msword' ||
-      name.endsWith('.docx')
-    ) {
-      const mammoth = require('mammoth');
-      const result = await mammoth.extractRawText({ buffer: req.file.buffer });
-      text = result.value;
-    } else {
-      text = req.file.buffer.toString('utf8');
-    }
+    rawText = await extractTextFromFile(req.file.buffer, req.file.mimetype, req.file.originalname);
   } catch (err) {
-    console.error('[sales-script] extract error:', err.message);
+    console.error('[documents] extract error:', err.message);
     return res.status(422).json({ error: 'No se pudo leer el archivo.' });
   }
 
-  const SCRIPT_LIMIT = 6000;
-  const trimmed = text.trim().slice(0, SCRIPT_LIMIT);
-  setSalesScript(user.business_id, trimmed);
-  res.json({ ok: true, length: trimmed.length });
+  const text = rawText.trim();
+  if (!text) return res.status(422).json({ error: 'El archivo está vacío o no tiene texto legible.' });
+
+  const result = addBusinessDocument(user.business_id, docName, text);
+  if (result.error === 'cap_exceeded') {
+    const DOC_PAGE_CHARS = 1500;
+    const remainingPages = Math.floor(result.remaining / DOC_PAGE_CHARS);
+    return res.status(422).json({
+      error: `Superaste el límite de contexto. Te quedan ~${remainingPages} página${remainingPages !== 1 ? 's' : ''} disponibles. Eliminá un documento para hacer lugar.`,
+      remaining: result.remaining,
+    });
+  }
+
+  res.json({ ok: true, id: result.id, charCount: text.length });
 });
 
-app.delete('/api/business/sales-script', requireAuth, (req, res) => {
+app.delete('/api/business/documents/:id', requireAuth, (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
-  setSalesScript(user.business_id, null);
+  const deleted = deleteBusinessDocument(user.business_id, Number(req.params.id));
+  if (!deleted) return res.status(404).json({ error: 'Documento no encontrado.' });
   res.json({ ok: true });
 });
 
@@ -982,7 +1009,8 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const currentBookingState = business.booking_enabled ? getBookingState(conversation.id) : null;
   const businessImages = getBusinessImages(business.id);
-  const runtimeCtx = { now: getMvdDate(), needsHuman: !!conversation.needs_human, images: businessImages };
+  const businessDocs   = getBusinessDocumentTexts(business.id);
+  const runtimeCtx = { now: getMvdDate(), needsHuman: !!conversation.needs_human, images: businessImages, documents: businessDocs };
   logError('webhook-claude-call', {
     message: `business_id=${business.id} customer=${customerPhone} text=${text.slice(0, 100)}`,
     stack: '',

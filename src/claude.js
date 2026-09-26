@@ -144,9 +144,11 @@ function buildSystemPrompt(business, label, bookingContext = null, runtimeCtx = 
     lines.push('\nATENCIÓN: Ya avisaste al equipo del negocio sobre esta conversación. Seguí respondiendo lo que puedas con la información disponible. Si el cliente pregunta por la consulta que requería atención humana, recordale brevemente que ya avisaste y que alguien del equipo se va a comunicar. NO vuelvas a emitir [NEEDS_HUMAN] — ya está registrado.');
   }
 
-  if (business.sales_script) {
-    const script = business.sales_script.slice(0, 6000);
-    lines.push(`\nGUION DE VENTAS — el dueño del negocio cargó este guion para orientar las conversaciones. Usalo como referencia para argumentar, manejar objeciones y cerrar ventas. No lo recites textualmente; adaptalo al contexto de cada mensaje:\n${script}`);
+  if (runtimeCtx?.documents?.length > 0) {
+    lines.push('\nDOCUMENTOS DE REFERENCIA — el dueño del negocio cargó estos documentos para orientar las conversaciones. Úsalos para argumentar, responder preguntas y manejar objeciones. No los recites textualmente; adaptalos al contexto de cada mensaje:');
+    for (const doc of runtimeCtx.documents) {
+      lines.push(`\n=== ${doc.name} ===\n${doc.text}`);
+    }
   }
 
   if (runtimeCtx?.images?.length > 0) {

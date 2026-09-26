@@ -224,23 +224,36 @@ Turno con seña: $200 (se descuenta del total)"></textarea>
 
         <div class="field" style="margin-top:32px;">
           <label class="field-label">
-            Guion de ventas
+            Documentos de referencia
             <span class="tag-optional">Opcional</span>
           </label>
-          <span class="field-hint">Subí un archivo .txt, .pdf o .docx con tu guion de ventas, argumentos, manejo de objeciones, etc. Tu asistente lo va a usar como referencia para cerrar ventas. Máximo 5 MB.</span>
+          <span class="field-hint">Subí guiones de venta, instrucciones, respuestas a objeciones, etc. Tu asistente los lee como contexto — nunca los envía al cliente. Acepta .txt, .md, .pdf y .docx. Máximo 5 MB por archivo.</span>
 
-          <div id="script-status" style="margin-bottom:8px; font-size:13px; color:#aaa;"></div>
-
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <label id="script-upload-label" style="display:inline-flex; align-items:center; gap:6px; font-size:13px; padding:6px 12px; border:1px solid #2e2e2e; border-radius:4px; background:transparent; color:#ccc; cursor:pointer; white-space:nowrap;">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1v10M4 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-              Subir guion
-              <input type="file" id="script-file-input" accept=".txt,.pdf,.docx" style="display:none">
-            </label>
-            <button type="button" id="btn-delete-script" style="display:none; font-size:13px; padding:6px 12px; border:1px solid #2e2e2e; border-radius:4px; background:transparent; color:#ef4444; cursor:pointer;">Eliminar guion</button>
+          <!-- Capacity bar -->
+          <div style="margin:10px 0 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+              <span id="doc-cap-label" style="font-size:12px; color:#aaa;">0 / 8 pág usadas</span>
+              <span id="doc-cap-warn" style="display:none; font-size:12px; color:#f59e0b;">Espacio casi lleno</span>
+            </div>
+            <div style="height:5px; background:#1e1e1e; border-radius:3px; overflow:hidden;">
+              <div id="doc-cap-bar" style="height:100%; width:0%; background:#3b82f6; border-radius:3px; transition:width 0.3s;"></div>
+            </div>
           </div>
-          <p id="script-upload-error" style="display:none; color:#ef4444; font-size:12px; margin-top:6px;"></p>
-          <p id="script-upload-ok" style="display:none; color:#22c55e; font-size:12px; margin-top:4px;"></p>
+
+          <div id="docs-list" style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;"></div>
+
+          <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-top:4px;">
+            <div style="display:flex; flex-direction:column; gap:4px; flex:1; min-width:160px;">
+              <input id="doc-name-input" type="text" placeholder="Nombre del documento (ej: Guion de ventas)" maxlength="80" style="font-size:13px; padding:6px 8px; background:#1a1a1a; border:1px solid #2a2a2a; border-radius:4px; color:#f0ede8;" />
+            </div>
+            <label id="doc-upload-label" style="display:inline-flex; align-items:center; gap:6px; font-size:13px; padding:6px 12px; border:1px solid #2e2e2e; border-radius:4px; background:transparent; color:#ccc; cursor:pointer; white-space:nowrap;">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1v10M4 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+              Subir documento
+              <input type="file" id="doc-file-input" accept=".txt,.md,.pdf,.docx" style="display:none">
+            </label>
+          </div>
+          <p id="doc-upload-error" style="display:none; color:#ef4444; font-size:12px; margin-top:6px;"></p>
+          <p id="doc-upload-ok" style="display:none; color:#22c55e; font-size:12px; margin-top:4px;"></p>
         </div>
 
         <div class="field" style="margin-top: 44px;">
@@ -1507,62 +1520,91 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       }
     });
 
-    // ── Sales script ──
-    async function loadScriptStatus() {
+    // ── Reference documents ──
+    const DOC_CAP_CHARS = 12000;
+    const DOC_PAGE_CHARS = 1500;
+    const DOC_CAP_PAGES = Math.round(DOC_CAP_CHARS / DOC_PAGE_CHARS);
+
+    async function loadDocs() {
       try {
-        const res = await fetch('/api/business');
+        const res = await fetch('/api/business/documents');
         if (!res.ok) return;
-        const biz = await res.json();
-        const statusEl = document.getElementById('script-status');
-        const delBtn   = document.getElementById('btn-delete-script');
-        if (biz.sales_script) {
-          statusEl.textContent = `Guion cargado (${biz.sales_script.length} caracteres).`;
-          statusEl.style.color = '#22c55e';
-          delBtn.style.display = 'inline-flex';
-        } else {
-          statusEl.textContent = 'Sin guion cargado.';
-          statusEl.style.color = '#aaa';
-          delBtn.style.display = 'none';
+        const { docs, totalChars } = await res.json();
+
+        // Capacity bar
+        const pct = Math.min(100, Math.round((totalChars / DOC_CAP_CHARS) * 100));
+        const usedPages = Math.ceil(totalChars / DOC_PAGE_CHARS) || 0;
+        const bar   = document.getElementById('doc-cap-bar');
+        const label = document.getElementById('doc-cap-label');
+        const warn  = document.getElementById('doc-cap-warn');
+        bar.style.width = pct + '%';
+        bar.style.background = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#3b82f6';
+        label.textContent = `${usedPages} / ${DOC_CAP_PAGES} pág usadas`;
+        warn.style.display = pct >= 80 ? 'block' : 'none';
+
+        // Doc list
+        const list = document.getElementById('docs-list');
+        list.innerHTML = '';
+        for (const doc of docs) {
+          const pages = Math.max(1, Math.ceil(doc.charCount / DOC_PAGE_CHARS));
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex; align-items:center; gap:8px; padding:7px 10px; background:#111; border:1px solid #1e1e1e; border-radius:5px;';
+          row.innerHTML = `
+            <span style="flex:1; font-size:13px; color:#e5e0d8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${doc.name}</span>
+            <span style="font-size:11px; color:#666; white-space:nowrap;">~${pages} pág</span>
+            <button data-id="${doc.id}" style="font-size:11px; color:#ef4444; background:none; border:none; cursor:pointer; padding:2px 4px; flex-shrink:0;">Eliminar</button>
+          `;
+          row.querySelector('button').addEventListener('click', async (e) => {
+            const id = e.currentTarget.dataset.id;
+            const errEl = document.getElementById('doc-upload-error');
+            errEl.style.display = 'none';
+            try {
+              const r = await fetch(`/api/business/documents/${id}`, { method: 'DELETE' });
+              if (!r.ok) throw new Error((await r.json()).error || 'Error al eliminar');
+              await loadDocs();
+            } catch (err) {
+              errEl.textContent = err.message;
+              errEl.style.display = 'block';
+            }
+          });
+          list.appendChild(row);
         }
       } catch (_) {}
     }
-    loadScriptStatus();
+    loadDocs();
 
-    document.getElementById('script-file-input').addEventListener('change', async function () {
+    document.getElementById('doc-file-input').addEventListener('change', async function () {
       const file   = this.files[0];
-      const errEl  = document.getElementById('script-upload-error');
-      const okEl   = document.getElementById('script-upload-ok');
+      const errEl  = document.getElementById('doc-upload-error');
+      const okEl   = document.getElementById('doc-upload-ok');
       errEl.style.display = 'none';
       okEl.style.display  = 'none';
       if (!file) return;
+      const name = document.getElementById('doc-name-input').value.trim();
+      if (!name) {
+        errEl.textContent = 'Ponele un nombre al documento antes de subirlo.';
+        errEl.style.display = 'block';
+        this.value = '';
+        return;
+      }
       const formData = new FormData();
-      formData.append('script', file);
+      formData.append('doc', file);
+      formData.append('name', name);
       try {
-        const res = await fetch('/api/business/sales-script', { method: 'POST', body: formData });
+        const res = await fetch('/api/business/documents', { method: 'POST', body: formData });
         const d   = await res.json();
         if (!res.ok) throw new Error(d.error || 'Error desconocido');
+        document.getElementById('doc-name-input').value = '';
         this.value = '';
-        await loadScriptStatus();
-        okEl.textContent = `Guion subido (${d.length} caracteres).`;
+        await loadDocs();
+        const pages = Math.max(1, Math.ceil(d.charCount / DOC_PAGE_CHARS));
+        okEl.textContent = `"${name}" subido (~${pages} pág).`;
         okEl.style.display = 'block';
         setTimeout(() => { okEl.style.display = 'none'; }, 3000);
       } catch (err) {
         errEl.textContent = err.message;
         errEl.style.display = 'block';
         this.value = '';
-      }
-    });
-
-    document.getElementById('btn-delete-script').addEventListener('click', async () => {
-      const errEl = document.getElementById('script-upload-error');
-      errEl.style.display = 'none';
-      try {
-        const res = await fetch('/api/business/sales-script', { method: 'DELETE' });
-        if (!res.ok) throw new Error('Error al eliminar');
-        await loadScriptStatus();
-      } catch (err) {
-        errEl.textContent = err.message;
-        errEl.style.display = 'block';
       }
     });
 

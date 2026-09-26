@@ -176,6 +176,27 @@ db.exec(`
 `);
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS business_documents (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    business_id INTEGER NOT NULL REFERENCES businesses(id),
+    name        TEXT NOT NULL,
+    text        TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
+// Migrate sales_script → business_documents (idempotent: only runs while sales_script IS NOT NULL)
+{
+  const bizWithScript = db.prepare('SELECT id, sales_script FROM businesses WHERE sales_script IS NOT NULL').all();
+  const insertDoc = db.prepare('INSERT INTO business_documents (business_id, name, text) VALUES (?, ?, ?)');
+  const clearScript = db.prepare('UPDATE businesses SET sales_script = NULL WHERE id = ?');
+  for (const biz of bizWithScript) {
+    insertDoc.run(biz.id, 'Guion de ventas', biz.sales_script);
+    clearScript.run(biz.id);
+  }
+}
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS tags (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     business_id INTEGER NOT NULL REFERENCES businesses(id),
@@ -956,7 +977,10 @@ module.exports = {
   setKapsoCustomerId,
   setKapsoSetupLinkId,
   getBusinessByKapsoCustomerId,
-  setSalesScript,
+  getBusinessDocuments,
+  getBusinessDocumentTexts,
+  addBusinessDocument,
+  deleteBusinessDocument,
   addBusinessImage,
   getBusinessImages,
   deleteBusinessImage,
@@ -993,8 +1017,40 @@ function deleteBusinessImage(businessId, imageId) {
   return row.file_path;
 }
 
-function setSalesScript(businessId, text) {
-  db.prepare('UPDATE businesses SET sales_script = ? WHERE id = ?').run(text ?? null, businessId);
+const DOC_CAP_CHARS = 12000;
+
+function getBusinessDocuments(businessId) {
+  return db.prepare(
+    'SELECT id, name, length(text) AS charCount, created_at FROM business_documents WHERE business_id = ? ORDER BY created_at ASC'
+  ).all(businessId);
+}
+
+function getBusinessDocumentTexts(businessId) {
+  return db.prepare(
+    'SELECT name, text FROM business_documents WHERE business_id = ? ORDER BY created_at ASC'
+  ).all(businessId);
+}
+
+function addBusinessDocument(businessId, name, text) {
+  const { total } = db.prepare(
+    'SELECT COALESCE(SUM(length(text)), 0) AS total FROM business_documents WHERE business_id = ?'
+  ).get(businessId);
+  if (total + text.length > DOC_CAP_CHARS) {
+    return { error: 'cap_exceeded', remaining: DOC_CAP_CHARS - total };
+  }
+  const result = db.prepare(
+    'INSERT INTO business_documents (business_id, name, text) VALUES (?, ?, ?)'
+  ).run(businessId, name, text);
+  return { id: result.lastInsertRowid };
+}
+
+function deleteBusinessDocument(businessId, docId) {
+  const row = db.prepare(
+    'SELECT id FROM business_documents WHERE id = ? AND business_id = ?'
+  ).get(docId, businessId);
+  if (!row) return false;
+  db.prepare('DELETE FROM business_documents WHERE id = ? AND business_id = ?').run(docId, businessId);
+  return true;
 }
 
 function setKapsoCustomerId(businessId, kapsoCustomerId) {
