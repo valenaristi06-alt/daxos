@@ -20,7 +20,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, addBusinessImage, getBusinessImages, deleteBusinessImage, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, addBusinessImage, getBusinessImages, deleteBusinessImage, setSalesScript, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -59,6 +59,25 @@ const imageUpload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (!['image/jpeg', 'image/png'].includes(file.mimetype)) return cb(new Error('Solo se aceptan imágenes JPG o PNG'));
+    cb(null, true);
+  },
+});
+
+const SCRIPT_MIMES = [
+  'text/plain',
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword',
+];
+const scriptUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ok = SCRIPT_MIMES.includes(file.mimetype) ||
+               file.originalname.endsWith('.txt') ||
+               file.originalname.endsWith('.pdf') ||
+               file.originalname.endsWith('.docx');
+    if (!ok) return cb(new Error('Solo se aceptan archivos .txt, .pdf o .docx'));
     cb(null, true);
   },
 });
@@ -643,6 +662,49 @@ app.delete('/api/business/images/:id', requireAuth, (req, res) => {
   if (!filePath) return res.status(404).json({ error: 'Imagen no encontrada.' });
 
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  res.json({ ok: true });
+});
+
+app.post('/api/business/sales-script', requireAuth, scriptUpload.single('script'), async (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+  if (!req.file) return res.status(400).json({ error: 'Sin archivo.' });
+
+  let text = '';
+  const mime = req.file.mimetype;
+  const name = req.file.originalname.toLowerCase();
+
+  try {
+    if (mime === 'application/pdf' || name.endsWith('.pdf')) {
+      const pdfParse = require('pdf-parse');
+      const result = await pdfParse(req.file.buffer);
+      text = result.text;
+    } else if (
+      mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      mime === 'application/msword' ||
+      name.endsWith('.docx')
+    ) {
+      const mammoth = require('mammoth');
+      const result = await mammoth.extractRawText({ buffer: req.file.buffer });
+      text = result.value;
+    } else {
+      text = req.file.buffer.toString('utf8');
+    }
+  } catch (err) {
+    console.error('[sales-script] extract error:', err.message);
+    return res.status(422).json({ error: 'No se pudo leer el archivo.' });
+  }
+
+  const SCRIPT_LIMIT = 6000;
+  const trimmed = text.trim().slice(0, SCRIPT_LIMIT);
+  setSalesScript(user.business_id, trimmed);
+  res.json({ ok: true, length: trimmed.length });
+});
+
+app.delete('/api/business/sales-script', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+  setSalesScript(user.business_id, null);
   res.json({ ok: true });
 });
 

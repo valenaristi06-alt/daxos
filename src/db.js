@@ -162,6 +162,7 @@ if (!bizCols.includes('human_resume_timeout'))    db.exec('ALTER TABLE businesse
 if (!bizCols.includes('business_hours_start'))    db.exec('ALTER TABLE businesses ADD COLUMN business_hours_start TEXT');
 if (!bizCols.includes('business_hours_end'))      db.exec('ALTER TABLE businesses ADD COLUMN business_hours_end TEXT');
 if (!bizCols.includes('kapso_customer_id'))       db.exec('ALTER TABLE businesses ADD COLUMN kapso_customer_id TEXT');
+if (!bizCols.includes('sales_script'))            db.exec('ALTER TABLE businesses ADD COLUMN sales_script TEXT');
 if (!bizCols.includes('kapso_setup_link_id'))     db.exec('ALTER TABLE businesses ADD COLUMN kapso_setup_link_id TEXT');
 
 db.exec(`
@@ -955,6 +956,7 @@ module.exports = {
   setKapsoCustomerId,
   setKapsoSetupLinkId,
   getBusinessByKapsoCustomerId,
+  setSalesScript,
   addBusinessImage,
   getBusinessImages,
   deleteBusinessImage,
@@ -989,6 +991,10 @@ function deleteBusinessImage(businessId, imageId) {
   if (!row) return null;
   db.prepare('DELETE FROM business_images WHERE id = ? AND business_id = ?').run(imageId, businessId);
   return row.file_path;
+}
+
+function setSalesScript(businessId, text) {
+  db.prepare('UPDATE businesses SET sales_script = ? WHERE id = ?').run(text ?? null, businessId);
 }
 
 function setKapsoCustomerId(businessId, kapsoCustomerId) {

@@ -222,6 +222,27 @@ Turno con seña: $200 (se descuenta del total)"></textarea>
           <p id="img-upload-ok" style="display:none; color:#22c55e; font-size:12px; margin-top:4px;"></p>
         </div>
 
+        <div class="field" style="margin-top:32px;">
+          <label class="field-label">
+            Guion de ventas
+            <span class="tag-optional">Opcional</span>
+          </label>
+          <span class="field-hint">Subí un archivo .txt, .pdf o .docx con tu guion de ventas, argumentos, manejo de objeciones, etc. Tu asistente lo va a usar como referencia para cerrar ventas. Máximo 5 MB.</span>
+
+          <div id="script-status" style="margin-bottom:8px; font-size:13px; color:#aaa;"></div>
+
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <label id="script-upload-label" style="display:inline-flex; align-items:center; gap:6px; font-size:13px; padding:6px 12px; border:1px solid #2e2e2e; border-radius:4px; background:transparent; color:#ccc; cursor:pointer; white-space:nowrap;">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1v10M4 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+              Subir guion
+              <input type="file" id="script-file-input" accept=".txt,.pdf,.docx" style="display:none">
+            </label>
+            <button type="button" id="btn-delete-script" style="display:none; font-size:13px; padding:6px 12px; border:1px solid #2e2e2e; border-radius:4px; background:transparent; color:#ef4444; cursor:pointer;">Eliminar guion</button>
+          </div>
+          <p id="script-upload-error" style="display:none; color:#ef4444; font-size:12px; margin-top:6px;"></p>
+          <p id="script-upload-ok" style="display:none; color:#22c55e; font-size:12px; margin-top:4px;"></p>
+        </div>
+
         <div class="field" style="margin-top: 44px;">
           <label class="field-label" for="owner_phone">
             Tu número de WhatsApp
@@ -1483,6 +1504,65 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         errEl.textContent = err.message;
         errEl.style.display = 'block';
         this.value = '';
+      }
+    });
+
+    // ── Sales script ──
+    async function loadScriptStatus() {
+      try {
+        const res = await fetch('/api/business');
+        if (!res.ok) return;
+        const biz = await res.json();
+        const statusEl = document.getElementById('script-status');
+        const delBtn   = document.getElementById('btn-delete-script');
+        if (biz.sales_script) {
+          statusEl.textContent = `Guion cargado (${biz.sales_script.length} caracteres).`;
+          statusEl.style.color = '#22c55e';
+          delBtn.style.display = 'inline-flex';
+        } else {
+          statusEl.textContent = 'Sin guion cargado.';
+          statusEl.style.color = '#aaa';
+          delBtn.style.display = 'none';
+        }
+      } catch (_) {}
+    }
+    loadScriptStatus();
+
+    document.getElementById('script-file-input').addEventListener('change', async function () {
+      const file   = this.files[0];
+      const errEl  = document.getElementById('script-upload-error');
+      const okEl   = document.getElementById('script-upload-ok');
+      errEl.style.display = 'none';
+      okEl.style.display  = 'none';
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('script', file);
+      try {
+        const res = await fetch('/api/business/sales-script', { method: 'POST', body: formData });
+        const d   = await res.json();
+        if (!res.ok) throw new Error(d.error || 'Error desconocido');
+        this.value = '';
+        await loadScriptStatus();
+        okEl.textContent = `Guion subido (${d.length} caracteres).`;
+        okEl.style.display = 'block';
+        setTimeout(() => { okEl.style.display = 'none'; }, 3000);
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.style.display = 'block';
+        this.value = '';
+      }
+    });
+
+    document.getElementById('btn-delete-script').addEventListener('click', async () => {
+      const errEl = document.getElementById('script-upload-error');
+      errEl.style.display = 'none';
+      try {
+        const res = await fetch('/api/business/sales-script', { method: 'DELETE' });
+        if (!res.ok) throw new Error('Error al eliminar');
+        await loadScriptStatus();
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.style.display = 'block';
       }
     });
 

@@ -144,6 +144,11 @@ function buildSystemPrompt(business, label, bookingContext = null, runtimeCtx = 
     lines.push('\nATENCIÓN: Ya avisaste al equipo del negocio sobre esta conversación. Seguí respondiendo lo que puedas con la información disponible. Si el cliente pregunta por la consulta que requería atención humana, recordale brevemente que ya avisaste y que alguien del equipo se va a comunicar. NO vuelvas a emitir [NEEDS_HUMAN] — ya está registrado.');
   }
 
+  if (business.sales_script) {
+    const script = business.sales_script.slice(0, 6000);
+    lines.push(`\nGUION DE VENTAS — el dueño del negocio cargó este guion para orientar las conversaciones. Usalo como referencia para argumentar, manejar objeciones y cerrar ventas. No lo recites textualmente; adaptalo al contexto de cada mensaje:\n${script}`);
+  }
+
   if (runtimeCtx?.images?.length > 0) {
     const labels = runtimeCtx.images.map(img => `[${img.label}]`).join(', ');
     lines.push(`\nIMÁGENES DISPONIBLES: Tenés estas imágenes para enviar si el cliente las pide o si ayuda a la venta: ${labels}. Si querés enviar una, agregá al FINAL de tu respuesta, en una línea separada, exactamente: [ENVIAR_IMAGEN: <label exacto>]. Solo podés enviar UNA imagen por respuesta. Solo usala si el cliente la pidió o si claramente ayuda a la venta — no la mandes por las dudas.`);
