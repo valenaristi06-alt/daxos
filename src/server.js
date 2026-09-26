@@ -778,7 +778,13 @@ app.post('/api/business/preview-chat', (req, res, next) => {
   if (!message || !message.trim()) return res.status(400).json({ error: 'Mensaje vacío.' });
 
   try {
-    const rawReply = await generateReply(business, history, message.trim());
+    const previewCtx = {
+      now:       getMvdDate(),
+      needsHuman: false,
+      images:    getBusinessImages(user.business_id),
+      documents: getBusinessDocumentTexts(user.business_id),
+    };
+    const rawReply = await generateReply(business, history, message.trim(), null, null, previewCtx);
     let sent_doc = false;
     let needs_human = false;
     let reply = rawReply;
