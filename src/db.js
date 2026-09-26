@@ -164,6 +164,9 @@ if (!bizCols.includes('business_hours_end'))      db.exec('ALTER TABLE businesse
 if (!bizCols.includes('kapso_customer_id'))       db.exec('ALTER TABLE businesses ADD COLUMN kapso_customer_id TEXT');
 if (!bizCols.includes('sales_script'))            db.exec('ALTER TABLE businesses ADD COLUMN sales_script TEXT');
 if (!bizCols.includes('kapso_setup_link_id'))     db.exec('ALTER TABLE businesses ADD COLUMN kapso_setup_link_id TEXT');
+// plan_cortesia: permanent free access granted outside of MercadoPago — client pays by other means.
+// When set, the account is never blocked by trial expiry or message limits.
+if (!bizCols.includes('plan_cortesia'))           db.exec('ALTER TABLE businesses ADD COLUMN plan_cortesia INTEGER NOT NULL DEFAULT 0');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS business_images (
@@ -305,6 +308,21 @@ db.exec(`
 
     db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('002_trial_starts_at');
     console.log(`[migration 002] trial_starts_at added. With phone: ${withPhone.changes} rows. Without phone: ${withoutPhone.changes} rows. Excluded review id: ${reviewId === -1 ? 'not found (none excluded)' : reviewId}`);
+  }
+
+  if (!applied('003_plan_cortesia_valentin')) {
+    // Grant permanent free Arranque access to valentin@daxos.lat — pays outside the system.
+    const result = db.prepare(`
+      UPDATE businesses SET plan_cortesia = 1
+      WHERE id = (
+        SELECT b.id FROM businesses b
+        JOIN users u ON u.business_id = b.id
+        WHERE u.email = 'valentin@daxos.lat'
+        LIMIT 1
+      )
+    `).run();
+    db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('003_plan_cortesia_valentin');
+    console.log(`[migration 003] plan_cortesia set for valentin@daxos.lat: ${result.changes} row(s) updated`);
   }
 })();
 

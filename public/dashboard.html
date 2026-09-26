@@ -753,7 +753,9 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         return;
       }
 
-      if (b.plan !== 'arranque' && (b.subscription_status === 'cancelled' || b.subscription_status === 'paused')) {
+      if (b.plan_cortesia) {
+        // Courtesy account — permanent free access, no trial banners
+      } else if (b.plan !== 'arranque' && (b.subscription_status === 'cancelled' || b.subscription_status === 'paused')) {
         const expiry = b.plan_expires_at || b.trial_ends_at;
         if (!expiry || new Date(expiry) < new Date()) {
           banner.className = 'trial-banner trial-banner--expired';

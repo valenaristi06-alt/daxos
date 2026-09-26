@@ -231,7 +231,7 @@ app.get('/api/config', (req, res) => {
 app.get('/api/business', requireAuth, (req, res) => {
   const business = getBusinessByUserId(req.session.userId);
   if (!business) return res.json(null);
-  if (business.plan === 'arranque' && business.trial_starts_at) {
+  if (business.plan === 'arranque' && business.trial_starts_at && !business.plan_cortesia) {
     const trial_msg_count = getTrialMessageCount(business.id, business.trial_starts_at);
     return res.json({ ...business, trial_msg_count, trial_msg_limit: TRIAL_MESSAGE_LIMIT });
   }
@@ -867,6 +867,8 @@ app.post('/test/simulate', async (req, res) => {
 });
 
 function isTrialExpired(business) {
+  if (business.plan_cortesia) return false;
+
   const { plan, subscription_status, trial_starts_at, trial_ends_at, phone_number_id } = business;
 
   // Paid plan
@@ -964,7 +966,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     return;
   }
 
-  if (business.plan === 'arranque' && business.trial_starts_at) {
+  if (business.plan === 'arranque' && business.trial_starts_at && !business.plan_cortesia) {
     const trialCount = getTrialMessageCount(business.id, business.trial_starts_at);
     if (trialCount >= TRIAL_MESSAGE_LIMIT) {
       const conv = getOrCreateConversation(business.id, customerPhone);
