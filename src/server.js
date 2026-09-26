@@ -88,7 +88,8 @@ async function extractTextFromFile(buffer, mimetype, originalname) {
   const mime = mimetype;
   const name = originalname.toLowerCase();
   if (mime === 'application/pdf' || name.endsWith('.pdf')) {
-    const pdfParse = require('pdf-parse');
+    const pdfParseLib = require('pdf-parse');
+    const pdfParse = pdfParseLib.default ?? pdfParseLib;
     const result = await pdfParse(buffer);
     return result.text;
   }
