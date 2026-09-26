@@ -246,10 +246,10 @@ Turno con seña: $200 (se descuenta del total)"></textarea>
             <div style="display:flex; flex-direction:column; gap:4px; flex:1; min-width:160px;">
               <input id="doc-name-input" type="text" placeholder="Nombre del documento (ej: Guion de ventas)" maxlength="80" style="font-size:13px; padding:6px 8px; background:#1a1a1a; border:1px solid #2a2a2a; border-radius:4px; color:#f0ede8;" />
             </div>
-            <label id="doc-upload-label" style="display:inline-flex; align-items:center; gap:6px; font-size:13px; padding:6px 12px; border:1px solid #2e2e2e; border-radius:4px; background:transparent; color:#ccc; cursor:pointer; white-space:nowrap;">
+            <label id="refdoc-upload-label" style="display:inline-flex; align-items:center; gap:6px; font-size:13px; padding:6px 12px; border:1px solid #2e2e2e; border-radius:4px; background:transparent; color:#ccc; cursor:pointer; white-space:nowrap;">
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1v10M4 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
               Subir documento
-              <input type="file" id="doc-file-input" accept=".txt,.md,.pdf,.docx" style="display:none">
+              <input type="file" id="refdoc-file-input" accept=".txt,.md,.pdf,.docx" style="display:none">
             </label>
           </div>
           <p id="doc-upload-error" style="display:none; color:#ef4444; font-size:12px; margin-top:6px;"></p>
@@ -1573,7 +1573,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
     }
     loadDocs();
 
-    document.getElementById('doc-file-input').addEventListener('change', async function () {
+    document.getElementById('refdoc-file-input').addEventListener('change', async function () {
       const file   = this.files[0];
       const errEl  = document.getElementById('doc-upload-error');
       const okEl   = document.getElementById('doc-upload-ok');
