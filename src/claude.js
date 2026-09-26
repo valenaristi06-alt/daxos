@@ -144,16 +144,19 @@ function buildSystemPrompt(business, label, bookingContext = null, runtimeCtx = 
     lines.push('\nATENCIÓN: Ya avisaste al equipo del negocio sobre esta conversación. Seguí respondiendo lo que puedas con la información disponible. Si el cliente pregunta por la consulta que requería atención humana, recordale brevemente que ya avisaste y que alguien del equipo se va a comunicar. NO vuelvas a emitir [NEEDS_HUMAN] — ya está registrado.');
   }
 
-  if (runtimeCtx?.documents?.length > 0) {
-    lines.push('\nDOCUMENTOS DE REFERENCIA — el dueño del negocio cargó estos documentos para orientar las conversaciones. Úsalos para argumentar, responder preguntas y manejar objeciones. No los recites textualmente; adaptalos al contexto de cada mensaje:');
-    for (const doc of runtimeCtx.documents) {
-      lines.push(`\n=== ${doc.name} ===\n${doc.text}`);
-    }
-  }
-
   if (runtimeCtx?.images?.length > 0) {
     const labels = runtimeCtx.images.map(img => `[${img.label}]`).join(', ');
     lines.push(`\nIMÁGENES DISPONIBLES: Tenés estas imágenes para enviar si el cliente las pide o si ayuda a la venta: ${labels}. Si querés enviar una, agregá al FINAL de tu respuesta, en una línea separada, exactamente: [ENVIAR_IMAGEN: <label exacto>]. Solo podés enviar UNA imagen por respuesta. Solo usala si el cliente la pidió o si claramente ayuda a la venta — no la mandes por las dudas.`);
+  }
+
+  if (runtimeCtx?.documents?.length > 0) {
+    const imageNote = runtimeCtx?.images?.length > 0
+      ? ` IMPORTANTE: si algún documento indica enviar una imagen, usá el tag [ENVIAR_IMAGEN: <label exacto>] con la etiqueta exacta de la lista de imágenes de arriba — no describas la imagen ni la menciones de otra forma.`
+      : '';
+    lines.push(`\nDOCUMENTOS DE REFERENCIA — el dueño del negocio cargó estos documentos para orientar las conversaciones. Úsalos para argumentar, responder preguntas y manejar objeciones. No los recites textualmente; adaptalos al contexto de cada mensaje.${imageNote}`);
+    for (const doc of runtimeCtx.documents) {
+      lines.push(`\n=== ${doc.name} ===\n${doc.text}`);
+    }
   }
 
   lines.push('\nDERIVACIÓN: Usá [NEEDS_HUMAN] solo cuando el cliente necesite una respuesta que vos no podés dar y que el dueño del negocio sí puede dar en ese momento (ej: confirmar disponibilidad en tiempo real, autorizar una excepción, dar un dato privado). NO uses [NEEDS_HUMAN] para preguntas operativas básicas que el negocio simplemente no cargó: horarios de atención, dirección, formas de pago, zona de cobertura. Para esas, reconocé que no tenés el dato y decí que alguien del equipo se lo va a confirmar — no hables en primera persona como si vos fueras a confirmarlo, porque eso no va a pasar automáticamente. Ejemplos válidos: "eso te lo confirma alguien del equipo", "los horarios te los paso por acá en breve", "eso lo tiene que confirmar el equipo directamente". NO digas "te lo confirmo enseguida", "dame un momento", "ya te averiguo" — implican que la respuesta llega en segundos y no es honesto. Si en un mensaje posterior el cliente vuelve a preguntar por ese mismo dato que no llegó, ahí sí usá [NEEDS_HUMAN] para que el dueño lo atienda directamente.');
