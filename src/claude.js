@@ -157,17 +157,21 @@ function buildSystemPrompt(business, label, bookingContext = null, runtimeCtx = 
 
 CÓMO USAR ESTOS DOCUMENTOS — leé esto antes de leer el documento:
 
-Estos documentos contienen información sobre el negocio: servicios, argumentos de venta, contexto, tono. Son una REFERENCIA de TEMAS y CONTENIDO, no un guion a recitar ni una lista de pasos a ejecutar.
+Si el documento contiene un guion, script o flujo de ventas (preguntas en orden, pasos numerados, secuencia de calificación), ese orden define el flujo principal de la conversación. Seguilo tal como está escrito — el negocio lo diseñó así.
+
+Si el documento es información de referencia (precios, servicios, contexto del negocio), usalo para responder preguntas del cliente — no como pasos a ejecutar en secuencia.
 
 PROHIBIDO:
-- Copiar o parafrasear frases del documento casi textualmente — generá todo con tus propias palabras
-- Tratar numeración o listas del documento como una secuencia de pasos a seguir en orden
-- Saltar pasos o asumir que el cliente "acordó" algo solo porque dijo sí a una propuesta genérica
+- Copiar o parafrasear frases del documento casi textualmente — usá tus propias palabras, en el estilo del negocio
+- Saltar pasos del guion sin razón, o inventar preguntas que no están en él
 - Hacer preguntas que el cliente ya respondió en el historial de esta conversación
-- Reiniciar el flujo de calificación si ya aparece completo en el historial — si el cliente ya respondió edad, tipo de piel, u otras preguntas de calificación, NO las volvás a hacer bajo ninguna circunstancia. Un "Sí", "Me interesa" o cualquier respuesta afirmativa a una pregunta de cierre es una RESPUESTA al cierre, no un nuevo inicio de conversación. En ese caso, avanzá hacia el siguiente paso concreto (dar el precio, agendar, compartir el link, etc.)
+- Reiniciar el flujo desde el principio si ya aparece completo en el historial — un "Sí", "Me interesa" o cualquier respuesta afirmativa a una pregunta de cierre es una RESPUESTA al cierre, no un nuevo inicio. En ese caso, avanzá al siguiente paso concreto (precio, agendar, link, etc.)
 
 CÓMO HACERLO BIEN:
-Antes de responder, mirá el historial completo. Identificá qué información del cliente ya tenés. Decidí qué responder basándote en el ÚLTIMO mensaje del cliente y en lo que falta saber. Usá el documento para conocer los argumentos, servicios y temas relevantes — no para saber qué pregunta "sigue en la lista". Si el documento tiene preguntas numeradas, son TEMAS a explorar en algún momento, no un cuestionario a recitar en ese orden.`);
+1. Mirá el historial completo. Identificá en qué paso del guion está la conversación y qué información del cliente ya tenés.
+2. Avanzá al próximo paso del guion que aún no fue respondido — no al primero de la lista.
+3. Parafraseá el contenido del guion con tus propias palabras, en el estilo configurado del negocio.
+4. Si el cliente pregunta algo fuera del guion (precio, disponibilidad, etc.), respondé con la información disponible y retomá el flujo.`);
     for (const doc of runtimeCtx.documents) {
       lines.push(`\n=== ${doc.name} ===\n${doc.text}`);
     }
