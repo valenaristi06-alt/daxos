@@ -851,7 +851,7 @@ app.post('/test/simulate', async (req, res) => {
 
   try {
     const conversation = getOrCreateConversation(business_id, customer_id);
-    const history = getConversationHistory(conversation.id, 20);
+    const history = getConversationHistory(conversation.id, 60);
 
     await maybeSendDisclosure(business, conversation.id, history, null);
 
@@ -990,7 +990,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   }
 
   const conversation = getOrCreateConversation(business.id, customerPhone);
-  const history = getConversationHistory(conversation.id, 20);
+  const history = getConversationHistory(conversation.id, 60);
 
   // Conversation paused — record message so owner sees it, but no AI reply
   if (conversation.needs_attention) {
