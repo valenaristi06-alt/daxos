@@ -1219,8 +1219,9 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
       if (imageToSend) {
         if (imgTextBefore) await sendWhatsAppMessage(customerPhone, imgTextBefore, waCredentials);
         await sendImageNow();
-        if (imgTextAfter)  await sendWhatsAppMessage(customerPhone, imgTextAfter,  waCredentials);
-        logError('webhook-send-result', { message: `mode=text+image split before=${!!imgTextBefore} after=${!!imgTextAfter}`, stack: '' });
+        // After escalation the bot must not send anything extra — skip imgTextAfter
+        if (imgTextAfter && !needsHuman) await sendWhatsAppMessage(customerPhone, imgTextAfter, waCredentials);
+        logError('webhook-send-result', { message: `mode=text+image split before=${!!imgTextBefore} after=${!!imgTextAfter} skipped_after=${needsHuman && !!imgTextAfter}`, stack: '' });
       } else {
         const sendResult = await sendWhatsAppMessage(customerPhone, reply, waCredentials);
         logError('webhook-send-result', { message: `mode=text body=${JSON.stringify(sendResult).slice(0, 300)}`, stack: '' });
