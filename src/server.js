@@ -1063,11 +1063,16 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     reply = reply.replace(/^\[SEND_DOC\]\n?/, '');
   }
 
-  let imageToSend = null;
-  let imageFirst  = false;
+  let imageToSend   = null;
+  let imgTextBefore = null;
+  let imgTextAfter  = null;
   const imageMatch = reply.match(/\[ENVIAR_IMAGEN:\s*(.+?)\]/);
   if (imageMatch) {
-    imageFirst = imageMatch.index === 0;
+    const tagStart = imageMatch.index;
+    const tagEnd   = tagStart + imageMatch[0].length;
+    imgTextBefore  = reply.slice(0, tagStart).replace(/\n+$/, '').trim();
+    imgTextAfter   = reply.slice(tagEnd).replace(/^\n+/, '').trim();
+    reply = [imgTextBefore, imgTextAfter].filter(Boolean).join(' ').trim();
     const requestedLabel = imageMatch[1].trim();
     const found = businessImages.find(
       img => img.label.toLowerCase() === requestedLabel.toLowerCase()
@@ -1080,7 +1085,6 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
         stack: '',
       });
     }
-    reply = reply.replace(/\[ENVIAR_IMAGEN:\s*.+?\]\n?/g, '').trim();
   }
 
   // Booking state machine — parse tags, update state, strip tags from reply
@@ -1167,21 +1171,20 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     }
   }
 
-  async function sendImageIfReady() {
-    if (imageToSend && fs.existsSync(imageToSend.file_path)) {
-      try {
-        const imgBuffer  = fs.readFileSync(imageToSend.file_path);
-        const mimeType   = imageToSend.file_path.endsWith('.png') ? 'image/png' : 'image/jpeg';
-        const imgMediaId = await uploadMedia(imgBuffer, path.basename(imageToSend.file_path), mimeType, waCredentials);
-        await sendWhatsAppImage(customerPhone, imgMediaId, null, waCredentials);
-        logError('image-send-ok', { message: `business_id=${business.id} label="${imageToSend.label}"`, stack: '' });
-      } catch (imgErr) {
-        logError('image-send-error', { message: imgErr.message, stack: imgErr.stack || '' });
-      }
+  let imageSent = false;
+  async function sendImageNow() {
+    if (!imageToSend || !fs.existsSync(imageToSend.file_path)) return;
+    try {
+      const imgBuffer  = fs.readFileSync(imageToSend.file_path);
+      const mimeType   = imageToSend.file_path.endsWith('.png') ? 'image/png' : 'image/jpeg';
+      const imgMediaId = await uploadMedia(imgBuffer, path.basename(imageToSend.file_path), mimeType, waCredentials);
+      await sendWhatsAppImage(customerPhone, imgMediaId, null, waCredentials);
+      logError('image-send-ok', { message: `business_id=${business.id} label="${imageToSend.label}"`, stack: '' });
+      imageSent = true;
+    } catch (imgErr) {
+      logError('image-send-error', { message: imgErr.message, stack: imgErr.stack || '' });
     }
   }
-
-  if (imageFirst) await sendImageIfReady();
 
   const planAllowsAudio = ['crecimiento', 'a_medida'].includes(business.plan);
   const replyFitsAudio = reply.length <= AUDIO_MAX_CHARS;
@@ -1208,14 +1211,21 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
       if (wantsAudio && !replyFitsAudio) {
         logError('webhook-audio-skip', { message: `reply too long (${reply.length} chars)`, stack: '' });
       }
-      const sendResult = await sendWhatsAppMessage(customerPhone, reply, waCredentials);
-      logError('webhook-send-result', { message: `mode=text body=${JSON.stringify(sendResult).slice(0, 300)}`, stack: '' });
+      if (imageToSend) {
+        if (imgTextBefore) await sendWhatsAppMessage(customerPhone, imgTextBefore, waCredentials);
+        await sendImageNow();
+        if (imgTextAfter)  await sendWhatsAppMessage(customerPhone, imgTextAfter,  waCredentials);
+        logError('webhook-send-result', { message: `mode=text+image split before=${!!imgTextBefore} after=${!!imgTextAfter}`, stack: '' });
+      } else {
+        const sendResult = await sendWhatsAppMessage(customerPhone, reply, waCredentials);
+        logError('webhook-send-result', { message: `mode=text body=${JSON.stringify(sendResult).slice(0, 300)}`, stack: '' });
+      }
     }
   } catch (sendErr) {
     logError(sendCtxErr, sendErr);
   }
 
-  if (!imageFirst) await sendImageIfReady();
+  if (!imageSent) await sendImageNow();
 
   // Derivación: notificar al dueño pero NO pausar el bot — sigue respondiendo
   if (needsHuman && !conversation.needs_human) {
