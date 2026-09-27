@@ -1046,9 +1046,9 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   let sendDoc = false;
   let needsHuman = false;
   let reply = rawReply;
-  if (reply.startsWith('[NEEDS_HUMAN]')) {
+  if (/\[NEEDS_HUMAN\]/.test(reply)) {
     needsHuman = true;
-    reply = reply.replace(/^\[NEEDS_HUMAN\]\n?/, '');
+    reply = reply.replace(/\[NEEDS_HUMAN\]\n?/g, '');
   }
   if (reply.startsWith('[SEND_DOC]')) {
     sendDoc = true;
@@ -1149,6 +1149,19 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   }
 
   reply = reply.trim();
+
+  // Safety net: strip any unprocessed internal markers before touching WhatsApp
+  function sanitizeForClient(txt) {
+    if (!txt) return txt;
+    const cleaned = txt.replace(/\[[A-Z][A-Z_0-9]*(?::[^\]]+)?\]/g, '').replace(/[ \t]{2,}/g, ' ').trim();
+    if (cleaned !== txt) {
+      logError('marker-leak', { message: `stripped from client text: ${JSON.stringify(txt.slice(0, 300))}`, stack: '' });
+    }
+    return cleaned;
+  }
+  reply        = sanitizeForClient(reply);
+  imgTextBefore = sanitizeForClient(imgTextBefore);
+  imgTextAfter  = sanitizeForClient(imgTextAfter);
 
   addMessage(conversation.id, 'user', text);
   addMessage(conversation.id, 'assistant', reply);
