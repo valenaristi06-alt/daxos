@@ -146,7 +146,7 @@ function buildSystemPrompt(business, label, bookingContext = null, runtimeCtx = 
 
   if (runtimeCtx?.images?.length > 0) {
     const labels = runtimeCtx.images.map(img => `[${img.label}]`).join(', ');
-    lines.push(`\nIMÁGENES DISPONIBLES: Tenés estas imágenes para enviar si el cliente las pide o si ayuda a la venta: ${labels}. Si querés enviar una, agregá al FINAL de tu respuesta, en una línea separada, exactamente: [ENVIAR_IMAGEN: <label exacto>]. Solo podés enviar UNA imagen por respuesta. Solo usala si el cliente la pidió o si claramente ayuda a la venta — no la mandes por las dudas.`);
+    lines.push(`\nIMÁGENES DISPONIBLES: Tenés estas imágenes para enviar si el cliente las pide o si ayuda a la venta: ${labels}. Si querés enviar una, usá exactamente: [ENVIAR_IMAGEN: <label exacto>]. Solo podés enviar UNA imagen por respuesta. Solo usala si el cliente la pidió o si claramente ayuda a la venta — no la mandes por las dudas. POSICIÓN DEL TAG: si ponés el tag al FINAL del mensaje, la imagen se envía después del texto. Si ponés el tag al INICIO del mensaje (antes de cualquier texto), la imagen se envía primero. En la mayoría de los casos el tag va al final.`);
   }
 
   if (runtimeCtx?.documents?.length > 0) {

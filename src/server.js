@@ -1064,8 +1064,10 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   }
 
   let imageToSend = null;
+  let imageFirst  = false;
   const imageMatch = reply.match(/\[ENVIAR_IMAGEN:\s*(.+?)\]/);
   if (imageMatch) {
+    imageFirst = imageMatch.index === 0;
     const requestedLabel = imageMatch[1].trim();
     const found = businessImages.find(
       img => img.label.toLowerCase() === requestedLabel.toLowerCase()
@@ -1165,17 +1167,21 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     }
   }
 
-  if (imageToSend && fs.existsSync(imageToSend.file_path)) {
-    try {
-      const imgBuffer  = fs.readFileSync(imageToSend.file_path);
-      const mimeType   = imageToSend.file_path.endsWith('.png') ? 'image/png' : 'image/jpeg';
-      const imgMediaId = await uploadMedia(imgBuffer, path.basename(imageToSend.file_path), mimeType, waCredentials);
-      await sendWhatsAppImage(customerPhone, imgMediaId, null, waCredentials);
-      logError('image-send-ok', { message: `business_id=${business.id} label="${imageToSend.label}"`, stack: '' });
-    } catch (imgErr) {
-      logError('image-send-error', { message: imgErr.message, stack: imgErr.stack || '' });
+  async function sendImageIfReady() {
+    if (imageToSend && fs.existsSync(imageToSend.file_path)) {
+      try {
+        const imgBuffer  = fs.readFileSync(imageToSend.file_path);
+        const mimeType   = imageToSend.file_path.endsWith('.png') ? 'image/png' : 'image/jpeg';
+        const imgMediaId = await uploadMedia(imgBuffer, path.basename(imageToSend.file_path), mimeType, waCredentials);
+        await sendWhatsAppImage(customerPhone, imgMediaId, null, waCredentials);
+        logError('image-send-ok', { message: `business_id=${business.id} label="${imageToSend.label}"`, stack: '' });
+      } catch (imgErr) {
+        logError('image-send-error', { message: imgErr.message, stack: imgErr.stack || '' });
+      }
     }
   }
+
+  if (imageFirst) await sendImageIfReady();
 
   const planAllowsAudio = ['crecimiento', 'a_medida'].includes(business.plan);
   const replyFitsAudio = reply.length <= AUDIO_MAX_CHARS;
@@ -1208,6 +1214,8 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   } catch (sendErr) {
     logError(sendCtxErr, sendErr);
   }
+
+  if (!imageFirst) await sendImageIfReady();
 
   // Derivación: notificar al dueño pero NO pausar el bot — sigue respondiendo
   if (needsHuman && !conversation.needs_human) {
