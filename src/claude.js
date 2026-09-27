@@ -153,7 +153,7 @@ function buildSystemPrompt(business, label, bookingContext = null, runtimeCtx = 
     const imageNote = runtimeCtx?.images?.length > 0
       ? ` IMPORTANTE: si algún documento indica enviar una imagen, usá el tag [ENVIAR_IMAGEN: <label exacto>] con la etiqueta exacta de la lista de imágenes de arriba — no describas la imagen ni la menciones de otra forma.`
       : '';
-    lines.push(`\nDOCUMENTOS DE REFERENCIA — el dueño del negocio cargó estos documentos para orientar las conversaciones. Úsalos para argumentar, responder preguntas y manejar objeciones. No los recites textualmente; adaptalos al contexto de cada mensaje.${imageNote}`);
+    lines.push(`\nDOCUMENTOS DE REFERENCIA — el dueño del negocio cargó estos documentos para orientar las conversaciones. Úsalos para argumentar, responder preguntas y manejar objeciones. No los recites textualmente; adaptalos al contexto de cada mensaje.${imageNote}\nREGLA CRÍTICA DE USO: estos documentos son una referencia de qué decir, NO un libreto a ejecutar desde el principio en cada mensaje. Si el documento tiene pasos, preguntas o una secuencia, chequeá siempre el historial de la conversación antes de avanzar. Si una pregunta ya fue respondida por el cliente, NO la repitas — tomá esa respuesta como válida y seguí con el paso siguiente. Nunca reiniciés la secuencia desde el principio por el hecho de recibir un nuevo mensaje.`);
     for (const doc of runtimeCtx.documents) {
       lines.push(`\n=== ${doc.name} ===\n${doc.text}`);
     }
