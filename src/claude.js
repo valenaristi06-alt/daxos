@@ -153,7 +153,20 @@ function buildSystemPrompt(business, label, bookingContext = null, runtimeCtx = 
     const imageNote = runtimeCtx?.images?.length > 0
       ? ` IMPORTANTE: si algún documento indica enviar una imagen, usá el tag [ENVIAR_IMAGEN: <label exacto>] con la etiqueta exacta de la lista de imágenes de arriba — no describas la imagen ni la menciones de otra forma.`
       : '';
-    lines.push(`\nDOCUMENTOS DE REFERENCIA — el dueño del negocio cargó estos documentos para orientar las conversaciones. Úsalos para argumentar, responder preguntas y manejar objeciones. No los recites textualmente; adaptalos al contexto de cada mensaje.${imageNote}\nREGLA CRÍTICA DE USO: estos documentos son una referencia de qué decir, NO un libreto a ejecutar desde el principio en cada mensaje. Si el documento tiene pasos, preguntas o una secuencia, chequeá siempre el historial de la conversación antes de avanzar. Si una pregunta ya fue respondida por el cliente, NO la repitas — tomá esa respuesta como válida y seguí con el paso siguiente. Nunca reiniciés la secuencia desde el principio por el hecho de recibir un nuevo mensaje.`);
+    lines.push(`\nDOCUMENTOS DE REFERENCIA${imageNote}
+
+CÓMO USAR ESTOS DOCUMENTOS — leé esto antes de leer el documento:
+
+Estos documentos contienen información sobre el negocio: servicios, argumentos de venta, contexto, tono. Son una REFERENCIA de TEMAS y CONTENIDO, no un guion a recitar ni una lista de pasos a ejecutar.
+
+PROHIBIDO:
+- Copiar o parafrasear frases del documento casi textualmente — generá todo con tus propias palabras
+- Tratar numeración o listas del documento como una secuencia de pasos a seguir en orden
+- Saltar pasos o asumir que el cliente "acordó" algo solo porque dijo sí a una propuesta genérica
+- Hacer preguntas que el cliente ya respondió en el historial de esta conversación
+
+CÓMO HACERLO BIEN:
+Antes de responder, mirá el historial completo. Identificá qué información del cliente ya tenés. Decidí qué responder basándote en el ÚLTIMO mensaje del cliente y en lo que falta saber. Usá el documento para conocer los argumentos, servicios y temas relevantes — no para saber qué pregunta "sigue en la lista". Si el documento tiene preguntas numeradas, son TEMAS a explorar en algún momento, no un cuestionario a recitar en ese orden.`);
     for (const doc of runtimeCtx.documents) {
       lines.push(`\n=== ${doc.name} ===\n${doc.text}`);
     }
