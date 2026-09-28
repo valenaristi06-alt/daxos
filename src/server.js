@@ -1417,28 +1417,26 @@ app.post('/webhook/kapso-platform', async (req, res) => {
     const eventType = payload?.event || payload?.type;
     if (eventType !== 'phone_number.created' && eventType !== 'whatsapp.phone_number.created') return;
 
-    // Defensive extraction — log full payload on first event to verify schema
-    const data             = payload?.data || payload;
-    const phoneNumberId    = data?.phone_number_id || data?.phoneNumberId;
-    const wabaId           = data?.waba_id || data?.wabaId;
-    const extCustomerId    = data?.customer?.external_customer_id
-                          || data?.external_customer_id
-                          || payload?.customer?.external_customer_id;
+    // Kapso webhook payload: { phone_number_id, project: { id }, customer: { id } }
+    // customer.id is Kapso's internal UUID — no external_customer_id in this payload
+    const data          = payload?.data || payload;
+    const phoneNumberId = data?.phone_number_id || data?.phoneNumberId;
+    const wabaId        = data?.waba_id || data?.wabaId;
+    const kapsoCustomerId = data?.customer?.id || payload?.customer?.id;
 
     logError('kapso-onboarding-webhook', {
-      message: `event=${eventType} phone_number_id=${phoneNumberId} waba_id=${wabaId} ext_customer_id=${extCustomerId}`,
+      message: `event=${eventType} phone_number_id=${phoneNumberId} waba_id=${wabaId} kapso_customer_id=${kapsoCustomerId}`,
       stack: '',
     });
 
-    if (!phoneNumberId || !extCustomerId) {
-      logError('kapso-onboarding-webhook', { message: 'missing phone_number_id or external_customer_id — skipping', stack: '' });
+    if (!phoneNumberId || !kapsoCustomerId) {
+      logError('kapso-onboarding-webhook', { message: 'missing phone_number_id or customer.id — skipping', stack: '' });
       return;
     }
 
-    const businessId = Number(extCustomerId);
-    const business   = getBusinessById(businessId);
+    const business = getBusinessByKapsoCustomerId(kapsoCustomerId);
     if (!business) {
-      logError('kapso-onboarding-webhook', { message: `business not found for external_customer_id=${extCustomerId}`, stack: '' });
+      logError('kapso-onboarding-webhook', { message: `business not found for kapso_customer_id=${kapsoCustomerId}`, stack: '' });
       return;
     }
 
@@ -1839,6 +1837,31 @@ app.post('/api/whatsapp/connect', requireAuth, async (req, res) => {
     logError('kapso-onboarding-link', err);
     res.status(500).json({ error: err.message });
   }
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Kapso onboarding — save credentials from Kapso redirect params
+// POST /api/whatsapp/save-kapso-redirect
+app.post('/api/whatsapp/save-kapso-redirect', requireAuth, (req, res) => {
+  const business = getBusinessByUserId(req.session.userId);
+  if (!business) return res.status(400).json({ error: 'Negocio no encontrado' });
+
+  const { phone_number_id, waba_id } = req.body;
+  if (!phone_number_id) return res.status(400).json({ error: 'phone_number_id requerido' });
+
+  saveWabaCredentials(business.id, {
+    wabaId:        waba_id || null,
+    phoneNumberId: String(phone_number_id),
+    accessToken:   null,
+    provider:      'kapso',
+  });
+
+  logError('kapso-onboarding-redirect', {
+    message: `saved business_id=${business.id} phone_number_id=${phone_number_id} waba_id=${waba_id ?? 'none'} provider=kapso`,
+    stack: '',
+  });
+
+  res.json({ ok: true });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
