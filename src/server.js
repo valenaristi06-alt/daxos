@@ -1895,25 +1895,18 @@ app.get('/api/whatsapp/status', requireAuth, async (req, res) => {
       return res.json({ connected: false, reason: 'not_found' });
     }
 
-    // Log raw status value so we learn the exact string from the first real case
-    const rawStatus    = linkData.status;
+    // Always log exact status string — lets us learn the real Kapso value from production
+    const rawStatus     = linkData.status;
     const phoneNumberId = linkData.phone_number_id || linkData.phoneNumberId;
     const wabaId        = linkData.waba_id         || linkData.wabaId;
 
     logError('kapso-onboarding-status', {
-      message: `status=${JSON.stringify(rawStatus)} phone_number_id=${phoneNumberId} waba_id=${wabaId}`,
+      message: `raw_status=${JSON.stringify(rawStatus)} all_keys=${JSON.stringify(Object.keys(linkData))} phone_number_id=${phoneNumberId} waba_id=${wabaId}`,
       stack: '',
     });
 
-    // Accept any status that looks like completion AND has a phone_number_id
-    // We don't hardcode the string — once we see the real value we'll tighten this
-    const looksComplete = phoneNumberId && (
-      String(rawStatus).toLowerCase().includes('complet') ||
-      String(rawStatus).toLowerCase().includes('connect') ||
-      String(rawStatus).toLowerCase().includes('activ')
-    );
-
-    if (looksComplete) {
+    // phone_number_id present = connection exists — save regardless of status string
+    if (phoneNumberId) {
       saveWabaCredentials(business.id, {
         wabaId:        wabaId || null,
         phoneNumberId: String(phoneNumberId),
@@ -1921,13 +1914,13 @@ app.get('/api/whatsapp/status', requireAuth, async (req, res) => {
         provider:      'kapso',
       });
       logError('kapso-onboarding-status', {
-        message: `saved business_id=${business.id} phone_number_id=${phoneNumberId} provider=kapso`,
+        message: `saved business_id=${business.id} phone_number_id=${phoneNumberId} raw_status=${JSON.stringify(rawStatus)} provider=kapso`,
         stack: '',
       });
       return res.json({ connected: true });
     }
 
-    res.json({ connected: false, status: rawStatus });
+    res.json({ connected: false, raw_status: rawStatus });
   } catch (err) {
     logError('kapso-onboarding-status', err);
     res.status(500).json({ error: err.message });
