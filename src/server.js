@@ -2032,6 +2032,69 @@ app.get('/admin/api/checkpoint', requireAdmin, (req, res) => {
   res.json({ ok: true, result });
 });
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Rescue: query Kapso phone numbers and save credentials for any business
+// that completed Kapso onboarding but never got its phone_number_id saved.
+// GET /admin/api/kapso-rescue  — dry run (shows what would be fixed)
+// POST /admin/api/kapso-rescue — applies the fix
+app.all('/admin/api/kapso-rescue', requireAdmin, async (req, res) => {
+  const apiKey = process.env.KAPSO_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'KAPSO_API_KEY no configurada' });
+
+  try {
+    const numbersRes = await fetch('https://api.kapso.ai/platform/v1/whatsapp/phone_numbers?per_page=100', {
+      headers: { 'X-API-Key': apiKey },
+    });
+    if (!numbersRes.ok) {
+      const body = await numbersRes.text();
+      return res.status(502).json({ error: `Kapso responded ${numbersRes.status}`, body });
+    }
+    const numbersData = await numbersRes.json();
+    const phoneNumbers = numbersData?.data || [];
+
+    const results = [];
+    for (const pn of phoneNumbers) {
+      const { phone_number_id, business_account_id, customer_id, display_phone_number, status } = pn;
+      if (!phone_number_id || !customer_id) {
+        results.push({ phone_number_id, customer_id, status: 'skipped_no_ids' });
+        continue;
+      }
+
+      const business = getBusinessByKapsoCustomerId(customer_id);
+      if (!business) {
+        results.push({ phone_number_id, customer_id, display_phone_number, status: 'no_business_match' });
+        continue;
+      }
+
+      if (business.phone_number_id) {
+        results.push({ phone_number_id, customer_id, business_id: business.id, display_phone_number, status: 'already_saved' });
+        continue;
+      }
+
+      if (req.method === 'POST') {
+        saveWabaCredentials(business.id, {
+          wabaId:        business_account_id || null,
+          phoneNumberId: String(phone_number_id),
+          accessToken:   null,
+          provider:      'kapso',
+        });
+        logError('kapso-rescue', {
+          message: `rescued business_id=${business.id} phone_number_id=${phone_number_id} display=${display_phone_number}`,
+          stack: '',
+        });
+        results.push({ phone_number_id, customer_id, business_id: business.id, display_phone_number, status: 'rescued' });
+      } else {
+        results.push({ phone_number_id, customer_id, business_id: business.id, display_phone_number, status: 'would_rescue' });
+      }
+    }
+
+    res.json({ dry_run: req.method === 'GET', total_kapso_numbers: phoneNumbers.length, results });
+  } catch (err) {
+    logError('kapso-rescue', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Temporary one-shot route to load WhatsApp credentials for a business by owner email.
 // Protected by ADMIN_SET_WA_TOKEN env var (Bearer token). Remove once credentials are loaded.
 app.post('/admin/set-wa-credentials', (req, res) => {
