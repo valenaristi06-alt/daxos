@@ -698,7 +698,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           ${step4
             ? stepRow(true, 'Método de pago en Meta')
             : stepRow(false, 'Método de pago en Meta',
-                'Meta requiere que tu cuenta de WhatsApp Business tenga un método de pago registrado. Responder a clientes que te escriben primero es gratis — es solo un requisito de activación de Meta.',
+                'Meta requiere un método de pago cargado en tu cuenta de WhatsApp Business; sin él, deja de entregar mensajes. Meta incluye 1.000 respuestas gratis por mes por número; después cobra por cada respuesta. Lo cobra Meta directo, no Daxos.',
                 `<button class="step-confirm-btn" id="btn-confirm-payment" onclick="confirmWaPayment()">Ya lo cargué →</button>`
               )
           }
@@ -743,6 +743,11 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       document.getElementById('form').style.display = '';
       renderWaConnectionStatus(b);
       renderActivationPanel(b);
+
+      // Auto-check: Kapso connected but webhook might be missing — retry silently on each load
+      if (b && b.phone_number_id && b.wa_provider === 'kapso') {
+        fetch('/api/whatsapp/ensure-webhook').catch(() => {});
+      }
 
       // Auto-check: Kapso onboarding started but phone_number_id not yet saved — do one silent check
       if (b && b.kapso_customer_id && !b.phone_number_id) {

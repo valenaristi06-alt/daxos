@@ -1310,6 +1310,62 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
+// Creates the message webhook for a Kapso phone number if it doesn't exist yet.
+// Fire-and-forget: call without await. Logs failures to errors table.
+async function ensureKapsoWebhook(phoneNumberId) {
+  const apiKey       = process.env.KAPSO_API_KEY;
+  const webhookSecret = process.env.KAPSO_WEBHOOK_SECRET;
+  if (!apiKey || !webhookSecret) {
+    logError('kapso-ensure-webhook', { message: `missing env: apiKey=${!!apiKey} webhookSecret=${!!webhookSecret} — cannot create webhook for phone_number_id=${phoneNumberId}`, stack: '' });
+    return;
+  }
+  try {
+    // Check if active webhook already points to this server
+    const listRes = await fetch(
+      `https://api.kapso.ai/platform/v1/whatsapp/phone_numbers/${phoneNumberId}/webhooks?url_contains=daxos.lat`,
+      { headers: { 'X-API-Key': apiKey } },
+    );
+    if (!listRes.ok) {
+      logError('kapso-ensure-webhook', { message: `list FAILED phone_number_id=${phoneNumberId} status=${listRes.status}`, stack: '' });
+      return;
+    }
+    const listBody = await listRes.json();
+    const existing = (listBody?.data || []).find(
+      w => w.active &&
+           w.url === 'https://daxos.lat/webhook/kapso' &&
+           Array.isArray(w.events) && w.events.includes('whatsapp.message.received'),
+    );
+    if (existing) return;
+
+    // No active webhook — create it
+    const createRes = await fetch(
+      `https://api.kapso.ai/platform/v1/whatsapp/phone_numbers/${phoneNumberId}/webhooks`,
+      {
+        method: 'POST',
+        headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          whatsapp_webhook: {
+            url:             'https://daxos.lat/webhook/kapso',
+            secret_key:      webhookSecret,
+            active:          true,
+            events:          ['whatsapp.message.received'],
+            payload_version: 'v2',
+          },
+        }),
+      },
+    );
+    const createBody = await createRes.json().catch(() => ({}));
+    if (!createRes.ok) {
+      logError('kapso-ensure-webhook', { message: `create FAILED phone_number_id=${phoneNumberId} status=${createRes.status} body=${JSON.stringify(createBody)}`, stack: '' });
+      return;
+    }
+    const webhookId = createBody?.data?.id;
+    logError('kapso-ensure-webhook', { message: `created phone_number_id=${phoneNumberId} webhook_id=${webhookId}`, stack: '' });
+  } catch (err) {
+    logError('kapso-ensure-webhook', { message: `error phone_number_id=${phoneNumberId}: ${err.message}`, stack: err.stack || '' });
+  }
+}
+
 // Confirms a phone_number_id for a Kapso customer by querying the platform API.
 // Returns { phoneNumberId, wabaId, displayPhoneNumber } or null.
 // This is the same call the rescue endpoint uses — the API is the source of truth.
@@ -1438,18 +1494,20 @@ app.post('/webhook/kapso-platform', async (req, res) => {
     stack: '',
   });
 
-  if (secret) {
-    if (!rawBody) {
-      logError('kapso-onboarding-webhook', { message: 'rawBody missing', stack: '' });
-      return;
-    }
-    const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
-    const expBuf   = Buffer.from(expected, 'utf8');
-    const sigBuf   = Buffer.from(sig.length === expected.length ? sig : '', 'utf8');
-    if (sigBuf.length === 0 || !crypto.timingSafeEqual(sigBuf, expBuf)) {
-      logError('kapso-onboarding-webhook', { message: 'invalid HMAC — rejected', stack: '' });
-      return;
-    }
+  if (!secret) {
+    logError('kapso-onboarding-webhook', { message: 'KAPSO_PLATFORM_WEBHOOK_SECRET not set — rejecting request', stack: '' });
+    return;
+  }
+  if (!rawBody) {
+    logError('kapso-onboarding-webhook', { message: 'rawBody missing', stack: '' });
+    return;
+  }
+  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  const expBuf   = Buffer.from(expected, 'utf8');
+  const sigBuf   = Buffer.from(sig.length === expected.length ? sig : '', 'utf8');
+  if (sigBuf.length === 0 || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+    logError('kapso-onboarding-webhook', { message: 'invalid HMAC — rejected', stack: '' });
+    return;
   }
 
   try {
@@ -1511,6 +1569,8 @@ app.post('/webhook/kapso-platform', async (req, res) => {
       message: `saved business_id=${business.id} phone_number_id=${confirmed.phoneNumberId} display=${confirmed.displayPhoneNumber} provider=kapso`,
       stack: '',
     });
+
+    ensureKapsoWebhook(confirmed.phoneNumberId);
   } catch (err) {
     logError('kapso-onboarding-webhook', err);
   }
@@ -1940,6 +2000,7 @@ app.post('/api/whatsapp/save-kapso-redirect', requireAuth, async (req, res) => {
     stack: '',
   });
 
+  ensureKapsoWebhook(confirmed.phoneNumberId);
   res.json({ ok: true });
 });
 
@@ -2012,6 +2073,7 @@ app.get('/api/whatsapp/status', requireAuth, async (req, res) => {
             message: `saved via setup_link business_id=${business.id} phone_number_id=${phoneNumberId} provider=kapso`,
             stack: '',
           });
+          ensureKapsoWebhook(String(phoneNumberId));
           return res.json({ connected: true });
         }
       } else {
@@ -2032,6 +2094,7 @@ app.get('/api/whatsapp/status', requireAuth, async (req, res) => {
         message: `confirmed via API business_id=${business.id} phone_number_id=${confirmed.phoneNumberId} provider=kapso`,
         stack: '',
       });
+      ensureKapsoWebhook(confirmed.phoneNumberId);
       return res.json({ connected: true });
     }
 
@@ -2040,6 +2103,19 @@ app.get('/api/whatsapp/status', requireAuth, async (req, res) => {
     logError('kapso-onboarding-status', err);
     res.status(500).json({ error: err.message });
   }
+});
+
+// Kapso onboarding — ensure message webhook exists for the connected number
+// GET /api/whatsapp/ensure-webhook
+// Called from the dashboard on panel load for Kapso-connected businesses.
+app.get('/api/whatsapp/ensure-webhook', requireAuth, async (req, res) => {
+  const business = getBusinessByUserId(req.session.userId);
+  if (!business) return res.status(400).json({ error: 'Negocio no encontrado' });
+  if (!business.phone_number_id || business.wa_provider !== 'kapso') {
+    return res.json({ ok: false, reason: 'not_kapso' });
+  }
+  await ensureKapsoWebhook(business.phone_number_id);
+  res.json({ ok: true });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -2174,6 +2250,7 @@ app.all('/admin/api/kapso-rescue', requireAdmin, async (req, res) => {
           message: `rescued business_id=${business.id} phone_number_id=${phone_number_id} display=${display_phone_number}`,
           stack: '',
         });
+        ensureKapsoWebhook(String(phone_number_id));
         results.push({ phone_number_id, customer_id, business_id: business.id, display_phone_number, status: 'rescued' });
       } else {
         results.push({ phone_number_id, customer_id, business_id: business.id, display_phone_number, status: 'would_rescue' });
