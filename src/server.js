@@ -1415,6 +1415,10 @@ app.post('/webhook/kapso-platform', async (req, res) => {
     logError('kapso-onboarding-webhook', { message: `full_payload=${JSON.stringify(payload)}`, stack: '' });
 
     const eventType = payload?.event || payload?.type;
+    logError('kapso-onboarding-webhook', {
+      message: `resolved_event_type=${JSON.stringify(eventType)} top_level_keys=${JSON.stringify(Object.keys(payload ?? {}))}`,
+      stack: '',
+    });
     if (eventType !== 'phone_number.created' && eventType !== 'whatsapp.phone_number.created') return;
 
     // Kapso webhook payload: { phone_number_id, project: { id }, customer: { id } }
@@ -1845,6 +1849,12 @@ app.post('/api/whatsapp/connect', requireAuth, async (req, res) => {
 app.post('/api/whatsapp/save-kapso-redirect', requireAuth, (req, res) => {
   const business = getBusinessByUserId(req.session.userId);
   if (!business) return res.status(400).json({ error: 'Negocio no encontrado' });
+
+  // Log full body before processing — lets us verify exact field names Kapso sends
+  logError('kapso-onboarding-redirect', {
+    message: `incoming body=${JSON.stringify(req.body)} business_id=${business?.id ?? 'none'}`,
+    stack: '',
+  });
 
   const { phone_number_id, waba_id } = req.body;
   if (!phone_number_id) return res.status(400).json({ error: 'phone_number_id requerido' });
