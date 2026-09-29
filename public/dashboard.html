@@ -744,6 +744,21 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       renderWaConnectionStatus(b);
       renderActivationPanel(b);
 
+      // Auto-check: Kapso onboarding started but phone_number_id not yet saved — do one silent check
+      if (b && b.kapso_customer_id && !b.phone_number_id) {
+        fetch('/api/whatsapp/status')
+          .then(r => r.json())
+          .then(data => {
+            if (data.connected) {
+              fetch('/api/business').then(r => r.json()).then(fresh => {
+                currentBusiness = fresh;
+                renderWaConnectionStatus(fresh);
+              }).catch(() => {});
+            }
+          })
+          .catch(() => {});
+      }
+
       // Trial banner — runs even if no business saved yet
       const banner = document.getElementById('trial-banner');
       if (!b) {

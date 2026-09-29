@@ -1326,9 +1326,18 @@ async function confirmKapsoPhoneNumber(kapsoCustomerId) {
     }
     const body = await res.json();
     const numbers = body?.data || [];
-    const match = numbers.find(n => String(n.customer_id) === String(kapsoCustomerId));
+    const matches = numbers.filter(n => String(n.customer_id) === String(kapsoCustomerId));
+    if (matches.length === 0) {
+      logError('kapso-confirm', { message: `customer_id=${kapsoCustomerId} no match in ${numbers.length} numbers`, stack: '' });
+      return null;
+    }
+    if (matches.length > 1) {
+      logError('kapso-confirm', { message: `customer_id=${kapsoCustomerId} AMBIGUOUS: ${matches.length} matches — not saving to avoid wrong number`, stack: '' });
+      return null;
+    }
+    const match = matches[0];
     logError('kapso-confirm', {
-      message: `customer_id=${kapsoCustomerId} total_numbers=${numbers.length} match=${match ? JSON.stringify({ phone_number_id: match.phone_number_id, business_account_id: match.business_account_id, display_phone_number: match.display_phone_number, status: match.status }) : 'null'}`,
+      message: `customer_id=${kapsoCustomerId} total_numbers=${numbers.length} match=${JSON.stringify({ phone_number_id: match.phone_number_id, business_account_id: match.business_account_id, display_phone_number: match.display_phone_number, status: match.status })}`,
       stack: '',
     });
     if (!match?.phone_number_id) return null;
@@ -1947,73 +1956,86 @@ app.get('/api/whatsapp/status', requireAuth, async (req, res) => {
   }
 
   const { kapso_customer_id: kapsoCustomerId, kapso_setup_link_id: setupLinkId } = business;
-  if (!kapsoCustomerId || !setupLinkId) {
-    return res.json({ connected: false, reason: 'no_setup_link' });
+  if (!kapsoCustomerId) {
+    return res.json({ connected: false, reason: 'no_kapso' });
   }
 
   const apiKey = process.env.KAPSO_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'KAPSO_API_KEY no configurada' });
 
   try {
-    // Try specific setup link first; fall back to list if 404
-    let linkData = null;
+    // Try setup link if we have one (Kapso rarely populates phone_number_id here, but check anyway)
+    if (setupLinkId) {
+      let linkData = null;
 
-    const singleRes = await fetch(
-      `https://api.kapso.ai/platform/v1/customers/${kapsoCustomerId}/setup_links/${setupLinkId}`,
-      { headers: { 'X-API-Key': apiKey } },
-    );
-
-    if (singleRes.ok) {
-      const raw = await singleRes.json();
-      // Log full response once so field names / status values are visible in /debug/errores
-      logError('kapso-onboarding-status', { message: `single_response=${JSON.stringify(raw)}`, stack: '' });
-      linkData = raw?.data || raw;
-    } else {
-      // Fallback: fetch the list and find by id
-      const listRes = await fetch(
-        `https://api.kapso.ai/platform/v1/customers/${kapsoCustomerId}/setup_links`,
+      const singleRes = await fetch(
+        `https://api.kapso.ai/platform/v1/customers/${kapsoCustomerId}/setup_links/${setupLinkId}`,
         { headers: { 'X-API-Key': apiKey } },
       );
-      if (listRes.ok) {
-        const listRaw = await listRes.json();
-        logError('kapso-onboarding-status', { message: `list_response=${JSON.stringify(listRaw)}`, stack: '' });
-        const items = listRaw?.data || listRaw;
-        const arr   = Array.isArray(items) ? items : [];
-        linkData = arr.find(l => String(l.id) === String(setupLinkId)) || arr[0] || null;
+
+      if (singleRes.ok) {
+        const raw = await singleRes.json();
+        logError('kapso-onboarding-status', { message: `single_response=${JSON.stringify(raw)}`, stack: '' });
+        linkData = raw?.data || raw;
+      } else {
+        const listRes = await fetch(
+          `https://api.kapso.ai/platform/v1/customers/${kapsoCustomerId}/setup_links`,
+          { headers: { 'X-API-Key': apiKey } },
+        );
+        if (listRes.ok) {
+          const listRaw = await listRes.json();
+          logError('kapso-onboarding-status', { message: `list_response=${JSON.stringify(listRaw)}`, stack: '' });
+          const items = listRaw?.data || listRaw;
+          const arr   = Array.isArray(items) ? items : [];
+          linkData = arr.find(l => String(l.id) === String(setupLinkId)) || arr[0] || null;
+        }
+      }
+
+      if (linkData) {
+        const rawStatus     = linkData.status;
+        const phoneNumberId = linkData.phone_number_id || linkData.phoneNumberId;
+        const wabaId        = linkData.waba_id         || linkData.wabaId;
+
+        logError('kapso-onboarding-status', {
+          message: `setup_link raw_status=${JSON.stringify(rawStatus)} all_keys=${JSON.stringify(Object.keys(linkData))} phone_number_id=${phoneNumberId} waba_id=${wabaId}`,
+          stack: '',
+        });
+
+        if (phoneNumberId) {
+          saveWabaCredentials(business.id, {
+            wabaId:        wabaId || null,
+            phoneNumberId: String(phoneNumberId),
+            accessToken:   null,
+            provider:      'kapso',
+          });
+          logError('kapso-onboarding-status', {
+            message: `saved via setup_link business_id=${business.id} phone_number_id=${phoneNumberId} provider=kapso`,
+            stack: '',
+          });
+          return res.json({ connected: true });
+        }
+      } else {
+        logError('kapso-onboarding-status', { message: `setup_link not found customer=${kapsoCustomerId} link=${setupLinkId}`, stack: '' });
       }
     }
 
-    if (!linkData) {
-      logError('kapso-onboarding-status', { message: `setup_link not found customer=${kapsoCustomerId} link=${setupLinkId}`, stack: '' });
-      return res.json({ connected: false, reason: 'not_found' });
-    }
-
-    // Always log exact status string — lets us learn the real Kapso value from production
-    const rawStatus     = linkData.status;
-    const phoneNumberId = linkData.phone_number_id || linkData.phoneNumberId;
-    const wabaId        = linkData.waba_id         || linkData.wabaId;
-
-    logError('kapso-onboarding-status', {
-      message: `raw_status=${JSON.stringify(rawStatus)} all_keys=${JSON.stringify(Object.keys(linkData))} phone_number_id=${phoneNumberId} waba_id=${wabaId}`,
-      stack: '',
-    });
-
-    // phone_number_id present = connection exists — save regardless of status string
-    if (phoneNumberId) {
+    // Setup link had no phone_number_id (or no setup link) — confirm via phone_numbers API
+    const confirmed = await confirmKapsoPhoneNumber(kapsoCustomerId);
+    if (confirmed) {
       saveWabaCredentials(business.id, {
-        wabaId:        wabaId || null,
-        phoneNumberId: String(phoneNumberId),
+        wabaId:        confirmed.wabaId || null,
+        phoneNumberId: confirmed.phoneNumberId,
         accessToken:   null,
         provider:      'kapso',
       });
       logError('kapso-onboarding-status', {
-        message: `saved business_id=${business.id} phone_number_id=${phoneNumberId} raw_status=${JSON.stringify(rawStatus)} provider=kapso`,
+        message: `confirmed via API business_id=${business.id} phone_number_id=${confirmed.phoneNumberId} provider=kapso`,
         stack: '',
       });
       return res.json({ connected: true });
     }
 
-    res.json({ connected: false, raw_status: rawStatus });
+    res.json({ connected: false, reason: 'not_ready' });
   } catch (err) {
     logError('kapso-onboarding-status', err);
     res.status(500).json({ error: err.message });
