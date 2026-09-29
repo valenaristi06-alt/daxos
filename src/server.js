@@ -20,7 +20,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -1440,7 +1440,7 @@ app.post('/webhook/kapso-platform', async (req, res) => {
       return;
     }
 
-    saveWabaCredentials(businessId, {
+    saveWabaCredentials(business.id, {
       wabaId:        wabaId || null,
       phoneNumberId: String(phoneNumberId),
       accessToken:   null,
@@ -1448,7 +1448,7 @@ app.post('/webhook/kapso-platform', async (req, res) => {
     });
 
     logError('kapso-onboarding-webhook', {
-      message: `saved business_id=${businessId} phone_number_id=${phoneNumberId} provider=kapso`,
+      message: `saved business_id=${business.id} phone_number_id=${phoneNumberId} provider=kapso`,
       stack: '',
     });
   } catch (err) {
@@ -1871,8 +1871,8 @@ app.get('/api/whatsapp/status', requireAuth, async (req, res) => {
   const business = getBusinessByUserId(req.session.userId);
   if (!business) return res.status(400).json({ error: 'Negocio no encontrado' });
 
-  // Already connected
-  if (business.phone_number_id && business.wa_provider === 'kapso') {
+  // Already connected (any provider)
+  if (business.phone_number_id) {
     return res.json({ connected: true });
   }
 
@@ -2147,6 +2147,30 @@ app.post('/admin/set-plan', (req, res) => {
   if (subscription_status) setSubscriptionStatus(user.business_id, subscription_status);
 
   res.json({ ok: true, business_id: user.business_id, plan, subscription_status: subscription_status || 'active' });
+});
+
+// Clears WA credentials so the next Kapso reconnect can write fresh ones.
+// Use after deregistering a number from the Meta API.
+app.post('/admin/disconnect-wa', (req, res) => {
+  const secret = process.env.ADMIN_SET_WA_TOKEN;
+  if (!secret) return res.status(503).json({ error: 'ADMIN_SET_WA_TOKEN no configurado' });
+  const auth = req.headers['authorization'] || '';
+  if (auth !== `Bearer ${secret}`) return res.status(403).json({ error: 'Token inválido' });
+
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'email requerido' });
+
+  const user = getUserByEmail(email);
+  if (!user) return res.status(404).json({ error: `No existe usuario con email: ${email}` });
+  if (!user.business_id) return res.status(404).json({ error: `El usuario ${email} no tiene negocio asociado` });
+
+  const prev = clearWabaCredentials(user.business_id);
+  logError('admin-disconnect-wa', {
+    message: `business_id=${user.business_id} email=${email} cleared: phone_number_id=${prev?.phone_number_id ?? 'null'} waba_id=${prev?.waba_id ?? 'null'} wa_provider=${prev?.wa_provider ?? 'null'}`,
+    stack: '',
+  });
+
+  res.json({ ok: true, business_id: user.business_id, cleared: prev });
 });
 
 process.on('SIGTERM', () => {

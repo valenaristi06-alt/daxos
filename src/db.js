@@ -340,7 +340,17 @@ function deserializeBusiness(row) {
 
 function saveWabaCredentials(businessId, { wabaId, phoneNumberId, accessToken = null, provider = 'meta' }) {
   // Only start the trial clock on first connection — don't reset if already connected
-  const existing = db.prepare('SELECT trial_starts_at FROM businesses WHERE id = ?').get(businessId);
+  const existing = db.prepare('SELECT trial_starts_at, phone_number_id FROM businesses WHERE id = ?').get(businessId);
+
+  // Guard: never overwrite an already-connected number — use clearWabaCredentials first
+  if (existing?.phone_number_id) {
+    logError('saveWabaCredentials-blocked', {
+      message: `biz ${businessId} already has phone_number_id=${existing.phone_number_id} — skipping overwrite with ${phoneNumberId}`,
+      stack: '',
+    });
+    return;
+  }
+
   const encToken = accessToken ? encrypt(accessToken) : null;
   if (existing && !existing.trial_starts_at) {
     db.prepare(`
@@ -355,6 +365,16 @@ function saveWabaCredentials(businessId, { wabaId, phoneNumberId, accessToken = 
       UPDATE businesses SET waba_id = ?, phone_number_id = ?, wa_access_token = ?, wa_provider = ? WHERE id = ?
     `).run(wabaId, phoneNumberId, encToken, provider, businessId);
   }
+}
+
+function clearWabaCredentials(businessId) {
+  const prev = db.prepare('SELECT phone_number_id, waba_id, wa_provider FROM businesses WHERE id = ?').get(businessId);
+  db.prepare(`
+    UPDATE businesses
+    SET phone_number_id = NULL, waba_id = NULL, wa_access_token = NULL, wa_provider = 'meta'
+    WHERE id = ?
+  `).run(businessId);
+  return prev || null;
 }
 
 function setUserPhone(userId, phone) {
@@ -968,6 +988,7 @@ module.exports = {
   getBusinessAdminMetrics,
   getPlanCounts,
   saveWabaCredentials,
+  clearWabaCredentials,
   setWaPaymentConfirmed,
   setBookingEnabled,
   getTrialMessageCount,
