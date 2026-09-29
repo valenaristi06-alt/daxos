@@ -1773,7 +1773,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         }).catch(() => {});
       }
 
-      // Fast path: Kapso included phone_number_id in the redirect URL — save immediately
+      // Fast path: Kapso included phone_number_id in the redirect URL — confirm via API then save
       if (redirectPhoneId) {
         fetch('/api/whatsapp/save-kapso-redirect', {
           method: 'POST',
@@ -1782,8 +1782,11 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         })
           .then(r => r.json())
           .then(data => {
-            if (data.ok) { onConnected(); }
-            else { waStep('No se pudo guardar la conexión. Recargá la página.'); document.getElementById('btn-wa-connect').disabled = false; }
+            if (data.ok) { onConnected(); return; }
+            // Server confirmed via API but number not ready yet — fall through to polling
+            if (data.polling) { waStep('Verificando conexión…'); startPolling(); return; }
+            waStep('No se pudo guardar la conexión. Recargá la página.');
+            document.getElementById('btn-wa-connect').disabled = false;
           })
           .catch(() => { waStep('No se pudo guardar la conexión. Recargá la página.'); document.getElementById('btn-wa-connect').disabled = false; });
         return;
@@ -1794,31 +1797,35 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       const INTERVAL_MS  = 4000;
       let attempts = 0;
 
-      const poll = setInterval(async () => {
-        attempts++;
-        try {
-          const r    = await fetch('/api/whatsapp/status');
-          const data = await r.json();
+      function startPolling() {
+        const poll = setInterval(async () => {
+          attempts++;
+          try {
+            const r    = await fetch('/api/whatsapp/status');
+            const data = await r.json();
 
-          if (data.connected) {
-            clearInterval(poll);
-            onConnected();
-            return;
-          }
+            if (data.connected) {
+              clearInterval(poll);
+              onConnected();
+              return;
+            }
 
-          if (attempts >= MAX_ATTEMPTS) {
-            clearInterval(poll);
-            waStep('La conexión está en proceso — recargá la página en unos minutos para confirmar.');
-            document.getElementById('btn-wa-connect').disabled = false;
+            if (attempts >= MAX_ATTEMPTS) {
+              clearInterval(poll);
+              waStep('La conexión está en proceso — recargá la página en unos minutos para confirmar.');
+              document.getElementById('btn-wa-connect').disabled = false;
+            }
+          } catch {
+            if (attempts >= MAX_ATTEMPTS) {
+              clearInterval(poll);
+              waStep('No se pudo verificar la conexión. Recargá la página.');
+              document.getElementById('btn-wa-connect').disabled = false;
+            }
           }
-        } catch {
-          if (attempts >= MAX_ATTEMPTS) {
-            clearInterval(poll);
-            waStep('No se pudo verificar la conexión. Recargá la página.');
-            document.getElementById('btn-wa-connect').disabled = false;
-          }
-        }
-      }, INTERVAL_MS);
+        }, INTERVAL_MS);
+      }
+
+      startPolling();
     })();
 
     document.getElementById('btn-wa-help').addEventListener('click', function () {
