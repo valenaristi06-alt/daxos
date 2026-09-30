@@ -10,7 +10,7 @@ const {
   getBookingsNeedingTimeout,
 } = require('./db');
 const { sendWhatsAppMessage } = require('./whatsapp');
-const { sendPauseEmail } = require('./email');
+const { sendBookingNotificationEmail } = require('./email');
 
 // Build the WA message sent to the owner when a booking is created.
 function buildOwnerMessage(booking, businessName) {
@@ -38,7 +38,7 @@ async function notifyOwnerOfBooking({ business, owner, booking, waCredentials })
   const msg = buildOwnerMessage(booking, business.name);
   let waSent = false;
 
-  if (ownerPhone && waCredentials?.phoneNumberId && waCredentials?.accessToken) {
+  if (ownerPhone && waCredentials?.phoneNumberId) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         await sendWhatsAppMessage(ownerPhone, msg, waCredentials);
@@ -60,12 +60,15 @@ async function notifyOwnerOfBooking({ business, owner, booking, waCredentials })
   // Email fallback — always attempt when WA didn't send
   if (!waSent && owner?.email) {
     try {
-      await sendPauseEmail({
-        to: owner.email,
+      await sendBookingNotificationEmail({
+        to:           owner.email,
         businessName: business.name,
-        contactId: booking.customer_phone,
-        messageText: `Pedido de turno de ${booking.client_name} (${booking.reason}). Horarios: ${booking.slots.join(' / ')}. Código para responder: ${booking.slot_code}`,
-        conversationId: booking.conversation_id,
+        clientName:   booking.client_name,
+        reason:       booking.reason,
+        slots:        booking.slots,
+        slotCode:     booking.slot_code,
+        businessPhone: business.whatsapp_number || null,
+        panelUrl:     'https://daxos.lat/conversations.html',
       });
       console.log(`[booking-notify] email fallback sent to ${owner.email} booking=${booking.id}`);
     } catch (emailErr) {
@@ -209,15 +212,27 @@ async function checkBookingTimeouts({ getCredentialsForBusiness }) {
         console.log(`[booking-timeout] expired booking=${booking.id} customer=${booking.customer_phone}`);
       } else {
         // First timeout — send reminder to owner
+        let reminderWaSent = false;
         if (owner?.phone && waCredentials?.phoneNumberId) {
           const hint = booking.slots.map((s, i) => `  ${i + 1}️⃣ ${s}`).join('\n');
           await sendWhatsAppMessage(
             owner.phone,
             `⏰ *Recordatorio de turno pendiente (${booking.slot_code})*\n\nCliente: ${booking.client_name}\nMotivo: ${booking.reason}\n\n${hint}\n\nRespuesta pendiente: *${booking.slot_code}-1*, *${booking.slot_code}-2*, *${booking.slot_code}-3* o *${booking.slot_code}-NO*`,
             waCredentials
-          ).catch(err => console.error(`[booking-timeout] reminder-to-owner failed booking=${booking.id}: ${err.message}`));
-        } else {
-          console.error(`[booking-timeout] ⛔ CANNOT SEND REMINDER: booking=${booking.id} ownerPhone=${owner?.phone || 'missing'} waCredentials=${waCredentials?.phoneNumberId ? 'ok' : 'missing'}`);
+          ).then(() => { reminderWaSent = true; })
+           .catch(err => console.error(`[booking-timeout] reminder-to-owner failed booking=${booking.id}: ${err.message}`));
+        }
+        if (!reminderWaSent && owner?.email) {
+          sendBookingNotificationEmail({
+            to:           owner.email,
+            businessName: business.name,
+            clientName:   booking.client_name,
+            reason:       booking.reason,
+            slots:        booking.slots,
+            slotCode:     booking.slot_code,
+            businessPhone: business.whatsapp_number || null,
+            panelUrl:     'https://daxos.lat/conversations.html',
+          }).catch(err => console.error(`[booking-timeout] reminder email fallback failed booking=${booking.id}: ${err.message}`));
         }
         markBookingReminderSent(booking.id);
         console.log(`[booking-timeout] reminder sent booking=${booking.id} owner=${owner?.phone}`);

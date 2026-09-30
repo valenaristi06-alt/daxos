@@ -1,5 +1,6 @@
 const { getBusinessesWithWeeklySummary, getWeeklyStats, getUserByBusinessId } = require('./db');
 const { sendWhatsAppMessage } = require('./whatsapp');
+const { sendWeeklySummaryEmail } = require('./email');
 
 function formatAvgResponse(seconds) {
   if (seconds === null) return null;
@@ -46,8 +47,16 @@ async function sendWeeklySummaries() {
       if (!owner?.phone) { skipped++; continue; }
 
       const waCredentials = { phoneNumberId: business.phone_number_id, accessToken: business.wa_access_token, provider: business.wa_provider || 'meta' };
-      const text = buildSummaryText(stats, getWeekLabel());
-      await sendWhatsAppMessage(owner.phone, text, waCredentials);
+      const weekLabel = getWeekLabel();
+      const text = buildSummaryText(stats, weekLabel);
+      let waSent = false;
+      await sendWhatsAppMessage(owner.phone, text, waCredentials)
+        .then(() => { waSent = true; })
+        .catch(err => console.error(`[weekly-summary] WA failed business=${business.id}: ${err.message}`));
+      if (!waSent && owner.email) {
+        await sendWeeklySummaryEmail({ to: owner.email, businessName: business.name, stats, weekLabel })
+          .catch(err => console.error(`[weekly-summary] email fallback failed business=${business.id}: ${err.message}`));
+      }
       sent++;
     } catch (err) {
       console.error(`[weekly-summary] business ${business.id} error:`, err.message);

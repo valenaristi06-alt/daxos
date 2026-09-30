@@ -81,4 +81,122 @@ async function sendUnmatchedPaymentAlert({ adminEmail, payerEmail, amount, curre
   }
 }
 
-module.exports = { sendPauseEmail, sendUnmatchedPaymentAlert };
+async function sendBookingNotificationEmail({ to, businessName, clientName, reason, slots, slotCode, businessPhone, panelUrl }) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) { console.warn('[resend] RESEND_API_KEY not set, skipping booking email'); return; }
+
+  const slotList = slots.map((s, i) => `
+    <li style="margin-bottom:6px">
+      <strong>${escapeHtml(slotCode)}-${i + 1}</strong> → ${escapeHtml(s)}
+    </li>`).join('');
+
+  const waHint = businessPhone
+    ? `Respondé por WhatsApp al <strong>${escapeHtml(businessPhone)}</strong> con el código correspondiente.`
+    : 'Respondé por WhatsApp al número de tu negocio con el código correspondiente.';
+
+  const body = {
+    from: 'Daxos <notificaciones@daxos.lat>',
+    to: [to],
+    subject: `Pedido de turno — ${businessName}`,
+    html: `
+      <p>Hola,</p>
+      <p>Nuevo pedido de turno en <strong>${escapeHtml(businessName)}</strong>.</p>
+      <table style="border-collapse:collapse;margin:16px 0">
+        <tr><td style="padding:4px 12px 4px 0;color:#666">Cliente</td><td>${escapeHtml(clientName)}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;color:#666">Motivo</td><td>${escapeHtml(reason)}</td></tr>
+      </table>
+      <p><strong>Para confirmar, elegí un horario respondiendo el código:</strong></p>
+      <ul style="margin:0 0 16px 0;padding-left:20px">${slotList}
+        <li style="margin-top:6px"><strong>${escapeHtml(slotCode)}-NO</strong> → rechazar todos los horarios</li>
+      </ul>
+      <p>${waHint}</p>
+      <p>O gestioná el turno desde tu panel: <a href="${panelUrl}">${panelUrl}</a></p>
+    `,
+  };
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Resend ${res.status}: ${text}`);
+  }
+}
+
+async function sendWeeklySummaryEmail({ to, businessName, stats, weekLabel }) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) { console.warn('[resend] RESEND_API_KEY not set, skipping weekly email'); return; }
+
+  const rows = [
+    `<tr><td style="padding:4px 12px 4px 0;color:#666">Consultas respondidas</td><td>${stats.aiReplies}</td></tr>`,
+    `<tr><td style="padding:4px 12px 4px 0;color:#666">Derivadas a vos</td><td>${stats.escalated}</td></tr>`,
+  ];
+  if (stats.avgSeconds !== null) {
+    const avg = stats.avgSeconds < 60 ? `${stats.avgSeconds} seg` : `${Math.round(stats.avgSeconds / 60)} min`;
+    rows.push(`<tr><td style="padding:4px 12px 4px 0;color:#666">Tiempo promedio de respuesta</td><td>${avg}</td></tr>`);
+  }
+  if (stats.autoResumed > 0) {
+    rows.push(`<tr><td style="padding:4px 12px 4px 0;color:#666">Conversaciones reactivadas</td><td>${stats.autoResumed}</td></tr>`);
+  }
+
+  const body = {
+    from: 'Daxos <notificaciones@daxos.lat>',
+    to: [to],
+    subject: `Resumen semanal — ${businessName}`,
+    html: `
+      <p>Resumen de la semana del ${escapeHtml(weekLabel)} para <strong>${escapeHtml(businessName)}</strong>.</p>
+      <table style="border-collapse:collapse;margin:16px 0">${rows.join('')}</table>
+      <p>Tu asistente está activo.</p>
+    `,
+  };
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Resend ${res.status}: ${text}`);
+  }
+}
+
+async function sendAdminNotificationEmail({ adminEmail, event, data }) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return;
+
+  const subjects = {
+    registration:          `Nuevo registro — ${data.email}`,
+    wa_connected:          `WhatsApp conectado — ${data.businessName}`,
+    incomplete_connection: `Conexión incompleta — ${data.businessName}`,
+  };
+  const subject = subjects[event] || `Daxos Admin: ${event}`;
+
+  const rows = Object.entries(data)
+    .map(([k, v]) => `<tr><td style="padding:4px 12px 4px 0;color:#666">${escapeHtml(k)}</td><td>${escapeHtml(String(v ?? ''))}</td></tr>`)
+    .join('');
+
+  const body = {
+    from: 'Daxos Admin <notificaciones@daxos.lat>',
+    to: [adminEmail],
+    subject,
+    html: `<p>Evento: <strong>${escapeHtml(event)}</strong></p><table style="border-collapse:collapse;margin:16px 0">${rows}</table>`,
+  };
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Resend ${res.status}: ${text}`);
+  }
+}
+
+module.exports = { sendPauseEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail };
