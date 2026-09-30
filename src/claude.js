@@ -206,10 +206,15 @@ async function generateReply(business, history, newMessage, label = null, bookin
   }
 
   const messages = [
-    ...history.map((msg) => ({
-      role: msg.role === 'assistant' ? 'assistant' : 'user',
-      content: msg.content,
-    })),
+    ...history.map((msg, i) => {
+      const role = msg.role === 'assistant' ? 'assistant' : 'user';
+      // Cache breakpoint on last history entry: Anthropic reuses everything up to this point
+      // on the next turn, paying cache_read (10%) instead of full input price.
+      if (i === history.length - 1 && history.length > 0) {
+        return { role, content: [{ type: 'text', text: msg.content, cache_control: { type: 'ephemeral' } }] };
+      }
+      return { role, content: msg.content };
+    }),
     { role: 'user', content: newMessage },
   ];
 

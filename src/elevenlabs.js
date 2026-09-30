@@ -73,8 +73,16 @@ async function generatePreview(voiceId) {
   return res; // caller pipes the response body
 }
 
+const _audioCache = new Map();
+const _AUDIO_CACHE_MAX = 200;
+
 async function generateAudioBuffer(voiceId, text) {
   requireKey();
+  const cacheKey = `${voiceId}|${text}`;
+  if (_audioCache.has(cacheKey)) {
+    console.log(`[elevenlabs:cache-hit] voiceId=${voiceId} chars=${text.length}`);
+    return _audioCache.get(cacheKey);
+  }
 
   const res = await fetch(`${BASE}/text-to-speech/${voiceId}`, {
     method: 'POST',
@@ -87,7 +95,12 @@ async function generateAudioBuffer(voiceId, text) {
     throw new Error(`ElevenLabs TTS error ${res.status}: ${err}`);
   }
 
-  return Buffer.from(await res.arrayBuffer());
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (_audioCache.size >= _AUDIO_CACHE_MAX) {
+    _audioCache.delete(_audioCache.keys().next().value);
+  }
+  _audioCache.set(cacheKey, buf);
+  return buf;
 }
 
 async function deleteVoice(voiceId) {
