@@ -676,39 +676,60 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
 
     function renderActivationPanel(b) {
       const panel = document.getElementById('activation-panel');
-      const step1 = true;
       const step2 = !!b && !!(b.business_context || (Array.isArray(b.sales_examples) && b.sales_examples.length > 0));
       const step3 = !!b && !!b.phone_number_id;
       const step4 = !!b && !!b.wa_payment_confirmed;
 
-      if (step1 && step2 && step3 && step4) {
+      if (step2 && step3 && step4) {
         panel.style.display = 'none';
         return;
       }
 
-      const stepRow = (done, label, note = '', extra = '') => `
+      const doneRow = label => `
+        <li class="activation-step activation-step--done">
+          <span class="step-icon step-icon--done">✓</span>
+          <span class="step-label step-label--done">${label}</span>
+        </li>`;
+
+      const pendingRow = (label, note) => `
         <li class="activation-step">
-          <span class="step-icon ${done ? 'step-icon--done' : 'step-icon--pending'}">${done ? '✓' : '○'}</span>
+          <span class="step-icon step-icon--pending">○</span>
           <div>
-            <span class="step-label ${done ? 'step-label--done' : ''}">${label}</span>
+            <span class="step-label">${label}</span>
             ${note ? `<p class="step-note">${note}</p>` : ''}
-            ${extra}
+          </div>
+        </li>`;
+
+      const metaUrl = 'https://business.facebook.com/latest/settings/whatsapp_account' +
+        (b.waba_id ? '?selected_asset_id=' + b.waba_id + '&selected_asset_type=whatsapp-business-account' : '');
+
+      const paymentCard = `
+        <li class="activation-step">
+          <div class="step-pending-card">
+            <div class="step-pending-header">
+              <span class="step-icon step-icon--pending">○</span>
+              <span class="step-label">Método de pago en Meta</span>
+            </div>
+            <p class="step-note">Meta lo requiere para entregar tus mensajes. Incluye 1.000 respuestas gratis por mes; lo que exceda lo cobra Meta directo, no Daxos.</p>
+            <ol class="step-numbered">
+              <li>Abrí tu cuenta de WhatsApp Business en Meta</li>
+              <li>Resumen → Configuración de pago</li>
+              <li>Agregá la tarjeta</li>
+            </ol>
+            <div class="step-actions-row">
+              <a href="${metaUrl}" target="_blank" rel="noopener" class="step-meta-link">Cargar tarjeta en Meta →</a>
+              <button class="step-confirm-btn" id="btn-confirm-payment" onclick="confirmWaPayment()">Ya lo cargué →</button>
+            </div>
           </div>
         </li>`;
 
       panel.innerHTML = `
         <p class="activation-title">Pasos para activar tu asistente</p>
         <ul class="activation-steps">
-          ${stepRow(true, 'Cuenta creada')}
-          ${stepRow(step2, 'Información del negocio cargada', step2 ? '' : 'Completá el contexto del negocio o los ejemplos de venta abajo.')}
-          ${stepRow(step3, 'WhatsApp conectado', step3 ? '' : 'Conectá tu número de WhatsApp Business más abajo.')}
-          ${step4
-            ? stepRow(true, 'Método de pago en Meta')
-            : stepRow(false, 'Método de pago en Meta',
-                'Meta requiere un método de pago cargado en tu cuenta de WhatsApp Business; sin él, deja de entregar mensajes. Meta incluye 1.000 respuestas gratis por mes por número; después cobra por cada respuesta. Lo cobra Meta directo, no Daxos.',
-                `<a href="https://business.facebook.com/latest/settings/whatsapp_account${b.waba_id ? '?selected_asset_id=' + b.waba_id + '&selected_asset_type=whatsapp-business-account' : ''}" target="_blank" rel="noopener" class="step-meta-link">Cargar tarjeta en Meta →</a><p class="step-meta-hint">Elegí tu cuenta de WhatsApp → Resumen → Configuración de pago → agregá la tarjeta.</p><button class="step-confirm-btn" id="btn-confirm-payment" onclick="confirmWaPayment()">Ya lo cargué →</button>`
-              )
-          }
+          ${doneRow('Cuenta creada')}
+          ${step2 ? doneRow('Información del negocio cargada') : pendingRow('Información del negocio', 'Completá el contexto del negocio o los ejemplos de venta más abajo.')}
+          ${step3 ? doneRow('WhatsApp conectado') : pendingRow('WhatsApp', 'Conectá tu número de WhatsApp Business más abajo.')}
+          ${step4 ? doneRow('Método de pago en Meta') : paymentCard}
         </ul>`;
       panel.style.display = 'block';
     }
