@@ -8,7 +8,7 @@ const _apiKey = process.env.ANTHROPIC_API_KEY;
 console.log('[startup] PID=' + process.pid + ' ANTHROPIC_API_KEY present:', !!_apiKey, '| length:', _apiKey?.length ?? 0, '| prefix:', _apiKey ? _apiKey.slice(0, 8) : 'MISSING');
 console.log('[startup] PID=' + process.pid + ' globalThis capture present:', !!globalThis.__DAXOS_ENV.ANTHROPIC_API_KEY, '| length:', globalThis.__DAXOS_ENV.ANTHROPIC_API_KEY?.length ?? 0);
 
-const TRIAL_MESSAGE_LIMIT = 200;
+const TRIAL_CONV_LIMIT = 150;
 const AUDIO_MAX_CHARS = 600;
 
 const crypto = require('crypto');
@@ -20,7 +20,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags } = require('./db');
+const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -33,7 +33,7 @@ initAnthropicKey(_apiKey);
 const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = require('./bookings');
 const { sendWeeklySummaries } = require('./weekly');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
-const { sendPauseEmail, sendUnmatchedPaymentAlert } = require('./email');
+const { sendPauseEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail } = require('./email');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -177,6 +177,7 @@ app.post('/auth/register', async (req, res) => {
     const user = createUser(email, hash);
     req.session.userId = user.id;
     res.json({ ok: true, email: user.email });
+    notifyAdmin('registration', { email }).catch(() => {});
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -232,8 +233,8 @@ app.get('/api/business', requireAuth, (req, res) => {
   const business = getBusinessByUserId(req.session.userId);
   if (!business) return res.json(null);
   if (business.plan === 'arranque' && business.trial_starts_at && !business.plan_cortesia) {
-    const trial_msg_count = getTrialMessageCount(business.id, business.trial_starts_at);
-    return res.json({ ...business, trial_msg_count, trial_msg_limit: TRIAL_MESSAGE_LIMIT });
+    const trial_conv_count = getTrialConversationCount(business.id, business.trial_starts_at);
+    return res.json({ ...business, trial_conv_count, trial_conv_limit: TRIAL_CONV_LIMIT });
   }
   res.json(business);
 });
@@ -918,6 +919,28 @@ async function notifyOwnerOfPause({ business, owner, channel, contactId, message
   });
 }
 
+async function notifyAdmin(event, data) {
+  const adminEmail        = process.env.ADMIN_EMAIL;
+  const adminPhone        = process.env.ADMIN_PHONE;
+  const adminPhoneNumberId = process.env.ADMIN_KAPSO_PHONE_NUMBER_ID;
+
+  if (!adminEmail) return;
+
+  sendAdminNotificationEmail({ adminEmail, event, data })
+    .catch(err => logError('admin-notify', { message: `email failed event=${event}: ${err.message}`, stack: '' }));
+
+  if (adminPhone && adminPhoneNumberId) {
+    const waTexts = {
+      registration:          `Nuevo registro en Daxos: ${data.email}`,
+      wa_connected:          `WhatsApp conectado: ${data.businessName}`,
+      incomplete_connection: `Conexión incompleta: ${data.businessName} lleva ${data.minutesElapsed} min sin completar WhatsApp`,
+    };
+    const text = waTexts[event] || `Admin event=${event}`;
+    sendWhatsAppMessage(adminPhone, text, { phoneNumberId: adminPhoneNumberId, provider: 'kapso' })
+      .catch(err => logError('admin-notify', { message: `WA failed event=${event}: ${err.message}`, stack: '' }));
+  }
+}
+
 // No-op: disclosure message removed — first reply is generated by Claude directly.
 async function maybeSendDisclosure(_business, _conversationId, _history, _recipientPhone, _waCredentials) {
 }
@@ -959,8 +982,8 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   }
 
   if (business.plan === 'arranque' && business.trial_starts_at && !business.plan_cortesia) {
-    const trialCount = getTrialMessageCount(business.id, business.trial_starts_at);
-    if (trialCount >= TRIAL_MESSAGE_LIMIT) {
+    const trialCount = getTrialConversationCount(business.id, business.trial_starts_at);
+    if (trialCount >= TRIAL_CONV_LIMIT) {
       const conv = getOrCreateConversation(business.id, customerPhone);
       if (!conv.needs_attention) {
         const limitMsg = `Hola! Por el momento no podemos responder automáticamente. Alguien de ${business.name} te va a contestar a la brevedad.`;
@@ -973,7 +996,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
           business, owner, channel: 'whatsapp', contactId: customerPhone,
           messageText: text, conversationId: conv.id, waCredentials,
         }).catch(err => console.error('[trial-limit-notify]', err.message));
-        console.log(`[trial-limit] business ${business.id} hit limit (${trialCount}/${TRIAL_MESSAGE_LIMIT}), notified customer ${customerPhone} and owner`);
+        console.log(`[trial-limit] business ${business.id} hit conv limit (${trialCount}/${TRIAL_CONV_LIMIT}), notified customer ${customerPhone} and owner`);
       } else {
         addMessage(conv.id, 'user', text);
       }
@@ -1335,7 +1358,28 @@ async function ensureKapsoWebhook(phoneNumberId) {
            w.url === 'https://daxos.lat/webhook/kapso' &&
            Array.isArray(w.events) && w.events.includes('whatsapp.message.received'),
     );
-    if (existing) return;
+    if (existing) {
+      if (existing.events.includes('whatsapp.message.sent')) return;
+
+      // Webhook exists but lacks message.sent — patch it in
+      const patchRes = await fetch(
+        `https://api.kapso.ai/platform/v1/whatsapp/phone_numbers/${phoneNumberId}/webhooks/${existing.id}`,
+        {
+          method: 'PATCH',
+          headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            whatsapp_webhook: { events: ['whatsapp.message.received', 'whatsapp.message.sent'] },
+          }),
+        },
+      );
+      const patchBody = await patchRes.json().catch(() => ({}));
+      if (!patchRes.ok) {
+        logError('kapso-ensure-webhook', { message: `patch FAILED phone_number_id=${phoneNumberId} webhook_id=${existing.id} status=${patchRes.status} body=${JSON.stringify(patchBody)}`, stack: '' });
+        return;
+      }
+      logError('kapso-ensure-webhook', { message: `patched phone_number_id=${phoneNumberId} webhook_id=${existing.id} added message.sent`, stack: '' });
+      return;
+    }
 
     // No active webhook — create it
     const createRes = await fetch(
@@ -1348,7 +1392,7 @@ async function ensureKapsoWebhook(phoneNumberId) {
             url:             'https://daxos.lat/webhook/kapso',
             secret_key:      webhookSecret,
             active:          true,
-            events:          ['whatsapp.message.received'],
+            events:          ['whatsapp.message.received', 'whatsapp.message.sent'],
             payload_version: 'v2',
           },
         }),
@@ -1454,6 +1498,40 @@ app.post('/webhook/kapso', async (req, res) => {
     });
 
     if (!business) return;
+
+    // Detect echo/sent events — only by payload.event, never by msg.kapso?.origin
+    // (received messages may also carry kapso metadata; origin alone would block all replies)
+    if (payload.event === 'whatsapp.message.sent') {
+      const kapsoOrigin = msg.kapso?.origin; // 'business_app', 'api', etc.
+      logError('kapso-webhook-echo', {
+        message: `ECHO_PAYLOAD origin=${kapsoOrigin} full=${JSON.stringify(payload).slice(0, 1000)}`,
+        stack: '',
+      });
+      if (kapsoOrigin === 'business_app') {
+        const customerPhone = payload.conversation?.contact?.phone_number
+          || payload.conversation?.contact?.wa_id
+          || msg.to
+          || null;
+        if (customerPhone) {
+          const conv = getOrCreateConversation(business.id, customerPhone);
+          const ownerText = msg.type === 'text'
+            ? (msg.text?.body || '[mensaje vacío]')
+            : `[${msg.type || 'mensaje'}]`;
+          addMessage(conv.id, 'assistant', ownerText);
+          setHumanPaused(conv.id);
+          logError('kapso-webhook-echo', {
+            message: `business_app echo saved conv=${conv.id} customer=${customerPhone} text="${ownerText.slice(0, 80)}"`,
+            stack: '',
+          });
+        } else {
+          logError('kapso-webhook-echo', {
+            message: `business_app echo — no customer phone found payload=${JSON.stringify(payload).slice(0, 500)}`,
+            stack: '',
+          });
+        }
+      }
+      return; // Never process echoes through AI
+    }
 
     const waCredentials = {
       phoneNumberId: business.phone_number_id,
@@ -1571,6 +1649,7 @@ app.post('/webhook/kapso-platform', async (req, res) => {
     });
 
     ensureKapsoWebhook(confirmed.phoneNumberId);
+    notifyAdmin('wa_connected', { businessName: business.name, phoneNumber: confirmed.displayPhoneNumber || confirmed.phoneNumberId, provider: 'kapso', source: 'webhook' }).catch(() => {});
   } catch (err) {
     logError('kapso-onboarding-webhook', err);
   }
@@ -1876,6 +1955,9 @@ app.post('/auth/whatsapp/callback', requireAuth, async (req, res) => {
     // 3. Persist credentials (access token encrypted at rest)
     saveWabaCredentials(Number(business_id), { wabaId: waba_id, phoneNumberId: phone_number_id, accessToken });
 
+    const savedBusiness = getBusinessById(Number(business_id));
+    if (savedBusiness) notifyAdmin('wa_connected', { businessName: savedBusiness.name, phoneNumber: phone_number_id, provider: 'meta', source: 'callback' }).catch(() => {});
+
     res.json({ ok: true, waba_id, phone_number_id, subscribed: subRes.ok });
   } catch (err) {
     console.error('[whatsapp-callback]', err.message);
@@ -1913,6 +1995,7 @@ app.post('/api/whatsapp/connect', requireAuth, async (req, res) => {
         return res.status(502).json({ error: 'Kapso no devolvió un id de cliente', detail: createData });
       }
       setKapsoCustomerId(business.id, kapsoCustomerId);
+      setKapsoConnectStartedAt(business.id);
       logError('kapso-onboarding-created', { message: `business_id=${business.id} kapso_customer_id=${kapsoCustomerId}`, stack: '' });
     }
 
@@ -2001,6 +2084,7 @@ app.post('/api/whatsapp/save-kapso-redirect', requireAuth, async (req, res) => {
   });
 
   ensureKapsoWebhook(confirmed.phoneNumberId);
+  notifyAdmin('wa_connected', { businessName: business.name, phoneNumber: confirmed.displayPhoneNumber || confirmed.phoneNumberId, provider: 'kapso', source: 'redirect' }).catch(() => {});
   res.json({ ok: true });
 });
 
@@ -2074,6 +2158,7 @@ app.get('/api/whatsapp/status', requireAuth, async (req, res) => {
             stack: '',
           });
           ensureKapsoWebhook(String(phoneNumberId));
+                notifyAdmin('wa_connected', { businessName: business.name, phoneNumber: String(phoneNumberId), provider: 'kapso', source: 'polling_setup_link' }).catch(() => {});
           return res.json({ connected: true });
         }
       } else {
@@ -2095,6 +2180,7 @@ app.get('/api/whatsapp/status', requireAuth, async (req, res) => {
         stack: '',
       });
       ensureKapsoWebhook(confirmed.phoneNumberId);
+        notifyAdmin('wa_connected', { businessName: business.name, phoneNumber: confirmed.displayPhoneNumber || confirmed.phoneNumberId, provider: 'kapso', source: 'polling_confirm' }).catch(() => {});
       return res.json({ connected: true });
     }
 
@@ -2177,6 +2263,12 @@ setInterval(() => {
 
   const resumed = autoResumeExpiredConversations();
   if (resumed > 0) console.log(`[auto-resume-job] reactivated=${resumed} conversations after 24h pause`);
+
+  // Alert admin on incomplete Kapso connections after 30 minutes (DB-backed, survives restarts)
+  for (const biz of getBusinessesWithIncompleteKapso()) {
+    setKapsoIncompleteAlertedAt(biz.id);
+    notifyAdmin('incomplete_connection', { businessName: biz.name, businessId: biz.id, startedAt: biz.kapso_connect_started_at }).catch(() => {});
+  }
 
   // Send weekly summary once per week. Fires Monday 09:00-09:30 Uruguay time (UTC-3 year-round).
   const now = new Date();

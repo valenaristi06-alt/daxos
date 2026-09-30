@@ -166,7 +166,9 @@ if (!bizCols.includes('sales_script'))            db.exec('ALTER TABLE businesse
 if (!bizCols.includes('kapso_setup_link_id'))     db.exec('ALTER TABLE businesses ADD COLUMN kapso_setup_link_id TEXT');
 // plan_cortesia: permanent free access granted outside of MercadoPago — client pays by other means.
 // When set, the account is never blocked by trial expiry or message limits.
-if (!bizCols.includes('plan_cortesia'))           db.exec('ALTER TABLE businesses ADD COLUMN plan_cortesia INTEGER NOT NULL DEFAULT 0');
+if (!bizCols.includes('plan_cortesia'))              db.exec('ALTER TABLE businesses ADD COLUMN plan_cortesia INTEGER NOT NULL DEFAULT 0');
+if (!bizCols.includes('kapso_connect_started_at'))   db.exec('ALTER TABLE businesses ADD COLUMN kapso_connect_started_at TEXT');
+if (!bizCols.includes('kapso_incomplete_alerted_at')) db.exec('ALTER TABLE businesses ADD COLUMN kapso_incomplete_alerted_at TEXT');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS business_images (
@@ -779,6 +781,14 @@ function getTrialMessageCount(businessId, trialStartsAt) {
   `).get(businessId, trialStartsAt).n;
 }
 
+function getTrialConversationCount(businessId, trialStartsAt) {
+  return db.prepare(`
+    SELECT COUNT(DISTINCT m.conversation_id) as n FROM messages m
+    JOIN conversations c ON c.id = m.conversation_id
+    WHERE c.business_id = ? AND m.role = 'user' AND m.created_at >= ?
+  `).get(businessId, trialStartsAt).n;
+}
+
 // --- admin queries (read-only) ---
 
 function getAllBusinesses() {
@@ -992,6 +1002,7 @@ module.exports = {
   setWaPaymentConfirmed,
   setBookingEnabled,
   getTrialMessageCount,
+  getTrialConversationCount,
   createBooking,
   getBookingById,
   getBookingByCode,
@@ -1015,6 +1026,9 @@ module.exports = {
   closeDb,
   setKapsoCustomerId,
   setKapsoSetupLinkId,
+  setKapsoConnectStartedAt,
+  setKapsoIncompleteAlertedAt,
+  getBusinessesWithIncompleteKapso,
   getBusinessByKapsoCustomerId,
   getBusinessDocuments,
   getBusinessDocumentTexts,
@@ -1102,6 +1116,25 @@ function setKapsoSetupLinkId(businessId, setupLinkId) {
 
 function getBusinessByKapsoCustomerId(kapsoCustomerId) {
   return db.prepare('SELECT * FROM businesses WHERE kapso_customer_id = ?').get(kapsoCustomerId);
+}
+
+function setKapsoConnectStartedAt(businessId) {
+  db.prepare('UPDATE businesses SET kapso_connect_started_at = datetime(\'now\') WHERE id = ? AND kapso_connect_started_at IS NULL').run(businessId);
+}
+
+function setKapsoIncompleteAlertedAt(businessId) {
+  db.prepare('UPDATE businesses SET kapso_incomplete_alerted_at = datetime(\'now\') WHERE id = ?').run(businessId);
+}
+
+function getBusinessesWithIncompleteKapso() {
+  return db.prepare(`
+    SELECT b.* FROM businesses b
+    WHERE b.kapso_customer_id IS NOT NULL
+      AND b.phone_number_id IS NULL
+      AND b.kapso_connect_started_at IS NOT NULL
+      AND b.kapso_connect_started_at <= datetime('now', '-30 minutes')
+      AND b.kapso_incomplete_alerted_at IS NULL
+  `).all();
 }
 
 function getWeeklyStats(businessId) {
