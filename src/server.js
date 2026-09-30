@@ -953,6 +953,10 @@ function getMvdDate() {
 }
 
 async function processIncomingMessage(business, waCredentials, { msgId, customerPhone, text }) {
+  if (!customerPhone) {
+    logError('process-incoming', { message: `customerPhone missing — skipping outbound or malformed message msgId=${msgId} business=${business.id}`, stack: '' });
+    return;
+  }
   const sendCtxOk  = waCredentials.provider === 'kapso' ? 'kapso-send-ok'  : 'webhook-send-ok';
   const sendCtxErr = waCredentials.provider === 'kapso' ? 'kapso-send-err' : 'webhook-send-error';
 
@@ -1499,18 +1503,20 @@ app.post('/webhook/kapso', async (req, res) => {
 
     if (!business) return;
 
-    // Detect echo/sent events — only by payload.event, never by msg.kapso?.origin
-    // (received messages may also carry kapso metadata; origin alone would block all replies)
-    if (payload.event === 'whatsapp.message.sent') {
-      const kapsoOrigin = msg.kapso?.origin; // 'business_app', 'api', etc.
-      logError('kapso-webhook-echo', {
-        message: `ECHO_PAYLOAD origin=${kapsoOrigin} full=${JSON.stringify(payload).slice(0, 1000)}`,
-        stack: '',
-      });
+    // Detect outbound messages: Kapso sends them with msg.to but no msg.from.
+    // payload.event may also be 'whatsapp.message.sent' — check both.
+    // Log full headers on first outbound to discover where Kapso puts the event type.
+    const isOutbound = !msg.from && !!msg.to;
+    if (isOutbound || payload.event === 'whatsapp.message.sent') {
+      const kapsoOrigin = msg.kapso?.origin; // 'business_app' for owner WA app, absent for bot
       if (kapsoOrigin === 'business_app') {
-        const customerPhone = payload.conversation?.contact?.phone_number
+        logError('kapso-webhook-echo', {
+          message: `OUTBOUND business_app to=${msg.to} event=${payload.event} headers=${JSON.stringify(req.headers)} full=${JSON.stringify(payload).slice(0, 1000)}`,
+          stack: '',
+        });
+        const customerPhone = msg.to
+          || payload.conversation?.contact?.phone_number
           || payload.conversation?.contact?.wa_id
-          || msg.to
           || null;
         if (customerPhone) {
           const conv = getOrCreateConversation(business.id, customerPhone);
@@ -1530,7 +1536,7 @@ app.post('/webhook/kapso', async (req, res) => {
           });
         }
       }
-      return; // Never process echoes through AI
+      return; // Never process outbound messages through AI
     }
 
     const waCredentials = {
