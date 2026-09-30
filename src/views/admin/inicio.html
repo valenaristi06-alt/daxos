@@ -198,6 +198,7 @@
       <div class="stat-card"><div class="stat-label">Negocios</div><div class="stat-value" id="s-total">—</div></div>
       <div class="stat-card"><div class="stat-label">Trial</div><div class="stat-value" id="s-trial">—</div></div>
       <div class="stat-card"><div class="stat-label">Pagando</div><div class="stat-value" id="s-paying">—</div></div>
+      <div class="stat-card"><div class="stat-label">Cortesía</div><div class="stat-value" id="s-cortesia">—</div></div>
       <div class="stat-card"><div class="stat-label">Mensajes este mes</div><div class="stat-value" id="s-msgs">—</div></div>
     </div>
 
@@ -206,10 +207,10 @@
     <div class="cost-grid" id="cost-grid">
       <div class="cost-card"><div class="cost-label">Claude (IA)</div><div class="cost-value" id="c-claude">—</div><div class="cost-sub" id="c-claude-sub"></div></div>
       <div class="cost-card"><div class="cost-label">ElevenLabs (voz)</div><div class="cost-value" id="c-el">—</div><div class="cost-sub" id="c-el-sub"></div></div>
-      <div class="cost-card"><div class="cost-label">Revenue estimado</div><div class="cost-value" id="c-rev">—</div><div class="cost-sub" id="c-rev-sub"></div></div>
-      <div class="cost-card margin-card" id="margin-card"><div class="cost-label">Margen bruto</div><div class="cost-value" id="c-margin">—</div><div class="cost-sub">ingresos − IA − voz</div></div>
+      <div class="cost-card"><div class="cost-label">Revenue MP (real)</div><div class="cost-value" id="c-rev">—</div><div class="cost-sub" id="c-rev-sub">pagos aprobados este mes</div></div>
+      <div class="cost-card margin-card" id="margin-card"><div class="cost-label">Costo IA + voz</div><div class="cost-value" id="c-margin">—</div><div class="cost-sub">Claude + ElevenLabs</div></div>
     </div>
-    <p class="cost-note">Estimaciones: Claude Sonnet 4.6 @ $3/$15 por MTok (input/output) · ElevenLabs @ $0.30/1k chars · Railway no incluido</p>
+    <p class="cost-note" id="cost-note">Estimaciones: Claude Sonnet 4.6 @ $3/$15 por MTok · ElevenLabs según modelo · Revenue = suma de pending_payments este mes · Railway no incluido</p>
 
     <!-- Billing links -->
     <p class="section-title">Facturación por servicio</p>
@@ -273,24 +274,22 @@
 
     // Stats
     const stats = await fetch('/admin/api/stats').then(r => r.json());
-    document.getElementById('s-total').textContent  = stats.totalBusinesses;
-    document.getElementById('s-trial').textContent  = stats.trialCount;
-    document.getElementById('s-paying').textContent = stats.payingCount;
-    document.getElementById('s-msgs').textContent   = stats.messagesThisMonth.toLocaleString('es-AR');
+    document.getElementById('s-total').textContent    = stats.totalBusinesses;
+    document.getElementById('s-trial').textContent    = stats.trialCount;
+    document.getElementById('s-paying').textContent   = stats.payingCount;
+    document.getElementById('s-cortesia').textContent = stats.cortesiaCount;
+    document.getElementById('s-msgs').textContent     = stats.messagesThisMonth.toLocaleString('es-AR');
 
     // Costs
     const costs = await fetch('/admin/api/costs').then(r => r.json());
-    document.getElementById('c-claude').textContent   = fmtUSD(costs.claude.estimatedUSD);
-    document.getElementById('c-claude-sub').textContent = `${costs.claude.replies} replies IA`;
-    document.getElementById('c-el').textContent       = fmtUSD(costs.elevenlabs.estimatedUSD);
-    document.getElementById('c-el-sub').textContent   = `${costs.elevenlabs.voiceReplies} replies voz`;
-    document.getElementById('c-rev').textContent      = fmtUSD(costs.revenue.estimatedUSD);
-    const planLines = costs.revenue.planCounts.map(p => `${p.plan}: ${p.count}`).join(' · ');
-    document.getElementById('c-rev-sub').textContent  = planLines;
-    const marginEl = document.getElementById('c-margin');
-    marginEl.textContent = fmtUSD(costs.margin);
-    marginEl.className = 'cost-value ' + (costs.margin >= 0 ? 'margin-positive' : 'margin-negative');
-    if (costs.margin < 0) document.getElementById('margin-card').classList.add('negative');
+    document.getElementById('c-claude').textContent      = fmtUSD(costs.claude.estimatedUSD);
+    document.getElementById('c-claude-sub').textContent  = `${costs.claude.replies} replies IA`;
+    document.getElementById('c-el').textContent          = fmtUSD(costs.elevenlabs.estimatedUSD);
+    document.getElementById('c-el-sub').textContent      = `${costs.elevenlabs.voiceReplies} replies voz · ${costs.elevenlabs.model}`;
+    const rev = costs.revenue;
+    document.getElementById('c-rev').textContent         = rev.amount.toLocaleString('es-AR') + ' ' + rev.currency;
+    const totalCostUSD = costs.claude.estimatedUSD + costs.elevenlabs.estimatedUSD;
+    document.getElementById('c-margin').textContent      = fmtUSD(totalCostUSD);
 
     // Businesses table
     const businesses = await fetch('/admin/api/businesses').then(r => r.json());

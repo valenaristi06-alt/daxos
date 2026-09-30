@@ -20,7 +20,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags } = require('./db');
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -1882,26 +1882,22 @@ app.get('/admin/api/business/:id', requireAdmin, (req, res) => {
 
 app.get('/admin/api/costs', requireAdmin, (req, res) => {
   const stats = getGlobalStats();
-  const planCounts = getPlanCounts();
 
-  // Claude Sonnet 4.6 pricing: $3/MTok input, $15/MTok output
-  // Estimate per AI reply: 2000 tok input + 300 tok output
+  // Claude Sonnet 4.6: $3/MTok input, $15/MTok output — ~2000 input + 300 output per reply
   const claudeUSD = stats.aiRepliesThisMonth * (
     (2000 * 3 / 1_000_000) + (300 * 15 / 1_000_000)
   );
 
-  // ElevenLabs: ~$0.30/1000 chars, ~200 chars/voice reply
-  const elevenlabsUSD = stats.voiceRepliesThisMonth * 200 * (0.30 / 1000);
-
-  // Revenue by plan (USD/month)
-  const PLAN_PRICES = { arranque: 0, crecimiento: 39, a_medida: 99 };
-  const revenueUSD = planCounts.reduce((sum, row) => sum + (PLAN_PRICES[row.plan] || 0) * row.count, 0);
+  // ElevenLabs: turbo/flash models = $0.15/1K chars, multilingual = $0.30/1K chars
+  const elModel = process.env.ELEVENLABS_MODEL_ID || '';
+  const elPricePerChar = (elModel.includes('turbo') || elModel.includes('flash')) ? 0.15 / 1000 : 0.30 / 1000;
+  const elevenlabsUSD = stats.voiceRepliesThisMonth * 200 * elPricePerChar;
 
   res.json({
     claude: { replies: stats.aiRepliesThisMonth, estimatedUSD: parseFloat(claudeUSD.toFixed(2)) },
-    elevenlabs: { voiceReplies: stats.voiceRepliesThisMonth, estimatedUSD: parseFloat(elevenlabsUSD.toFixed(2)) },
-    revenue: { planCounts, estimatedUSD: parseFloat(revenueUSD.toFixed(2)) },
-    margin: parseFloat((revenueUSD - claudeUSD - elevenlabsUSD).toFixed(2)),
+    elevenlabs: { voiceReplies: stats.voiceRepliesThisMonth, estimatedUSD: parseFloat(elevenlabsUSD.toFixed(2)), model: elModel || 'no configurado' },
+    revenue: stats.revenueThisMonth,
+    totalCostUSD: parseFloat((claudeUSD + elevenlabsUSD).toFixed(2)),
   });
 });
 

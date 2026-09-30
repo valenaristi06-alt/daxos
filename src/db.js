@@ -803,7 +803,7 @@ function getTrialConversationCount(businessId, trialStartsAt) {
 function getAllBusinesses() {
   return db.prepare(`
     SELECT
-      b.id, b.name, b.plan, b.trial_ends_at, b.plan_expires_at, b.subscription_status,
+      b.id, b.name, b.plan, b.plan_cortesia, b.trial_ends_at, b.plan_expires_at, b.subscription_status,
       b.created_at, b.whatsapp_number, b.response_mode, b.voice_id, b.website_url,
       u.email as owner_email,
       (SELECT COUNT(*) FROM conversations c WHERE c.business_id = b.id) as conv_count,
@@ -816,11 +816,12 @@ function getAllBusinesses() {
 }
 
 function getGlobalStats() {
-  const totalBusinesses = db.prepare('SELECT COUNT(*) as n FROM businesses').get().n;
-  const trialCount      = db.prepare(`SELECT COUNT(*) as n FROM businesses WHERE plan = 'arranque'`).get().n;
-  const payingCount     = db.prepare(`SELECT COUNT(*) as n FROM businesses WHERE plan != 'arranque'`).get().n;
-  const totalMessages   = db.prepare('SELECT COUNT(*) as n FROM messages').get().n;
-  const messagesThisMonth = db.prepare(`SELECT COUNT(*) as n FROM messages WHERE created_at >= date('now','start of month')`).get().n;
+  const totalBusinesses    = db.prepare('SELECT COUNT(*) as n FROM businesses').get().n;
+  const cortesiaCount      = db.prepare(`SELECT COUNT(*) as n FROM businesses WHERE plan_cortesia = 1`).get().n;
+  const trialCount         = db.prepare(`SELECT COUNT(*) as n FROM businesses WHERE plan = 'arranque' AND plan_cortesia = 0`).get().n;
+  const payingCount        = db.prepare(`SELECT COUNT(*) as n FROM businesses WHERE plan != 'arranque' AND plan_cortesia = 0`).get().n;
+  const totalMessages      = db.prepare('SELECT COUNT(*) as n FROM messages').get().n;
+  const messagesThisMonth  = db.prepare(`SELECT COUNT(*) as n FROM messages WHERE created_at >= date('now','start of month')`).get().n;
   const aiRepliesThisMonth = db.prepare(`SELECT COUNT(*) as n FROM messages WHERE role='assistant' AND created_at >= date('now','start of month')`).get().n;
   const voiceRepliesThisMonth = db.prepare(`
     SELECT COUNT(*) as n FROM messages m
@@ -829,7 +830,16 @@ function getGlobalStats() {
     WHERE m.role = 'assistant' AND b.voice_id IS NOT NULL
       AND m.created_at >= date('now','start of month')
   `).get().n;
-  return { totalBusinesses, trialCount, payingCount, totalMessages, messagesThisMonth, aiRepliesThisMonth, voiceRepliesThisMonth };
+  const revenueRow = db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) as total, currency
+    FROM pending_payments
+    WHERE created_at >= date('now','start of month')
+    GROUP BY currency ORDER BY total DESC LIMIT 1
+  `).get();
+  const revenueThisMonth = revenueRow
+    ? { amount: Math.round(revenueRow.total), currency: revenueRow.currency || 'UYU' }
+    : { amount: 0, currency: 'UYU' };
+  return { totalBusinesses, cortesiaCount, trialCount, payingCount, totalMessages, messagesThisMonth, aiRepliesThisMonth, voiceRepliesThisMonth, revenueThisMonth };
 }
 
 function getBusinessAdminMetrics(businessId) {
