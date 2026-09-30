@@ -158,6 +158,22 @@
       color: var(--accent);
     }
     .muted-text { color: var(--muted); font-size: 12px; }
+    .biz-status {
+      font-family: var(--mono);
+      font-size: 8px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border: 1px solid;
+      vertical-align: middle;
+      margin-left: 6px;
+      white-space: nowrap;
+    }
+    .status-paying   { border-color: var(--accent); color: var(--accent); }
+    .status-trial    { border-color: rgba(250,200,60,0.5); color: #fac83c; }
+    .status-expired  { border-color: var(--border-2); color: var(--muted-2); }
+    .status-cortesia { border-color: rgba(96,165,250,0.5); color: #60a5fa; }
+    .status-nopay    { border-color: var(--border-2); color: var(--muted); }
     .cost-note {
       font-family: var(--mono);
       font-size: 9px;
@@ -266,6 +282,16 @@
   function fmtUSD(n) {
     return '$' + n.toFixed(2);
   }
+  function bizStatus(b) {
+    if (b.plan_cortesia) return { label: 'Cortesía', cls: 'status-cortesia' };
+    if (b.plan && b.plan !== 'arranque') return { label: 'Pagando', cls: 'status-paying' };
+    if (b.trial_ends_at) {
+      const daysLeft = Math.ceil((new Date(b.trial_ends_at) - Date.now()) / 86400000);
+      if (daysLeft > 0) return { label: `Prueba · ${daysLeft}d`, cls: 'status-trial' };
+      return { label: 'Prueba vencida', cls: 'status-expired' };
+    }
+    return { label: 'Sin pago', cls: 'status-nopay' };
+  }
 
   async function load() {
     // Auth check
@@ -299,10 +325,11 @@
       return;
     }
     tbody.innerHTML = businesses.map(b => {
-      const isPaying = b.plan && b.plan !== 'arranque';
+      const isPaying = b.plan && b.plan !== 'arranque' && !b.plan_cortesia;
       const planLabel = b.plan || 'arranque';
+      const st = bizStatus(b);
       return `<tr>
-        <td><a class="biz-link" href="/admin/negocio/${b.id}">${escHtml(b.name)}</a></td>
+        <td><a class="biz-link" href="/admin/negocio/${b.id}">${escHtml(b.name)}</a><span class="biz-status ${st.cls}">${st.label}</span></td>
         <td class="muted-text">${escHtml(b.owner_email || '—')}</td>
         <td><span class="plan-pill ${isPaying ? 'paying' : ''}">${planLabel}</span></td>
         <td class="muted-text">${fmt(b.created_at)}</td>
