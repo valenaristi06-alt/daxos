@@ -1082,7 +1082,7 @@ details[open] .faq-question::after {
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  background: #25D366;
+  background: var(--accent);
   color: #fff;
   font-family: var(--sans);
   font-size: 12px;
@@ -1093,7 +1093,7 @@ details[open] .faq-question::after {
   opacity: 0.9;
   transition: background 0.15s, transform 0.15s, opacity 0.15s;
 }
-.wa-float:hover { background: #1eb858; transform: translateY(-2px); opacity: 1; }
+.wa-float:hover { background: var(--accent); transform: translateY(-2px); opacity: 1; }
 @media (max-width: 600px) {
   .wa-float { bottom: 16px; right: 16px; padding: 10px; border-radius: 50%; }
   .wa-float span { display: none; }
