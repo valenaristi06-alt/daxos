@@ -1075,25 +1075,26 @@ details[open] .faq-question::after {
 
 .wa-float {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: 20px;
+  right: 20px;
   z-index: 999;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
+  gap: 6px;
+  padding: 8px 14px;
   background: #25D366;
   color: #fff;
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
-  border-radius: 28px;
+  border-radius: 24px;
   text-decoration: none;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
-  transition: background 0.15s, transform 0.15s;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  opacity: 0.9;
+  transition: background 0.15s, transform 0.15s, opacity 0.15s;
 }
-.wa-float:hover { background: #1eb858; transform: translateY(-2px); }
+.wa-float:hover { background: #1eb858; transform: translateY(-2px); opacity: 1; }
 @media (max-width: 600px) {
+  .wa-float { bottom: 16px; right: 16px; padding: 10px; border-radius: 50%; }
   .wa-float span { display: none; }
-  .wa-float { padding: 12px; border-radius: 50%; }
 }
