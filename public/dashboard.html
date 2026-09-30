@@ -700,7 +700,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
             ? stepRow(true, 'Método de pago en Meta')
             : stepRow(false, 'Método de pago en Meta',
                 'Meta requiere un método de pago cargado en tu cuenta de WhatsApp Business; sin él, deja de entregar mensajes. Meta incluye 1.000 respuestas gratis por mes por número; después cobra por cada respuesta. Lo cobra Meta directo, no Daxos.',
-                `<button class="step-confirm-btn" id="btn-confirm-payment" onclick="confirmWaPayment()">Ya lo cargué →</button>`
+                `<a href="https://business.facebook.com/latest/settings/whatsapp_account${b.waba_id ? '?selected_asset_id=' + b.waba_id + '&selected_asset_type=whatsapp-business-account' : ''}" target="_blank" rel="noopener" class="step-meta-link">Cargar tarjeta en Meta →</a><p class="step-meta-hint">Elegí tu cuenta de WhatsApp → Resumen → Configuración de pago → agregá la tarjeta.</p><button class="step-confirm-btn" id="btn-confirm-payment" onclick="confirmWaPayment()">Ya lo cargué →</button>`
               )
           }
         </ul>`;

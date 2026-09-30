@@ -193,6 +193,26 @@ body {
 .step-confirm-btn:hover:not(:disabled) { background: rgba(196, 92, 26, 0.1); color: var(--text); }
 .step-confirm-btn:disabled { opacity: 0.5; cursor: default; }
 
+.step-meta-link {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 3px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  border: 1px solid rgba(196, 92, 26, 0.5);
+  border-radius: 3px;
+  background: rgba(196, 92, 26, 0.07);
+  color: var(--text);
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+.step-meta-link:hover { background: rgba(196, 92, 26, 0.15); }
+.step-meta-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 5px 0 6px;
+}
+
 .trial-banner {
   display: flex;
   align-items: center;
