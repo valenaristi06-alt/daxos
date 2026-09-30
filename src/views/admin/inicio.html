@@ -226,7 +226,7 @@
       <div class="cost-card"><div class="cost-label">Revenue MP (real)</div><div class="cost-value" id="c-rev">—</div><div class="cost-sub" id="c-rev-sub">pagos aprobados este mes</div></div>
       <div class="cost-card margin-card" id="margin-card"><div class="cost-label">Costo IA + voz</div><div class="cost-value" id="c-margin">—</div><div class="cost-sub">Claude + ElevenLabs</div></div>
     </div>
-    <p class="cost-note" id="cost-note">Estimaciones: Claude Sonnet 4.6 @ $3/$15 por MTok · ElevenLabs según modelo · Revenue = suma de pending_payments este mes · Railway no incluido</p>
+    <p class="cost-note" id="cost-note">Estimaciones: Claude Sonnet 4.6 @ $3/$15 por MTok · ElevenLabs según modelo · Revenue = suma de payments este mes · Railway no incluido</p>
 
     <!-- Billing links -->
     <p class="section-title">Facturación por servicio</p>
@@ -284,7 +284,7 @@
   }
   function bizStatus(b) {
     if (b.plan_cortesia) return { label: 'Cortesía', cls: 'status-cortesia' };
-    if (b.plan && b.plan !== 'arranque') return { label: 'Pagando', cls: 'status-paying' };
+    if (b.has_recent_payment) return { label: 'Pagando', cls: 'status-paying' };
     if (b.trial_ends_at) {
       const daysLeft = Math.ceil((new Date(b.trial_ends_at) - Date.now()) / 86400000);
       if (daysLeft > 0) return { label: `Prueba · ${daysLeft}d`, cls: 'status-trial' };

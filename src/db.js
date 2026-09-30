@@ -267,6 +267,19 @@ db.exec(`
   );
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS payments (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    business_id     INTEGER NOT NULL REFERENCES businesses(id),
+    mp_payment_id   TEXT NOT NULL UNIQUE,
+    amount          REAL,
+    currency        TEXT,
+    paid_at         TEXT,
+    raw_json        TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
 // ── Schema migrations (run-once) ──
 db.exec(`
   CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -762,6 +775,14 @@ function setSubscriptionStatus(businessId, status) {
   db.prepare('UPDATE businesses SET subscription_status = ? WHERE id = ?').run(status, businessId);
 }
 
+function savePayment({ businessId, mpPaymentId, amount, currency, paidAt, rawJson }) {
+  db.prepare(`
+    INSERT OR IGNORE INTO payments
+      (business_id, mp_payment_id, amount, currency, paid_at, raw_json)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(businessId, mpPaymentId, amount ?? null, currency ?? null, paidAt ?? null, rawJson ?? null);
+}
+
 function savePendingPayment({ mpPaymentId, payerEmail, amount, currency, paidAt, rawJson }) {
   db.prepare(`
     INSERT OR IGNORE INTO pending_payments
@@ -808,7 +829,8 @@ function getAllBusinesses() {
       u.email as owner_email,
       (SELECT COUNT(*) FROM conversations c WHERE c.business_id = b.id) as conv_count,
       (SELECT COUNT(*) FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.business_id = b.id) as msg_count,
-      (SELECT m.created_at FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.business_id = b.id ORDER BY m.created_at DESC LIMIT 1) as last_msg_at
+      (SELECT m.created_at FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.business_id = b.id ORDER BY m.created_at DESC LIMIT 1) as last_msg_at,
+      (SELECT COUNT(*) FROM payments p WHERE p.business_id = b.id AND p.paid_at >= datetime('now', '-35 days')) as has_recent_payment
     FROM businesses b
     LEFT JOIN users u ON u.business_id = b.id
     ORDER BY b.created_at DESC
@@ -819,7 +841,7 @@ function getGlobalStats() {
   const totalBusinesses    = db.prepare('SELECT COUNT(*) as n FROM businesses').get().n;
   const cortesiaCount      = db.prepare(`SELECT COUNT(*) as n FROM businesses WHERE plan_cortesia = 1`).get().n;
   const trialCount         = db.prepare(`SELECT COUNT(*) as n FROM businesses WHERE plan = 'arranque' AND plan_cortesia = 0`).get().n;
-  const payingCount        = db.prepare(`SELECT COUNT(*) as n FROM businesses WHERE plan != 'arranque' AND plan_cortesia = 0`).get().n;
+  const payingCount        = db.prepare(`SELECT COUNT(DISTINCT business_id) as n FROM payments WHERE paid_at >= datetime('now', '-35 days')`).get().n;
   const totalMessages      = db.prepare('SELECT COUNT(*) as n FROM messages').get().n;
   const messagesThisMonth  = db.prepare(`SELECT COUNT(*) as n FROM messages WHERE created_at >= date('now','start of month')`).get().n;
   const aiRepliesThisMonth = db.prepare(`SELECT COUNT(*) as n FROM messages WHERE role='assistant' AND created_at >= date('now','start of month')`).get().n;
@@ -832,7 +854,7 @@ function getGlobalStats() {
   `).get().n;
   const revenueRow = db.prepare(`
     SELECT COALESCE(SUM(amount), 0) as total, currency
-    FROM pending_payments
+    FROM payments
     WHERE created_at >= date('now','start of month')
     GROUP BY currency ORDER BY total DESC LIMIT 1
   `).get();
@@ -1012,6 +1034,7 @@ module.exports = {
   clearBusinessDocument,
   upgradePlan,
   setSubscriptionStatus,
+  savePayment,
   savePendingPayment,
   getPendingPayments,
   getAllBusinesses,
