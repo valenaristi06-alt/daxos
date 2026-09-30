@@ -1503,41 +1503,42 @@ app.post('/webhook/kapso', async (req, res) => {
 
     if (!business) return;
 
-    // Detect outbound messages: Kapso sends them with msg.to but no msg.from.
-    // payload.event may also be 'whatsapp.message.sent' — check both.
-    // Log full headers on first outbound to discover where Kapso puts the event type.
-    const isOutbound = !msg.from && !!msg.to;
-    if (isOutbound || payload.event === 'whatsapp.message.sent') {
-      const kapsoOrigin = msg.kapso?.origin; // 'business_app' for owner WA app, absent for bot
-      if (kapsoOrigin === 'business_app') {
+    // 1. Owner replied from WA Business App — check origin first, regardless of from/to
+    const kapsoOrigin = msg.kapso?.origin;
+    if (kapsoOrigin === 'business_app') {
+      const customerPhone = msg.to
+        || payload.conversation?.contact?.phone_number
+        || payload.conversation?.contact?.wa_id
+        || null;
+      logError('kapso-webhook-echo', {
+        message: `business_app origin=${kapsoOrigin} from=${msg.from} to=${msg.to} full=${JSON.stringify(payload).slice(0, 2000)}`,
+        stack: '',
+      });
+      if (customerPhone) {
+        const conv = getOrCreateConversation(business.id, customerPhone);
+        const ownerText = msg.type === 'text'
+          ? (msg.text?.body || '[mensaje vacío]')
+          : `[${msg.type || 'mensaje'}]`;
+        addMessage(conv.id, 'assistant', ownerText);
+        setHumanPaused(conv.id);
         logError('kapso-webhook-echo', {
-          message: `OUTBOUND business_app to=${msg.to} event=${payload.event} headers=${JSON.stringify(req.headers)} full=${JSON.stringify(payload).slice(0, 1000)}`,
+          message: `business_app saved conv=${conv.id} customer=${customerPhone} text="${ownerText.slice(0, 80)}"`,
           stack: '',
         });
-        const customerPhone = msg.to
-          || payload.conversation?.contact?.phone_number
-          || payload.conversation?.contact?.wa_id
-          || null;
-        if (customerPhone) {
-          const conv = getOrCreateConversation(business.id, customerPhone);
-          const ownerText = msg.type === 'text'
-            ? (msg.text?.body || '[mensaje vacío]')
-            : `[${msg.type || 'mensaje'}]`;
-          addMessage(conv.id, 'assistant', ownerText);
-          setHumanPaused(conv.id);
-          logError('kapso-webhook-echo', {
-            message: `business_app echo saved conv=${conv.id} customer=${customerPhone} text="${ownerText.slice(0, 80)}"`,
-            stack: '',
-          });
-        } else {
-          logError('kapso-webhook-echo', {
-            message: `business_app echo — no customer phone found payload=${JSON.stringify(payload).slice(0, 500)}`,
-            stack: '',
-          });
-        }
+      } else {
+        logError('kapso-webhook-echo', {
+          message: `business_app no customer phone payload=${JSON.stringify(payload).slice(0, 500)}`,
+          stack: '',
+        });
       }
-      return; // Never process outbound messages through AI
+      return;
     }
+
+    // 2. Outbound: bot echo (no from), business's own number, or explicit sent event — ignore silently
+    const bizPhone = (business.whatsapp_number || '').replace(/\D/g, '');
+    const fromPhone = (msg.from || '').replace(/\D/g, '');
+    const isFromOwnNumber = bizPhone && fromPhone && (fromPhone === bizPhone || fromPhone.endsWith(bizPhone) || bizPhone.endsWith(fromPhone));
+    if (!msg.from || isFromOwnNumber || payload.event === 'whatsapp.message.sent') return;
 
     const waCredentials = {
       phoneNumberId: business.phone_number_id,
