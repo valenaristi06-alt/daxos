@@ -326,6 +326,7 @@ db.exec(`
     db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('003_plan_cortesia_valentin');
     console.log(`[migration 003] plan_cortesia set for valentin@daxos.lat: ${result.changes} row(s) updated`);
   }
+
 })();
 
 // --- businesses ---
@@ -739,6 +740,14 @@ function getUserByEmail(email) {
   return stmtGetUserByEmail.get(email) || null;
 }
 
+function changeUserEmail(oldEmail, newEmail) {
+  return db.prepare('UPDATE users SET email = ? WHERE email = ?').run(newEmail, oldEmail);
+}
+
+function setPlanCortesia(businessId, value) {
+  db.prepare('UPDATE businesses SET plan_cortesia = ? WHERE id = ?').run(value ? 1 : 0, businessId);
+}
+
 function getUserById(id) {
   return stmtGetUserById.get(id) || null;
 }
@@ -961,6 +970,8 @@ module.exports = {
   saveVoiceConsent,
   createUser,
   getUserByEmail,
+  changeUserEmail,
+  setPlanCortesia,
   getUserById,
   getUserByBusinessId,
   upsertBusiness,

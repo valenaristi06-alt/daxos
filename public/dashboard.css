@@ -253,6 +253,14 @@ body {
 }
 .btn-logout:hover { color: var(--text); border-color: #444; }
 
+.sidebar-help-link {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--mono);
+  text-decoration: none;
+}
+.sidebar-help-link:hover { color: var(--text); }
+
 /* ── Main content area ── */
 
 .app-main {

@@ -20,7 +20,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags } = require('./db');
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, getPlanCounts, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -2439,6 +2439,42 @@ app.post('/admin/disconnect-wa', (req, res) => {
   });
 
   res.json({ ok: true, business_id: user.business_id, cleared: prev });
+});
+
+app.post('/admin/change-email', (req, res) => {
+  const secret = process.env.ADMIN_SET_WA_TOKEN;
+  if (!secret) return res.status(503).json({ error: 'ADMIN_SET_WA_TOKEN no configurado' });
+  const auth = req.headers['authorization'] || '';
+  if (auth !== `Bearer ${secret}`) return res.status(403).json({ error: 'Token inválido' });
+
+  const { old_email, new_email } = req.body;
+  if (!old_email || !new_email) return res.status(400).json({ error: 'old_email y new_email requeridos' });
+
+  const target = getUserByEmail(old_email);
+  if (!target) return res.status(404).json({ error: `No existe usuario con email: ${old_email}` });
+
+  const conflict = getUserByEmail(new_email);
+  if (conflict) return res.status(409).json({ error: `El email ${new_email} ya está en uso por otra cuenta` });
+
+  changeUserEmail(old_email, new_email);
+  res.json({ ok: true, old_email, new_email, user_id: target.id });
+});
+
+app.post('/admin/set-plan-cortesia', (req, res) => {
+  const secret = process.env.ADMIN_SET_WA_TOKEN;
+  if (!secret) return res.status(503).json({ error: 'ADMIN_SET_WA_TOKEN no configurado' });
+  const auth = req.headers['authorization'] || '';
+  if (auth !== `Bearer ${secret}`) return res.status(403).json({ error: 'Token inválido' });
+
+  const { email, plan_cortesia } = req.body;
+  if (!email || plan_cortesia === undefined) return res.status(400).json({ error: 'email y plan_cortesia requeridos' });
+
+  const user = getUserByEmail(email);
+  if (!user) return res.status(404).json({ error: `No existe usuario con email: ${email}` });
+  if (!user.business_id) return res.status(404).json({ error: `El usuario ${email} no tiene negocio asociado` });
+
+  setPlanCortesia(user.business_id, plan_cortesia);
+  res.json({ ok: true, email, business_id: user.business_id, plan_cortesia: plan_cortesia ? 1 : 0 });
 });
 
 process.on('SIGTERM', () => {
