@@ -173,7 +173,7 @@
         ? `${timeGreeting}, ${b.name}`
         : timeGreeting;
 
-      const waConnected = !!b?.whatsapp_number;
+      const waConnected = !!b?.phone_number_id;
       const greetingSubs = waConnected
         ? [
             'Tu asistente está respondiendo en tu nombre.',
@@ -272,7 +272,7 @@
       // Card: estado del agente
       function renderAgentCard() {
         const agentEl = document.getElementById('card-agent');
-        const waOk = !!b?.whatsapp_number;
+        const waOk = !!b?.phone_number_id;
         const botOnline = waOk;
         const hasActivity = today.resolvedToday > 0 || today.pausedToday > 0;
 
