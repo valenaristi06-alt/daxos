@@ -228,6 +228,16 @@
     </div>
     <p class="cost-note" id="cost-note">Estimaciones: Claude Sonnet 4.6 @ $3/$15 por MTok · ElevenLabs según modelo · Revenue = suma de payments este mes · Railway no incluido</p>
 
+    <!-- Backup status -->
+    <p class="section-title">Backup</p>
+    <div class="cost-grid" style="margin-bottom:32px">
+      <div class="cost-card" id="backup-card">
+        <div class="cost-label">Última copia en R2</div>
+        <div class="cost-value" id="backup-name" style="font-size:13px;font-family:var(--mono);word-break:break-all">—</div>
+        <div class="cost-sub" id="backup-meta"></div>
+      </div>
+    </div>
+
     <!-- Billing links -->
     <p class="section-title">Facturación por servicio</p>
     <div class="billing-row">
@@ -316,6 +326,22 @@
     document.getElementById('c-rev').textContent         = rev.amount.toLocaleString('es-AR') + ' ' + rev.currency;
     const totalCostUSD = costs.claude.estimatedUSD + costs.elevenlabs.estimatedUSD;
     document.getElementById('c-margin').textContent      = fmtUSD(totalCostUSD);
+
+    // Backup status
+    fetch('/admin/api/backup-status').then(r => r.json()).then(bk => {
+      const nameEl = document.getElementById('backup-name');
+      const metaEl = document.getElementById('backup-meta');
+      if (!bk || bk.error) {
+        nameEl.textContent = 'Sin copias o R2 no configurado';
+        return;
+      }
+      nameEl.textContent = bk.name;
+      const mb   = bk.sizeBytes ? (bk.sizeBytes / 1024 / 1024).toFixed(2) + ' MB' : '';
+      const date = bk.lastModified ? new Date(bk.lastModified).toLocaleString('es-AR', { timeZone: 'America/Montevideo' }) : '';
+      metaEl.textContent = [mb, date].filter(Boolean).join(' · ');
+    }).catch(() => {
+      document.getElementById('backup-name').textContent = 'Error al consultar R2';
+    });
 
     // Businesses table
     const businesses = await fetch('/admin/api/businesses').then(r => r.json());

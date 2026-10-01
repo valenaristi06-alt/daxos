@@ -170,9 +170,13 @@ async function sendAdminNotificationEmail({ adminEmail, event, data }) {
   if (!key) return;
 
   const subjects = {
-    registration:          `Nuevo registro — ${data.email}`,
-    wa_connected:          `WhatsApp conectado — ${data.businessName}`,
-    incomplete_connection: `Conexión incompleta — ${data.businessName}`,
+    registration:           `Nuevo registro — ${data.email}`,
+    wa_connected:           `WhatsApp conectado — ${data.businessName}`,
+    incomplete_connection:  `Conexión incompleta — ${data.businessName}`,
+    backup_error:           `⚠️ Error en backup — Daxos`,
+    backup_anomalia_tamano: `⚠️ Backup anómalo (tamaño) — Daxos`,
+    backup_silencio:        `⚠️ Sin backup en más de 30h — Daxos`,
+    backup_sin_copias:      `⚠️ Sin backups en R2 — Daxos`,
   };
   const subject = subjects[event] || `Daxos Admin: ${event}`;
 

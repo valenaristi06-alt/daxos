@@ -1067,6 +1067,7 @@ module.exports = {
   logError,
   getRecentErrors,
   checkpoint,
+  backupToFile,
   closeDb,
   setKapsoCustomerId,
   setKapsoSetupLinkId,
@@ -1251,6 +1252,10 @@ function getRecentErrors(limit = 20) {
 
 function checkpoint() {
   return db.pragma('wal_checkpoint(FULL)');
+}
+
+function backupToFile(destPath) {
+  return db.backup(destPath);
 }
 
 function closeDb() {

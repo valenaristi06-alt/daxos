@@ -34,6 +34,7 @@ const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = 
 const { sendWeeklySummaries } = require('./weekly');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
 const { sendPauseEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail } = require('./email');
+const { runBackup, maybeScheduledBackup, maybeSilenceAlert, startupBackupCheck, getLatestBackupMeta, listAllBackups } = require('./backup');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -2281,6 +2282,11 @@ setInterval(() => {
     notifyAdmin('incomplete_connection', { businessName: biz.name, businessId: biz.id, startedAt: biz.kapso_connect_started_at }).catch(() => {});
   }
 
+  // Daily backup at 04:xx Uruguay time — source of truth is R2, not memory
+  maybeScheduledBackup().catch(err => logError('backup-schedule', err));
+  // Silence alert at 08:00-08:29 Uruguay time — only if no backup in last 30h
+  maybeSilenceAlert().catch(err => logError('backup-silence-check', err));
+
   // Send weekly summary once per week. Fires Monday 09:00-09:30 Uruguay time (UTC-3 year-round).
   const now = new Date();
   const uyHour = (now.getUTCHours() - 3 + 24) % 24;
@@ -2296,6 +2302,46 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   const ckResult = checkpoint();
   console.log('WAL checkpoint on startup:', JSON.stringify(ckResult));
+  setTimeout(() => startupBackupCheck().catch(err => logError('backup-startup', err)), 15_000);
+});
+
+// ─── Backup endpoints ─────────────────────────────────────────────────────────
+
+function requireBearerToken(req, res, next) {
+  const secret = process.env.ADMIN_SET_WA_TOKEN;
+  if (!secret) return res.status(503).json({ error: 'ADMIN_SET_WA_TOKEN no configurado' });
+  if (req.headers.authorization !== `Bearer ${secret}`) return res.status(403).json({ error: 'Token inválido' });
+  next();
+}
+
+app.post('/admin/backup-now', requireBearerToken, async (req, res) => {
+  try {
+    const result = await runBackup();
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/admin/backups', requireBearerToken, async (req, res) => {
+  try {
+    const list = await listAllBackups();
+    res.json(list.map(o => ({ name: o.Key, sizeBytes: o.Size, lastModified: o.LastModified })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/admin/api/backup-status', requireAdmin, async (req, res) => {
+  try {
+    const latest = await getLatestBackupMeta();
+    res.json(latest
+      ? { name: latest.Key, sizeBytes: latest.Size, lastModified: latest.LastModified }
+      : null
+    );
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/admin/api/checkpoint', requireAdmin, (req, res) => {
