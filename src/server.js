@@ -2323,6 +2323,20 @@ app.post('/admin/backup-now', requireBearerToken, async (req, res) => {
   }
 });
 
+app.post('/admin/api/backup-now', requireAdmin, async (req, res) => {
+  try {
+    const result = await runBackup();
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    // Strip internal paths and R2 account ID before sending to browser
+    const safe = (err.message || 'Error desconocido')
+      .replace(/\/tmp\/\S+/g, '/tmp/...')
+      .replace(/\/app\/\S+/g, '/app/...')
+      .replace(new RegExp(process.env.R2_ACCOUNT_ID || '\x00', 'g'), '[R2_ACCOUNT]');
+    res.status(500).json({ ok: false, error: safe });
+  }
+});
+
 app.get('/admin/backups', requireBearerToken, async (req, res) => {
   try {
     const list = await listAllBackups();
