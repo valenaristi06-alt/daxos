@@ -2,9 +2,12 @@
 
 ## ¿Qué se respalda?
 
-El archivo `daxos.db` (SQLite), que contiene todos los negocios, conversaciones, mensajes y pagos. Se copia una vez por día a las 04:00 hora de Uruguay hacia Cloudflare R2. Se conservan las últimas 30 copias.
+- **`daxos.db`** (SQLite): negocios, conversaciones, mensajes y pagos → `daxos-YYYY-MM-DD-HHmm.db.gz`
+- **`data/uploads`**: fotos, PDFs y documentos de referencia → `uploads-YYYY-MM-DD-HHmm.tar.gz`
 
-El archivo `sessions.db` y los archivos subidos (`data/uploads`) no se incluyen en este backup.
+Ambos se copian una vez por día a las 04:00 hora de Uruguay hacia Cloudflare R2. Se conservan las últimas 30 copias de cada uno en el mismo bucket.
+
+`sessions.db` no se incluye.
 
 ---
 
@@ -104,6 +107,47 @@ Si los números tienen sentido, continuá.
 En Railway: **Settings → Deploy → Resume service** (o triggereá un nuevo deploy).
 
 El servidor arranca, hace un WAL checkpoint y queda operativo.
+
+---
+
+## Restaurar la carpeta uploads
+
+> Hacé esto **después** de restaurar `daxos.db` y con el servidor detenido.
+> Todo se hace desde la **Console de Railway** (Shell del servicio) — no hace falta pasar archivos a mano.
+
+### Paso único — Ejecutar el script de restauración
+
+```bash
+node scripts/restore-uploads.js
+```
+
+El script:
+1. Descarga el último `uploads-*.tar.gz` de R2.
+2. Mueve la carpeta `uploads/` actual a `uploads-old/` (no borra nada).
+3. Extrae el archivo restaurando `uploads/` con los archivos originales.
+4. Imprime cuántos archivos quedaron.
+
+Si querés restaurar una copia específica en lugar de la más reciente:
+
+```bash
+node scripts/restore-uploads.js uploads-2026-09-30-0400.tar.gz
+```
+
+### Verificar
+
+```bash
+node scripts/verify-backup.js
+```
+
+La sección "Uploads backup" va a mostrar cuántos archivos tiene la última copia en R2. Comparalo con lo que quedó en disco.
+
+### Limpiar el respaldo anterior (opcional)
+
+Si todo está bien y no necesitás el rollback:
+
+```bash
+rm -rf /app/data/uploads-old
+```
 
 ---
 

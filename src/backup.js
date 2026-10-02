@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const zlib = require('zlib');
+const { execFile } = require('child_process');
 const { pipeline } = require('stream/promises');
 const {
   S3Client,
@@ -15,11 +16,14 @@ const {
 const { backupToFile, logError } = require('./db');
 const { sendAdminNotificationEmail } = require('./email');
 
-const BACKUP_PREFIX = 'daxos-';
-const BACKUP_REGEX  = /^daxos-\d{4}-\d{2}-\d{2}-\d{4}\.db\.gz$/;
-const RETENTION     = 30;
+const BACKUP_PREFIX  = 'daxos-';
+const BACKUP_REGEX   = /^daxos-\d{4}-\d{2}-\d{2}-\d{4}\.db\.gz$/;
+const UPLOADS_PREFIX = 'uploads-';
+const UPLOADS_REGEX  = /^uploads-\d{4}-\d{2}-\d{2}-\d{4}\.tar\.gz$/;
+const RETENTION      = 30;
 
-let _backupRunning = false;
+let _backupRunning          = false;
+let _lastUploadErrorMailDate = null;   // throttle: one alert per day for uploads errors
 
 function makeS3() {
   const id = process.env.R2_ACCOUNT_ID;
@@ -49,20 +53,26 @@ function backupKey() {
   return `daxos-${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}.db.gz`;
 }
 
-async function _listSorted(s3) {
+function uploadsKey() {
+  const d = uyNow();
+  const p = n => String(n).padStart(2, '0');
+  return `uploads-${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}.tar.gz`;
+}
+
+async function _listSorted(s3, prefix, regex) {
   const res = await s3.send(new ListObjectsV2Command({
     Bucket: process.env.R2_BUCKET,
-    Prefix: BACKUP_PREFIX,
+    Prefix: prefix,
   }));
   return (res.Contents || [])
-    .filter(o => BACKUP_REGEX.test(o.Key))
+    .filter(o => regex.test(o.Key))
     .sort((a, b) => a.Key.localeCompare(b.Key));
 }
 
 async function getLatestBackupMeta() {
   try {
     const s3   = makeS3();
-    const list = await _listSorted(s3);
+    const list = await _listSorted(s3, BACKUP_PREFIX, BACKUP_REGEX);
     return list.length ? list[list.length - 1] : null;
   } catch {
     return null;
@@ -71,7 +81,93 @@ async function getLatestBackupMeta() {
 
 async function listAllBackups() {
   const s3 = makeS3();
-  return _listSorted(s3);
+  return _listSorted(s3, BACKUP_PREFIX, BACKUP_REGEX);
+}
+
+async function listAllUploadsBackups() {
+  const s3 = makeS3();
+  return _listSorted(s3, UPLOADS_PREFIX, UPLOADS_REGEX);
+}
+
+// Packs /app/data/uploads (or local equivalent) and uploads to R2.
+// Returns { name, sizeBytes } on success, null if folder missing/empty.
+// Throws on actual failure so the caller can handle alerting.
+async function runUploadsBackup(s3) {
+  // Resolve via path so this works regardless of mount point
+  const uploadsDir = path.join(__dirname, '../data/uploads');
+  const parentDir  = path.dirname(uploadsDir);
+  const folderName = path.basename(uploadsDir);
+  const stamp      = Date.now();
+  const tmpTar     = path.join(os.tmpdir(), `daxos-uploads-bk-${stamp}.tar.gz`);
+
+  try {
+    // Skip if folder missing or empty
+    if (!fs.existsSync(uploadsDir)) {
+      console.log('[backup-uploads-skip] uploads dir not found');
+      return null;
+    }
+    const entries = fs.readdirSync(uploadsDir);
+    if (!entries.length) {
+      console.log('[backup-uploads-skip] uploads dir is empty');
+      return null;
+    }
+
+    // Pack with system tar — -C changes dir so archive contains relative paths
+    await new Promise((resolve, reject) => {
+      execFile('tar', ['-czf', tmpTar, '-C', parentDir, folderName], err => {
+        if (err) reject(err); else resolve();
+      });
+    });
+
+    const { size: tarSize } = fs.statSync(tmpTar);
+
+    // Size anomaly check
+    const existingUploads = await _listSorted(s3, UPLOADS_PREFIX, UPLOADS_REGEX);
+    const prevU    = existingUploads.length ? existingUploads[existingUploads.length - 1] : null;
+    const tooSmall = !!(prevU && prevU.Size > 0 && tarSize < prevU.Size / 2);
+
+    const key = uploadsKey();
+    await s3.send(new PutObjectCommand({
+      Bucket:        process.env.R2_BUCKET,
+      Key:           key,
+      Body:          fs.createReadStream(tmpTar),
+      ContentLength: tarSize,
+      ContentType:   'application/gzip',
+    }));
+
+    console.log(`[backup-uploads-ok] key=${key} size=${tarSize}`);
+
+    // Retention (skip if size anomaly)
+    if (!tooSmall) {
+      const excess   = existingUploads.length + 1 - RETENTION;
+      const toDelete = excess > 0 ? existingUploads.slice(0, excess) : [];
+      for (const obj of toDelete) {
+        await s3.send(new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET, Key: obj.Key }));
+        console.log(`[backup-uploads-retention] deleted ${obj.Key}`);
+      }
+    } else {
+      console.warn(`[backup-uploads-warn] ${key} (${tarSize}B) < 50% of ${prevU.Key} (${prevU.Size}B) — retention skipped`);
+      const adminEmail = process.env.ADMIN_EMAIL;
+      if (adminEmail) {
+        sendAdminNotificationEmail({
+          adminEmail,
+          event: 'backup_anomalia_tamano',
+          data: {
+            nueva_copia:     key,
+            tamaño_nuevo:    `${tarSize} bytes`,
+            copia_anterior:  prevU.Key,
+            tamaño_anterior: `${prevU.Size} bytes`,
+            nota: 'Uploads backup pesa menos de la mitad que la copia anterior.',
+          },
+        }).catch(() => {});
+      }
+    }
+
+    return { name: key, sizeBytes: tarSize };
+
+  } finally {
+    try { if (fs.existsSync(tmpTar)) fs.unlinkSync(tmpTar); } catch (_) {}
+  }
 }
 
 async function runBackup() {
@@ -112,12 +208,12 @@ async function runBackup() {
 
     // 4. Compare size against previous backup before uploading
     const s3       = makeS3();
-    const existing = await _listSorted(s3);
+    const existing = await _listSorted(s3, BACKUP_PREFIX, BACKUP_REGEX);
     const prev     = existing.length ? existing[existing.length - 1] : null;
     const { size: gzSize } = fs.statSync(tmpGz);
     const tooSmall = !!(prev && prev.Size > 0 && gzSize < prev.Size / 2);
 
-    // 5. Upload with ContentLength (R2 requires it for reliable streaming)
+    // 5. Upload DB backup with ContentLength (R2 requires it for reliable streaming)
     const key = backupKey();
     await s3.send(new PutObjectCommand({
       Bucket:        process.env.R2_BUCKET,
@@ -129,9 +225,9 @@ async function runBackup() {
 
     console.log(`[backup-ok] key=${key} size=${gzSize}`);
 
-    // 6. Retention: keep last 30, skip if size anomaly
+    // 6. DB retention: keep last 30, skip if size anomaly
     if (!tooSmall) {
-      const excess   = existing.length + 1 - RETENTION; // +1 = the file we just uploaded
+      const excess   = existing.length + 1 - RETENTION;
       const toDelete = excess > 0 ? existing.slice(0, excess) : [];
       for (const obj of toDelete) {
         await s3.send(new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET, Key: obj.Key }));
@@ -145,17 +241,35 @@ async function runBackup() {
           adminEmail,
           event: 'backup_anomalia_tamano',
           data: {
-            nueva_copia:       key,
-            tamaño_nuevo:      `${gzSize} bytes`,
-            copia_anterior:    prev.Key,
-            tamaño_anterior:   `${prev.Size} bytes`,
+            nueva_copia:     key,
+            tamaño_nuevo:    `${gzSize} bytes`,
+            copia_anterior:  prev.Key,
+            tamaño_anterior: `${prev.Size} bytes`,
             nota: 'La copia nueva pesa menos de la mitad que la anterior. Se conservaron todas las copias viejas.',
           },
         }).catch(() => {});
       }
     }
 
-    return { name: key, sizeBytes: gzSize };
+    // 7. Uploads backup — failure never blocks the DB backup result
+    let uploadsResult = null;
+    try {
+      uploadsResult = await runUploadsBackup(s3);
+    } catch (uploadsErr) {
+      logError('backup-error', { message: `[uploads] ${uploadsErr.message}`, stack: uploadsErr.stack || '' });
+      const todayUY    = uyNow().toISOString().slice(0, 10);
+      const adminEmail = process.env.ADMIN_EMAIL;
+      if (adminEmail && _lastUploadErrorMailDate !== todayUY) {
+        _lastUploadErrorMailDate = todayUY;
+        sendAdminNotificationEmail({
+          adminEmail,
+          event: 'backup_error',
+          data: { mensaje: `[uploads] ${uploadsErr.message}` },
+        }).catch(() => {});
+      }
+    }
+
+    return { name: key, sizeBytes: gzSize, uploads: uploadsResult };
 
   } catch (err) {
     logError('backup-error', err);
@@ -182,9 +296,8 @@ async function maybeScheduledBackup() {
   if (d.getUTCHours() !== 4) return false;
 
   const latest = await getLatestBackupMeta();
-  const todayUY = d.toISOString().slice(0, 10); // YYYY-MM-DD in UY time
+  const todayUY = d.toISOString().slice(0, 10);
   if (latest) {
-    // Key format: daxos-YYYY-MM-DD-HHmm.db.gz — date is chars 6-15
     const lastDate = latest.Key.slice(6, 16);
     if (lastDate >= todayUY) return false;
   }
@@ -195,7 +308,6 @@ async function maybeScheduledBackup() {
 }
 
 // Called from the 30-min setInterval. Fires once at 08:00-08:29 UY.
-// Alerts if no backup in the last 30 hours.
 async function maybeSilenceAlert() {
   const d = uyNow();
   if (d.getUTCHours() !== 8 || d.getUTCMinutes() >= 30) return;
@@ -223,8 +335,8 @@ async function maybeSilenceAlert() {
       adminEmail,
       event: 'backup_silencio',
       data: {
-        última_copia: latest.Key,
-        fecha:        latest.LastModified,
+        última_copia:     latest.Key,
+        fecha:            latest.LastModified,
         horas_sin_backup: Math.round(ageMs / 3600000),
       },
     }).catch(() => {});
@@ -255,4 +367,5 @@ module.exports = {
   startupBackupCheck,
   getLatestBackupMeta,
   listAllBackups,
+  listAllUploadsBackups,
 };

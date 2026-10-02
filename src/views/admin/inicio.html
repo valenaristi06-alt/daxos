@@ -389,8 +389,11 @@
       const data = await res.json();
       if (data.ok) {
         const mb = data.sizeBytes ? (data.sizeBytes / 1024 / 1024).toFixed(2) + ' MB' : '';
+        const uploadsPart = data.uploads
+          ? `  ·  uploads: ${(data.uploads.sizeBytes / 1024 / 1024).toFixed(2)} MB`
+          : '  ·  uploads: omitido';
         result.style.color = '#4ade80';
-        result.textContent = `✓ ${data.name}${mb ? '  ·  ' + mb : ''}`;
+        result.textContent = `✓ ${data.name}${mb ? '  ·  ' + mb : ''}${uploadsPart}`;
         document.getElementById('backup-name').textContent = data.name;
         document.getElementById('backup-meta').textContent = mb;
       } else {
