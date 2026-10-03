@@ -2118,6 +2118,18 @@ app.delete('/admin/api/silent/:id', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+app.post('/admin/api/wa-disconnect/:id', requireAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
+  const prev = clearWabaCredentials(id);
+  const last4 = prev?.phone_number_id ? String(prev.phone_number_id).slice(-4) : 'null';
+  logError('wa-admin-disconnect', {
+    message: `business_id=${id} phone_number_id_last4=${last4} wa_provider=${prev?.wa_provider ?? 'null'} wa_connected_at=${prev?.wa_connected_at ?? 'null'}`,
+    stack: '',
+  });
+  res.json({ ok: true, cleared: prev });
+});
+
 app.get('/admin/api/costs', requireAdmin, (req, res) => {
   const stats = getGlobalStats();
 
@@ -2212,6 +2224,10 @@ app.post('/auth/whatsapp/callback', requireAuth, async (req, res) => {
 app.post('/api/whatsapp/connect', requireAuth, async (req, res) => {
   const business = getBusinessByUserId(req.session.userId);
   if (!business) return res.status(400).json({ error: 'Negocio no encontrado' });
+
+  if (business.phone_number_id) {
+    return res.status(409).json({ error: 'ya_conectado', message: 'Tu WhatsApp ya figura conectado. Si querés cambiar de número, escribinos al 092 052 508.' });
+  }
 
   const apiKey = process.env.KAPSO_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'KAPSO_API_KEY no configurada' });

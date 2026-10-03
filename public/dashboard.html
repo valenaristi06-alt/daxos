@@ -1773,6 +1773,12 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         return;
       }
 
+      if (currentBusiness.phone_number_id) {
+        document.getElementById('wa-connect-error').textContent = 'Tu WhatsApp ya figura conectado. Si querés cambiar de número, escribinos al 092 052 508.';
+        document.getElementById('wa-connect-error').style.display = 'block';
+        return;
+      }
+
       const btn = this;
       btn.disabled = true;
       document.getElementById('wa-connect-error').style.display = 'none';

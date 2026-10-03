@@ -236,6 +236,13 @@
 
     <p class="section-title">Acciones</p>
     <div class="action-card">
+      <div class="action-card-title">WhatsApp</div>
+      <div id="wa-status-rows"></div>
+      <div class="action-row" id="wa-disconnect-row" style="margin-top:14px; display:none">
+        <button class="btn-action-ghost" onclick="disconnectWa()">Desconectar WhatsApp</button>
+      </div>
+    </div>
+    <div class="action-card">
       <div class="action-card-title">Ventana de silencio</div>
       <div class="action-status" id="silence-status">Cargando…</div>
       <div class="action-row">
@@ -314,6 +321,31 @@
     renderSilenceStatus(null);
   }
 
+  function renderWaStatus(d) {
+    const rowsEl = document.getElementById('wa-status-rows');
+    const disconnectRow = document.getElementById('wa-disconnect-row');
+    if (!rowsEl) return;
+    const pnid = d.phone_number_id;
+    const last4 = pnid ? '…' + String(pnid).slice(-4) : null;
+    let html = '';
+    html += row('ID de número (termina en)', last4 ? escHtml(last4) : '—', !pnid);
+    html += row('Proveedor', escHtml(d.wa_provider || '—'), !d.wa_provider || d.wa_provider === 'meta');
+    html += row('Conectado', d.wa_connected_at ? fmt(d.wa_connected_at) : '—', !d.wa_connected_at);
+    html += row('Estado', pnid
+      ? '<span style="color:#22c55e;font-size:12px">● conectado</span>'
+      : '<span style="color:var(--muted-2);font-size:12px">○ sin número</span>', false);
+    rowsEl.innerHTML = html;
+    disconnectRow.style.display = pnid ? '' : 'none';
+  }
+
+  async function disconnectWa() {
+    if (!confirm('Esto borra la conexión guardada de este negocio y el bot dejará de contestar hasta que se vuelva a conectar. No borra chats ni configuración. No desconecta nada en Kapso ni en WhatsApp.')) return;
+    const r = await fetch(`/admin/api/wa-disconnect/${_bizId}`, { method: 'POST' });
+    if (!r.ok) { alert('Error al desconectar.'); return; }
+    const br = await fetch(`/admin/api/business/${_bizId}`);
+    if (br.ok) renderWaStatus(await br.json());
+  }
+
   async function load() {
     const me = await fetch('/admin/auth/me');
     if (!me.ok) { window.location.href = '/admin/login'; return; }
@@ -355,6 +387,9 @@
     pl += row('Plan pagado', fmt(d.plan_paid_at), true);
     pl += row('Plan vence', fmt(d.plan_expires_at), true);
     document.getElementById('config-plan').innerHTML = pl;
+
+    // WhatsApp status
+    renderWaStatus(d);
 
     // Silence status
     renderSilenceStatus(d.silent_until || null);

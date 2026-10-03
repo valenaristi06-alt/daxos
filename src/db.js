@@ -427,10 +427,11 @@ function saveWabaCredentials(businessId, { wabaId, phoneNumberId, accessToken = 
 }
 
 function clearWabaCredentials(businessId) {
-  const prev = db.prepare('SELECT phone_number_id, waba_id, wa_provider FROM businesses WHERE id = ?').get(businessId);
+  const prev = db.prepare('SELECT phone_number_id, waba_id, wa_provider, wa_connected_at FROM businesses WHERE id = ?').get(businessId);
   db.prepare(`
     UPDATE businesses
-    SET phone_number_id = NULL, waba_id = NULL, wa_access_token = NULL, wa_provider = 'meta'
+    SET phone_number_id = NULL, waba_id = NULL, wa_access_token = NULL, wa_provider = 'meta',
+        wa_connected_at = NULL
     WHERE id = ?
   `).run(businessId);
   return prev || null;
