@@ -165,6 +165,35 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Fields the owner's browser is allowed to see. Everything else is stripped.
+// Keeps credentials (wa_access_token), internal tracking (kapso_*_at, kapso_setup_link_id),
+// and server paths (document_path) off the wire.
+const OWNER_BUSINESS_FIELDS = new Set([
+  'id', 'name', 'whatsapp_number', 'created_at',
+  'website_url', 'website_summary', 'business_context', 'pricing_info',
+  'sales_examples', 'survey_answers', 'style_profile',
+  'document_name',
+  'response_mode', 'response_delay', 'pause_keywords',
+  'business_hours_start', 'business_hours_end', 'human_resume_timeout',
+  'voice_id', 'voice_consent_at',
+  'plan', 'plan_cortesia', 'subscription_status',
+  'plan_paid_at', 'plan_expires_at',
+  'trial_starts_at', 'trial_ends_at',
+  'trial_conv_count', 'trial_conv_limit',
+  'wa_provider', 'phone_number_id', 'waba_id', 'wa_payment_confirmed', 'wa_connected_at',
+  'kapso_customer_id',
+  'booking_enabled', 'weekly_summary_enabled',
+]);
+
+function ownerView(biz) {
+  if (!biz) return null;
+  const out = {};
+  for (const k of OWNER_BUSINESS_FIELDS) {
+    if (k in biz) out[k] = biz[k];
+  }
+  return out;
+}
+
 // --- Auth routes ---
 
 function requireAuth(req, res, next) {
@@ -242,9 +271,9 @@ app.get('/api/business', requireAuth, (req, res) => {
   if (!business) return res.json(null);
   if (business.plan === 'arranque' && business.trial_starts_at && !business.plan_cortesia) {
     const trial_conv_count = getTrialConversationCount(business.id, business.trial_starts_at);
-    return res.json({ ...business, trial_conv_count, trial_conv_limit: TRIAL_CONV_LIMIT });
+    return res.json(ownerView({ ...business, trial_conv_count, trial_conv_limit: TRIAL_CONV_LIMIT }));
   }
-  res.json(business);
+  res.json(ownerView(business));
 });
 
 app.patch('/api/business/wa-payment-confirmed', requireAuth, (req, res) => {
@@ -320,7 +349,7 @@ app.put('/api/business', requireAuth, async (req, res) => {
       }
     }
 
-    res.json(business);
+    res.json(ownerView(business));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -520,7 +549,7 @@ app.post('/businesses', (req, res) => {
   }
   try {
     const business = upsertBusiness({ name, whatsapp_number, sales_examples, survey_answers, response_mode });
-    res.json(business);
+    res.json(ownerView(business));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
