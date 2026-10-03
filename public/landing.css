@@ -682,6 +682,36 @@ body {
   align-items: stretch;
 }
 
+.pricing-simple {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+  max-width: 560px;
+}
+
+.pricing-free-text {
+  font-size: 1.25rem;
+  color: #e0e0e0;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.pricing-contact {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.pricing-contact a {
+  color: #888;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.pricing-contact a:hover {
+  color: #bbb;
+}
+
 .pricing-card {
   position: relative;
   display: flex;
