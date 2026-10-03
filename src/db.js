@@ -27,7 +27,7 @@ function decrypt(ciphertext) {
   return decipher.update(Buffer.from(encHex, 'hex')) + decipher.final('utf8');
 }
 
-const DB_DIR = path.join(__dirname, '../data');
+const DB_DIR = process.env.DB_DIR || path.join(__dirname, '../data');
 fs.mkdirSync(DB_DIR, { recursive: true });
 
 const db = new Database(path.join(DB_DIR, 'daxos.db'));
@@ -72,6 +72,16 @@ db.exec(`
     content         TEXT NOT NULL,
     created_at      TEXT NOT NULL DEFAULT (datetime('now'))
   );
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS processed_messages (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    business_id INTEGER NOT NULL,
+    msg_id      TEXT    NOT NULL,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(business_id, msg_id)
+  )
 `);
 
 // Businesses table: create or migrate to latest schema
@@ -169,6 +179,7 @@ if (!bizCols.includes('kapso_setup_link_id'))     db.exec('ALTER TABLE businesse
 if (!bizCols.includes('plan_cortesia'))              db.exec('ALTER TABLE businesses ADD COLUMN plan_cortesia INTEGER NOT NULL DEFAULT 0');
 if (!bizCols.includes('kapso_connect_started_at'))   db.exec('ALTER TABLE businesses ADD COLUMN kapso_connect_started_at TEXT');
 if (!bizCols.includes('kapso_incomplete_alerted_at')) db.exec('ALTER TABLE businesses ADD COLUMN kapso_incomplete_alerted_at TEXT');
+if (!bizCols.includes('wa_connected_at'))             db.exec('ALTER TABLE businesses ADD COLUMN wa_connected_at TEXT');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS business_images (
@@ -373,12 +384,16 @@ function saveWabaCredentials(businessId, { wabaId, phoneNumberId, accessToken = 
       UPDATE businesses
       SET waba_id = ?, phone_number_id = ?, wa_access_token = ?, wa_provider = ?,
           trial_starts_at = datetime('now'),
-          trial_ends_at   = datetime('now', '+14 days')
+          trial_ends_at   = datetime('now', '+14 days'),
+          wa_connected_at = datetime('now')
       WHERE id = ?
     `).run(wabaId, phoneNumberId, encToken, provider, businessId);
   } else {
     db.prepare(`
-      UPDATE businesses SET waba_id = ?, phone_number_id = ?, wa_access_token = ?, wa_provider = ? WHERE id = ?
+      UPDATE businesses
+      SET waba_id = ?, phone_number_id = ?, wa_access_token = ?, wa_provider = ?,
+          wa_connected_at = datetime('now')
+      WHERE id = ?
     `).run(wabaId, phoneNumberId, encToken, provider, businessId);
   }
 }
@@ -1088,6 +1103,9 @@ module.exports = {
   setConversationTags,
   getConversationTags,
   ensureDefaultTags,
+  tryMarkProcessed,
+  deleteProcessedMessage,
+  purgeOldProcessedMessages,
 };
 
 function setWeeklySummaryEnabled(businessId, enabled) {
@@ -1260,4 +1278,21 @@ function backupToFile(destPath) {
 
 function closeDb() {
   db.close();
+}
+
+// ── Webhook deduplication ────────────────────────────────────────────────────
+
+const stmtMarkProcessed   = db.prepare('INSERT OR IGNORE INTO processed_messages (business_id, msg_id) VALUES (?, ?)');
+const stmtDeleteProcessed = db.prepare('DELETE FROM processed_messages WHERE business_id = ? AND msg_id = ?');
+
+function tryMarkProcessed(businessId, msgId) {
+  return stmtMarkProcessed.run(businessId, msgId).changes === 1;
+}
+
+function deleteProcessedMessage(businessId, msgId) {
+  stmtDeleteProcessed.run(businessId, msgId);
+}
+
+function purgeOldProcessedMessages() {
+  db.prepare("DELETE FROM processed_messages WHERE created_at < datetime('now', '-7 days')").run();
 }

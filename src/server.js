@@ -20,7 +20,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags } = require('./db');
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -115,6 +115,13 @@ fs.mkdirSync(path.join(__dirname, '../data/uploads'), { recursive: true });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const MSG_MAX_AGE_MINUTES = parseInt(process.env.MSG_MAX_AGE_MINUTES) || 120;
+
+// Stale-message daily summary counters (in-memory; reset on deploy — that's fine)
+let _staleMsgCount = 0;
+let _staleMsgDate  = null;
+// Per-business-id date string (UY) of last msg-timestamp-field log — avoid log spam
+const _timestampFieldLogDate = {};
 
 app.use(express.json({
   verify: (req, _res, buf) => {
@@ -953,11 +960,55 @@ function getMvdDate() {
   return new Date(Date.now() - 3 * 60 * 60 * 1000);
 }
 
-async function processIncomingMessage(business, waCredentials, { msgId, customerPhone, text }) {
+// Parse a SQLite UTC datetime string (e.g. "2026-10-03 12:43:32") as UTC milliseconds.
+// SQLite stores datetime('now') without timezone suffix; appending 'Z' ensures JS
+// treats it as UTC rather than local time.
+function parseSqliteUtc(s) {
+  if (!s) return null;
+  return new Date(s.endsWith('Z') || s.includes('+') ? s : s + 'Z').getTime();
+}
+
+async function processIncomingMessage(business, waCredentials, { msgId, customerPhone, text, msgTimestamp, msgTimestampField }) {
   if (!customerPhone) {
     logError('process-incoming', { message: `customerPhone missing — skipping outbound or malformed message msgId=${msgId} business=${business.id}`, stack: '' });
     return;
   }
+
+  // ── Stale-message guard ──────────────────────────────────────────────────
+  if (msgTimestamp != null) {
+    const todayUY = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    // Log the timestamp field name + value once per business per day
+    const logKey = String(business.id);
+    if (_timestampFieldLogDate[logKey] !== todayUY) {
+      _timestampFieldLogDate[logKey] = todayUY;
+      logError('msg-timestamp-field', {
+        message: `business_id=${business.id} field=${msgTimestampField || 'unknown'} value=${msgTimestamp}`,
+        stack: '',
+      });
+    }
+
+    const nowSec    = Math.floor(Date.now() / 1000);
+    const ageSeconds = nowSec - msgTimestamp;
+
+    // Stale if message predates WA connection (with 60s grace) or exceeds max age
+    const connectedAtMs  = parseSqliteUtc(business.wa_connected_at);
+    const connectedAtSec = connectedAtMs ? Math.floor(connectedAtMs / 1000) : null;
+    const staleByConnect = connectedAtSec != null && msgTimestamp < connectedAtSec - 60;
+    const staleByAge     = ageSeconds > MSG_MAX_AGE_MINUTES * 60;
+
+    if (staleByConnect || staleByAge) {
+      const reason = staleByConnect ? 'before_connect' : 'too_old';
+      logError('msg-stale', {
+        message: `msgId=${msgId} business_id=${business.id} age=${ageSeconds}s field=${msgTimestampField || 'unknown'} reason=${reason}`,
+        stack: '',
+      });
+      _staleMsgCount++;
+      _staleMsgDate = todayUY;
+      return;
+    }
+  }
+  // ────────────────────────────────────────────────────────────────────────
   const sendCtxOk  = waCredentials.provider === 'kapso' ? 'kapso-send-ok'  : 'webhook-send-ok';
   const sendCtxErr = waCredentials.provider === 'kapso' ? 'kapso-send-err' : 'webhook-send-error';
 
@@ -1329,7 +1380,28 @@ app.post('/webhook', async (req, res) => {
           const customerPhone = msg.from;
           const text = msg.text?.body;
           if (!text) continue;
-          await processIncomingMessage(business, waCredentials, { msgId: msg.id, customerPhone, text });
+
+          // Dedup: INSERT OR IGNORE — if already processed, skip
+          if (msg.id) {
+            if (!tryMarkProcessed(business.id, msg.id)) {
+              logError('msg-duplicate', { message: `source=meta business_id=${business.id} msg_id=${msg.id}`, stack: '' });
+              continue;
+            }
+          }
+
+          // Meta sends timestamp as a Unix epoch string
+          const msgTimestamp = msg.timestamp ? parseInt(msg.timestamp, 10) || null : null;
+
+          try {
+            await processIncomingMessage(business, waCredentials, {
+              msgId: msg.id, customerPhone, text,
+              msgTimestamp, msgTimestampField: 'msg.timestamp',
+            });
+          } catch (err) {
+            // Rollback dedup mark so Kapso/Meta retry can reprocess
+            if (msg.id) deleteProcessedMessage(business.id, msg.id);
+            logError('webhook-process-error', err);
+          }
         }
       }
     }
@@ -1464,6 +1536,9 @@ app.get('/webhook/kapso', (_req, res) => res.status(200).send('OK'));
 app.post('/webhook/kapso', async (req, res) => {
   res.status(200).send('OK');
 
+  // Track dedup state so catch block can roll back on unexpected failure
+  let _dedupBizId = null, _dedupMsgId = null;
+
   const rawBody = req.rawBody;
   const sig     = req.headers['x-webhook-signature'] || '';
   const secret  = process.env.KAPSO_WEBHOOK_SECRET;
@@ -1503,6 +1578,16 @@ app.post('/webhook/kapso', async (req, res) => {
     });
 
     if (!business) return;
+
+    // Dedup: before any processing (covers owner reply and customer paths)
+    if (msg.id) {
+      if (!tryMarkProcessed(business.id, msg.id)) {
+        logError('msg-duplicate', { message: `source=kapso business_id=${business.id} msg_id=${msg.id}`, stack: '' });
+        return;
+      }
+      _dedupBizId = business.id;
+      _dedupMsgId = msg.id;
+    }
 
     // 1. Owner replied from WA Business App — check origin first, regardless of from/to
     const kapsoOrigin = msg.kapso?.origin;
@@ -1556,12 +1641,36 @@ app.post('/webhook/kapso', async (req, res) => {
 
     if (!text?.trim()) return;
 
+    // Resolve timestamp — field name unknown until first real payload; log it once/day
+    const msgTimestamp = msg.timestamp != null ? Number(msg.timestamp) || null
+      : msg.created_at != null ? Math.floor(new Date(msg.created_at).getTime() / 1000) || null
+      : null;
+    const msgTimestampField = msg.timestamp != null ? 'msg.timestamp'
+      : msg.created_at != null ? 'msg.created_at'
+      : null;
+
+    if (msgTimestamp == null) {
+      const todayUY = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const noTsKey = `${business.id}-no-ts`;
+      if (_timestampFieldLogDate[noTsKey] !== todayUY) {
+        _timestampFieldLogDate[noTsKey] = todayUY;
+        logError('msg-no-timestamp', {
+          message: `msgId=${msg.id} business_id=${business.id} available_keys=${JSON.stringify(Object.keys(msg))}`,
+          stack: '',
+        });
+      }
+    }
+
     await processIncomingMessage(business, waCredentials, {
-      msgId:         msg.id,
-      customerPhone: msg.from,
-      text:          text.trim(),
+      msgId:            msg.id,
+      customerPhone:    msg.from,
+      text:             text.trim(),
+      msgTimestamp,
+      msgTimestampField,
     });
   } catch (err) {
+    // Rollback dedup mark so the next Kapso retry can reprocess
+    if (_dedupBizId && _dedupMsgId) deleteProcessedMessage(_dedupBizId, _dedupMsgId);
     logError('kapso-webhook', err);
   }
 });
@@ -2282,6 +2391,9 @@ setInterval(() => {
     notifyAdmin('incomplete_connection', { businessName: biz.name, businessId: biz.id, startedAt: biz.kapso_connect_started_at }).catch(() => {});
   }
 
+  // Purge processed_messages older than 7 days
+  purgeOldProcessedMessages();
+
   // Daily backup at 04:xx Uruguay time — source of truth is R2, not memory
   maybeScheduledBackup().catch(err => logError('backup-schedule', err));
   // Silence alert at 08:00-08:29 Uruguay time — only if no backup in last 30h
@@ -2292,6 +2404,17 @@ setInterval(() => {
   const uyHour = (now.getUTCHours() - 3 + 24) % 24;
   const uyDay  = new Date(now.getTime() - 3 * 60 * 60 * 1000).getUTCDay();
   const todayStr = new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  // Daily stale-message summary at 08:00-08:29 Uruguay time
+  if (uyHour === 8 && _staleMsgDate && _staleMsgDate !== todayStr) {
+    logError('msg-stale-summary', {
+      message: `date=${_staleMsgDate} ignored=${_staleMsgCount}`,
+      stack: '',
+    });
+    _staleMsgCount = 0;
+    _staleMsgDate  = null;
+  }
+
   if (uyDay === 1 && uyHour === 9 && _lastWeeklySummaryDate !== todayStr) {
     _lastWeeklySummaryDate = todayStr;
     sendWeeklySummaries().catch(err => console.error('[weekly-summary-job]', err.message));
