@@ -142,6 +142,11 @@ if (!businessCols.includes('response_delay'))    db.exec('ALTER TABLE businesses
 const userCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
 if (!userCols.includes('phone')) db.exec('ALTER TABLE users ADD COLUMN phone TEXT');
 
+// silent=1: message was saved during a business's silent window.
+// Excluded from the history sent to Claude; still visible in the owner's panel.
+const msgCols = db.prepare("PRAGMA table_info(messages)").all().map(c => c.name);
+if (!msgCols.includes('silent')) db.exec('ALTER TABLE messages ADD COLUMN silent INTEGER NOT NULL DEFAULT 0');
+
 const convCols = db.prepare("PRAGMA table_info(conversations)").all().map(c => c.name);
 if (!convCols.includes('needs_attention'))      db.exec('ALTER TABLE conversations ADD COLUMN needs_attention INTEGER NOT NULL DEFAULT 0');
 if (!convCols.includes('label'))                db.exec('ALTER TABLE conversations ADD COLUMN label TEXT');
@@ -150,6 +155,9 @@ if (!convCols.includes('paused_at'))            db.exec('ALTER TABLE conversatio
 if (!convCols.includes('auto_resumed_at'))      db.exec('ALTER TABLE conversations ADD COLUMN auto_resumed_at INTEGER');
 if (!convCols.includes('needs_human'))          db.exec('ALTER TABLE conversations ADD COLUMN needs_human INTEGER NOT NULL DEFAULT 0');
 if (!convCols.includes('human_paused_at'))      db.exec('ALTER TABLE conversations ADD COLUMN human_paused_at INTEGER');
+// silent=1: conversation was created/updated during a business's silent window.
+// Excluded from trial conversation count. Cleared when the bot actually replies after the window.
+if (!convCols.includes('silent'))               db.exec('ALTER TABLE conversations ADD COLUMN silent INTEGER NOT NULL DEFAULT 0');
 
 const bizCols = db.prepare("PRAGMA table_info(businesses)").all().map(c => c.name);
 if (!bizCols.includes('document_path'))         db.exec('ALTER TABLE businesses ADD COLUMN document_path TEXT');
@@ -180,6 +188,11 @@ if (!bizCols.includes('plan_cortesia'))              db.exec('ALTER TABLE busine
 if (!bizCols.includes('kapso_connect_started_at'))   db.exec('ALTER TABLE businesses ADD COLUMN kapso_connect_started_at TEXT');
 if (!bizCols.includes('kapso_incomplete_alerted_at')) db.exec('ALTER TABLE businesses ADD COLUMN kapso_incomplete_alerted_at TEXT');
 if (!bizCols.includes('wa_connected_at'))             db.exec('ALTER TABLE businesses ADD COLUMN wa_connected_at TEXT');
+// silent_until: UTC datetime; while now < silent_until the bot saves messages but does not reply.
+// Set by admin via POST /admin/api/silent/:id. Calculated in JS, stored as UTC ISO string.
+if (!bizCols.includes('silent_until'))               db.exec('ALTER TABLE businesses ADD COLUMN silent_until TEXT');
+
+db.exec('CREATE INDEX IF NOT EXISTS idx_messages_conv_time ON messages (conversation_id, created_at)');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS business_images (
@@ -561,7 +574,11 @@ function getUserByBusinessId(businessId) {
 // --- conversations ---
 
 const stmtGetConversationsByBusiness = db.prepare(`
-  SELECT * FROM conversations WHERE business_id = ? ORDER BY created_at DESC
+  SELECT c.*,
+    (SELECT MAX(m.created_at) FROM messages m WHERE m.conversation_id = c.id) AS last_msg_at
+  FROM conversations c
+  WHERE c.business_id = ?
+  ORDER BY last_msg_at DESC, c.created_at DESC
 `);
 const stmtGetTagsForConversation = db.prepare(`
   SELECT t.id, t.name, t.color FROM tags t
@@ -643,19 +660,23 @@ function getLastCustomerMessage(businessId) {
 // --- messages ---
 
 const stmtAddMessage = db.prepare(`
-  INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)
+  INSERT INTO messages (conversation_id, role, content, silent) VALUES (?, ?, ?, ?)
 `);
 
-function addMessage(conversation_id, role, content) {
-  const result = stmtAddMessage.run(conversation_id, role, content);
+function addMessage(conversation_id, role, content, silent = 0) {
+  const result = stmtAddMessage.run(conversation_id, role, content, silent ? 1 : 0);
   return result.lastInsertRowid;
 }
 
 const stmtGetHistory = db.prepare(`
   SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC LIMIT ?
 `);
+const stmtGetHistoryExcludeSilent = db.prepare(`
+  SELECT * FROM messages WHERE conversation_id = ? AND silent = 0 ORDER BY created_at ASC LIMIT ?
+`);
 
-function getConversationHistory(conversation_id, limit = 50) {
+function getConversationHistory(conversation_id, limit = 50, { excludeSilent = false } = {}) {
+  if (excludeSilent) return stmtGetHistoryExcludeSilent.all(conversation_id, limit);
   return stmtGetHistory.all(conversation_id, limit);
 }
 
@@ -830,7 +851,7 @@ function getTrialConversationCount(businessId, trialStartsAt) {
   return db.prepare(`
     SELECT COUNT(DISTINCT m.conversation_id) as n FROM messages m
     JOIN conversations c ON c.id = m.conversation_id
-    WHERE c.business_id = ? AND m.role = 'user' AND m.created_at >= ?
+    WHERE c.business_id = ? AND m.role = 'user' AND m.created_at >= ? AND c.silent = 0
   `).get(businessId, trialStartsAt).n;
 }
 
@@ -1010,6 +1031,20 @@ function getBookingState(conversationId) {
   return JSON.parse(row.booking_state);
 }
 
+// --- silent window ---
+
+function setSilentUntil(businessId, isoUtc) {
+  db.prepare('UPDATE businesses SET silent_until = ? WHERE id = ?').run(isoUtc, businessId);
+}
+
+function clearSilentUntil(businessId) {
+  db.prepare('UPDATE businesses SET silent_until = NULL WHERE id = ?').run(businessId);
+}
+
+function setConversationSilent(conversationId, val) {
+  db.prepare('UPDATE conversations SET silent = ? WHERE id = ?').run(val ? 1 : 0, conversationId);
+}
+
 module.exports = {
   setUserPhone,
   setStyleProfile,
@@ -1106,6 +1141,9 @@ module.exports = {
   tryMarkProcessed,
   deleteProcessedMessage,
   purgeOldProcessedMessages,
+  setSilentUntil,
+  clearSilentUntil,
+  setConversationSilent,
 };
 
 function setWeeklySummaryEnabled(businessId, enabled) {

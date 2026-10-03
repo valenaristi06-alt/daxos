@@ -20,7 +20,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages } = require('./db');
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -860,7 +860,7 @@ app.post('/test/simulate', async (req, res) => {
 
   try {
     const conversation = getOrCreateConversation(business_id, customer_id);
-    const history = getConversationHistory(conversation.id, 60);
+    const history = getConversationHistory(conversation.id, 60, { excludeSilent: true });
 
     await maybeSendDisclosure(business, conversation.id, history, null);
 
@@ -1005,6 +1005,20 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
       });
       _staleMsgCount++;
       _staleMsgDate = todayUY;
+      return;
+    }
+  }
+  // ── Silent window ────────────────────────────────────────────────────────
+  if (business.silent_until) {
+    const silentUntilMs = parseSqliteUtc(business.silent_until);
+    if (silentUntilMs && Date.now() < silentUntilMs) {
+      const conv = getOrCreateConversation(business.id, customerPhone);
+      addMessage(conv.id, 'user', text, 1);
+      setConversationSilent(conv.id, 1);
+      logError('silent-window', {
+        message: `business_id=${business.id} msgId=${msgId} msgTimestamp=${msgTimestamp} field=${msgTimestampField || 'unknown'} silent_until=${business.silent_until}`,
+        stack: '',
+      });
       return;
     }
   }
@@ -1242,6 +1256,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   imgTextBefore = sanitizeForClient(imgTextBefore);
   imgTextAfter  = sanitizeForClient(imgTextAfter);
 
+  if (conversation.silent) setConversationSilent(conversation.id, 0);
   addMessage(conversation.id, 'user', text);
   addMessage(conversation.id, 'assistant', reply);
 
@@ -1606,9 +1621,13 @@ app.post('/webhook/kapso', async (req, res) => {
           ? (msg.text?.body || '[mensaje vacío]')
           : `[${msg.type || 'mensaje'}]`;
         addMessage(conv.id, 'assistant', ownerText);
-        setHumanPaused(conv.id);
+        // During silent window: save owner reply but don't pause bot or notify
+        const silentUntilMs = parseSqliteUtc(business.silent_until);
+        if (!silentUntilMs || Date.now() >= silentUntilMs) {
+          setHumanPaused(conv.id);
+        }
         logError('kapso-webhook-echo', {
-          message: `business_app saved conv=${conv.id} customer=${customerPhone} text="${ownerText.slice(0, 80)}"`,
+          message: `business_app saved conv=${conv.id} customer=${customerPhone} text="${ownerText.slice(0, 80)}" silent_skipped=${!!(silentUntilMs && Date.now() < silentUntilMs)}`,
           stack: '',
         });
       } else {
@@ -1996,6 +2015,26 @@ app.get('/admin/api/business/:id', requireAdmin, (req, res) => {
   // Strip sensitive/large fields — never expose conversation content or internal keys
   const { sales_examples, survey_answers, style_profile, document_path, ...safeFields } = business;
   res.json({ ...safeFields, metrics, owner_email: owner?.email || null });
+});
+
+app.post('/admin/api/silent/:id', requireAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
+  const minutes = parseInt(req.body.minutes, 10);
+  if (isNaN(minutes) || minutes < 1 || minutes > 1440) {
+    return res.status(400).json({ error: 'minutos debe ser un entero entre 1 y 1440' });
+  }
+  const until   = new Date(Date.now() + minutes * 60 * 1000);
+  const isoUtc  = until.toISOString().slice(0, 19).replace('T', ' ');
+  setSilentUntil(id, isoUtc);
+  res.json({ ok: true, silent_until: isoUtc });
+});
+
+app.delete('/admin/api/silent/:id', requireAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
+  clearSilentUntil(id);
+  res.json({ ok: true });
 });
 
 app.get('/admin/api/costs', requireAdmin, (req, res) => {

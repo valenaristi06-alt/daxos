@@ -92,6 +92,16 @@
       color: #f0ede8;
       border-color: #555;
     }
+    .day-separator {
+      text-align: center;
+      font-family: var(--mono, monospace);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #555;
+      padding: 10px 0 4px;
+      user-select: none;
+    }
   </style>
 </head>
 <body>
@@ -251,7 +261,7 @@
         <button class="conv-item" data-id="${c.id}" onclick="openConv(${c.id}, this)">
           ${c.needs_attention ? '<span class="conv-attention-dot" title="Requiere atención"></span>' : ''}
           <span class="conv-number">${formatPhone(c.customer_id)}</span>
-          <span class="conv-date">${formatDate(c.created_at)}</span>
+          <span class="conv-date">${formatLastMsgDate(c.last_msg_at || c.created_at)}</span>
           ${tagChips(c.tags)}
           ${labelBadge(c.label)}
         </button>
@@ -345,14 +355,27 @@
         return;
       }
 
-      document.getElementById('thread-messages').innerHTML = messages.map(m => `
-        <div class="bubble-row ${m.role === 'user' ? 'row-user' : 'row-ai'}">
-          <div class="bubble ${m.role === 'user' ? 'bubble-user' : 'bubble-ai'}">
-            <p>${escapeHtml(m.content)}</p>
-            <span class="bubble-time">${formatTime(m.created_at)}</span>
-          </div>
-        </div>
-      `).join('');
+      {
+        let lastDay = null;
+        const parts = [];
+        for (const m of messages) {
+          const d = toUtcDate(m.created_at);
+          const dayStr = d ? uyDateStr(d) : null;
+          if (dayStr && dayStr !== lastDay) {
+            lastDay = dayStr;
+            parts.push(`<div class="day-separator">${escapeHtml(daySeparatorLabel(dayStr))}</div>`);
+          }
+          parts.push(`
+            <div class="bubble-row ${m.role === 'user' ? 'row-user' : 'row-ai'}">
+              <div class="bubble ${m.role === 'user' ? 'bubble-user' : 'bubble-ai'}">
+                <p>${escapeHtml(m.content)}</p>
+                <span class="bubble-time">${formatTime(m.created_at)}</span>
+              </div>
+            </div>
+          `);
+        }
+        document.getElementById('thread-messages').innerHTML = parts.join('');
+      }
 
       // Scroll to bottom
       const el2 = document.getElementById('thread-messages');
@@ -454,16 +477,68 @@
       return raw;
     }
 
-    function formatDate(dt) {
+    function toUtcDate(dt) {
+      if (!dt) return null;
+      const s = String(dt);
+      return new Date(s.includes('T') || s.endsWith('Z') ? s : s.replace(' ', 'T') + 'Z');
+    }
+
+    // YYYY-MM-DD in America/Montevideo timezone
+    function uyDateStr(d) {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Montevideo' }).format(d);
+    }
+
+    function formatLastMsgDate(dt) {
       if (!dt) return '';
-      const d = new Date(dt.replace(' ', 'T') + 'Z');
-      return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
+      const d = toUtcDate(dt);
+      if (!d || isNaN(d)) return '';
+      const today = uyDateStr(new Date());
+      const dtStr = uyDateStr(d);
+      const diffMs = new Date(today) - new Date(dtStr);
+      const diffDays = Math.round(diffMs / 86400000);
+      if (diffDays === 0) {
+        return new Intl.DateTimeFormat('es-UY', {
+          timeZone: 'America/Montevideo',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        }).format(d);
+      }
+      if (diffDays === 1) return 'Ayer';
+      return new Intl.DateTimeFormat('es-UY', {
+        timeZone: 'America/Montevideo',
+        day: 'numeric', month: 'short',
+      }).format(d);
+    }
+
+    function formatDate(dt) {
+      // Used only for the "iniciado" header — keep original short format
+      if (!dt) return '';
+      const d = toUtcDate(dt);
+      if (!d || isNaN(d)) return '';
+      return new Intl.DateTimeFormat('es-UY', {
+        timeZone: 'America/Montevideo',
+        day: 'numeric', month: 'short',
+      }).format(d);
     }
 
     function formatTime(dt) {
       if (!dt) return '';
-      const d = new Date(dt.replace(' ', 'T') + 'Z');
-      return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+      const d = toUtcDate(dt);
+      if (!d || isNaN(d)) return '';
+      return new Intl.DateTimeFormat('es-UY', {
+        timeZone: 'America/Montevideo',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+      }).format(d);
+    }
+
+    function daySeparatorLabel(dtStr) {
+      const today = uyDateStr(new Date());
+      const yesterday = uyDateStr(new Date(Date.now() - 86400000));
+      if (dtStr === today) return 'Hoy';
+      if (dtStr === yesterday) return 'Ayer';
+      return new Intl.DateTimeFormat('es-UY', {
+        timeZone: 'America/Montevideo',
+        day: 'numeric', month: 'long',
+      }).format(new Date(dtStr + 'T12:00:00Z'));
     }
 
     function escapeHtml(str) {

@@ -120,6 +120,67 @@
       color: var(--muted-2);
       margin-bottom: 12px;
     }
+    .action-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 2px solid var(--accent);
+      padding: 20px;
+      margin-bottom: 32px;
+      max-width: 480px;
+    }
+    .action-card-title {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted-2);
+      margin-bottom: 16px;
+    }
+    .action-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .action-status {
+      font-size: 12px;
+      color: var(--muted-2);
+      margin-bottom: 14px;
+      font-family: var(--mono);
+    }
+    .action-status.active { color: #f97316; }
+    .action-input {
+      width: 80px;
+      padding: 6px 10px;
+      background: var(--bg);
+      border: 1px solid var(--border-2);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+    }
+    .action-input:focus { outline: none; border-color: var(--accent); }
+    .btn-action {
+      padding: 7px 14px;
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      border: none;
+      cursor: pointer;
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-action:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-action-ghost {
+      padding: 7px 14px;
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      border: 1px solid var(--border-2);
+      cursor: pointer;
+      background: transparent;
+      color: var(--muted-2);
+    }
+    .btn-action-ghost:hover { border-color: var(--accent); color: var(--accent); }
   </style>
 </head>
 <body>
@@ -173,21 +234,84 @@
       </div>
     </div>
 
+    <p class="section-title">Acciones</p>
+    <div class="action-card">
+      <div class="action-card-title">Ventana de silencio</div>
+      <div class="action-status" id="silence-status">Cargando…</div>
+      <div class="action-row">
+        <input class="action-input" type="number" id="silence-minutes" min="1" max="1440" placeholder="min" title="Minutos (1–1440)">
+        <button class="btn-action" id="btn-silence" onclick="setSilence()">Silenciar ahora</button>
+        <button class="btn-action-ghost" id="btn-unsilence" onclick="clearSilence()" style="display:none">Quitar silencio</button>
+      </div>
+    </div>
+
   </main>
 </div>
 
 <script>
+  let _bizId = null;
+
   function escHtml(s) {
     if (!s) return '';
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
   function fmt(iso) {
     if (!iso) return '—';
-    const d = new Date(iso);
+    const d = new Date(iso.includes('T') || iso.endsWith('Z') ? iso : iso + 'Z');
     return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
   }
   function row(key, val, muted) {
     return `<div class="field-row"><span class="field-key">${key}</span><span class="field-val${muted ? ' muted' : ''}">${val}</span></div>`;
+  }
+
+  function renderSilenceStatus(silentUntil) {
+    const statusEl   = document.getElementById('silence-status');
+    const unsilenceBtn = document.getElementById('btn-unsilence');
+    if (!silentUntil) {
+      statusEl.textContent = 'Bot activo';
+      statusEl.className   = 'action-status';
+      unsilenceBtn.style.display = 'none';
+      return;
+    }
+    const untilMs = new Date(silentUntil.includes('T') || silentUntil.endsWith('Z') ? silentUntil : silentUntil + 'Z').getTime();
+    if (Date.now() >= untilMs) {
+      statusEl.textContent = 'Bot activo (ventana venció)';
+      statusEl.className   = 'action-status';
+      unsilenceBtn.style.display = 'none';
+      return;
+    }
+    const hhMM = new Intl.DateTimeFormat('es-UY', {
+      timeZone: 'America/Montevideo',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(new Date(untilMs));
+    statusEl.textContent = `Silenciado hasta ${hhMM} (hora de Uruguay)`;
+    statusEl.className   = 'action-status active';
+    unsilenceBtn.style.display = '';
+  }
+
+  async function setSilence() {
+    const minutes = parseInt(document.getElementById('silence-minutes').value, 10);
+    if (isNaN(minutes) || minutes < 1 || minutes > 1440) {
+      alert('Ingresá un valor entre 1 y 1440 minutos.');
+      return;
+    }
+    const btn = document.getElementById('btn-silence');
+    btn.disabled = true;
+    const r = await fetch(`/admin/api/silent/${_bizId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ minutes }),
+    });
+    btn.disabled = false;
+    if (!r.ok) { alert('Error al silenciar.'); return; }
+    const { silent_until } = await r.json();
+    renderSilenceStatus(silent_until);
+  }
+
+  async function clearSilence() {
+    const r = await fetch(`/admin/api/silent/${_bizId}`, { method: 'DELETE' });
+    if (!r.ok) { alert('Error al quitar silencio.'); return; }
+    renderSilenceStatus(null);
   }
 
   async function load() {
@@ -195,6 +319,7 @@
     if (!me.ok) { window.location.href = '/admin/login'; return; }
 
     const id = window.location.pathname.split('/').pop();
+    _bizId = id;
     const r = await fetch(`/admin/api/business/${id}`);
     if (!r.ok) { document.getElementById('page-title').textContent = 'Negocio no encontrado'; return; }
 
@@ -230,6 +355,9 @@
     pl += row('Plan pagado', fmt(d.plan_paid_at), true);
     pl += row('Plan vence', fmt(d.plan_expires_at), true);
     document.getElementById('config-plan').innerHTML = pl;
+
+    // Silence status
+    renderSilenceStatus(d.silent_until || null);
   }
 
   document.getElementById('btn-logout').addEventListener('click', async () => {
