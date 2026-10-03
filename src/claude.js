@@ -4,6 +4,9 @@ const { getRuntimeConfig, logClaudeUsage, logError } = require('./db');
 const _lastUsageByConv = new Map();
 function getLastClaudeUsageId(convId) { return _lastUsageByConv.get(convId) ?? null; }
 
+let _usageRawLogged = false;
+let _splitMissingLogDate = null;
+
 let _localConfig = null;
 try { _localConfig = require('./config.local'); } catch (_) {}
 
@@ -199,20 +202,22 @@ CÓMO HACERLO BIEN:
 async function generateReply(business, history, newMessage, label = null, bookingContext = null, runtimeCtx = null, conversationId = null) {
   const { staticText, dynamicText } = buildSystemPrompt(business, label, bookingContext, runtimeCtx);
 
-  // Build system blocks: static part is marked for caching, dynamic part is always fresh.
-  // Anthropic caches everything up to and including the block with cache_control.
-  const systemBlocks = [
-    { type: 'text', text: staticText, cache_control: { type: 'ephemeral' } },
+  // Static block uses 1h cache (stable per business/label). Ordering rule: 1h must precede 5m —
+  // the history 5m breakpoint in `messages` comes after, so the order is correct.
+  const systemBlocks1h = [
+    { type: 'text', text: staticText, cache_control: { type: 'ephemeral', ttl: '1h' } },
+    ...(dynamicText ? [{ type: 'text', text: dynamicText }] : []),
   ];
-  if (dynamicText) {
-    systemBlocks.push({ type: 'text', text: dynamicText });
-  }
+  // Fallback blocks without ttl (5-minute default) used if the 1h call returns 400.
+  const systemBlocks5m = [
+    { type: 'text', text: staticText, cache_control: { type: 'ephemeral' } },
+    ...(dynamicText ? [{ type: 'text', text: dynamicText }] : []),
+  ];
 
   const messages = [
     ...history.map((msg, i) => {
       const role = msg.role === 'assistant' ? 'assistant' : 'user';
-      // Cache breakpoint on last history entry: Anthropic reuses everything up to this point
-      // on the next turn, paying cache_read (10%) instead of full input price.
+      // 5-minute cache breakpoint on last history entry.
       if (i === history.length - 1 && history.length > 0) {
         return { role, content: [{ type: 'text', text: msg.content, cache_control: { type: 'ephemeral' } }] };
       }
@@ -226,24 +231,64 @@ async function generateReply(business, history, newMessage, label = null, bookin
     response = await getClient().messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 1024,
-      system: systemBlocks,
+      system: systemBlocks1h,
       messages,
     });
   } catch (err) {
-    console.error('[claude] generateReply error:', err?.status ?? 'no-status', err?.message, err?.stack?.split('\n')[1]);
-    const friendly = new Error('El asistente no está disponible en este momento. Intentá de nuevo en unos segundos.');
-    friendly.cause = err;
-    throw friendly;
+    if (err?.status === 400) {
+      logError('cache-1h-fallback', { message: `1h cache 400, retrying with 5min. biz=${business.id} err=${(err.message || '').slice(0, 200)}`, stack: '' });
+      try {
+        response = await getClient().messages.create({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1024,
+          system: systemBlocks5m,
+          messages,
+        });
+      } catch (err2) {
+        console.error('[claude] fallback also failed:', err2?.status, err2?.message);
+        const friendly = new Error('El asistente no está disponible en este momento. Intentá de nuevo en unos segundos.');
+        friendly.cause = err2;
+        throw friendly;
+      }
+    } else {
+      console.error('[claude] generateReply error:', err?.status ?? 'no-status', err?.message, err?.stack?.split('\n')[1]);
+      const friendly = new Error('El asistente no está disponible en este momento. Intentá de nuevo en unos segundos.');
+      friendly.cause = err;
+      throw friendly;
+    }
   }
 
   const u = response.usage;
+
+  // Log raw usage object once on first call after deploy — confirms real field names.
+  if (!_usageRawLogged) {
+    _usageRawLogged = true;
+    logError('claude-usage-raw', { message: JSON.stringify(u), stack: '' });
+  }
+
+  const write5m = u.cache_creation?.ephemeral_5m_input_tokens ?? 0;
+  const write1h  = u.cache_creation?.ephemeral_1h_input_tokens ?? 0;
+
+  // Log once per day when API returns no split breakdown but cache writes occurred.
+  if (write5m === 0 && write1h === 0 && (u.cache_creation_input_tokens ?? 0) > 0) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (_splitMissingLogDate !== today) {
+      _splitMissingLogDate = today;
+      logError('cache-usage-split-missing', {
+        message: `cache_creation split missing, cache_write=${u.cache_creation_input_tokens} biz=${business.id}`,
+        stack: '',
+      });
+    }
+  }
+
   console.log(
     `[claude:cache] biz=${business.id} in=${u.input_tokens} out=${u.output_tokens}` +
-    ` cache_read=${u.cache_read_input_tokens ?? 0} cache_write=${u.cache_creation_input_tokens ?? 0}`
+    ` cache_read=${u.cache_read_input_tokens ?? 0} cache_write=${u.cache_creation_input_tokens ?? 0}` +
+    ` write_5m=${write5m} write_1h=${write1h}`
   );
 
   try {
-    const usageId = logClaudeUsage(business.id, conversationId, response.model || 'claude-sonnet-4-6', u);
+    const usageId = logClaudeUsage(business.id, conversationId, response.model || 'claude-sonnet-4-6', u, write5m, write1h);
     if (conversationId != null) _lastUsageByConv.set(conversationId, usageId);
   } catch (usageErr) {
     logError('claude-usage-log', { message: usageErr.message, stack: usageErr.stack || '' });

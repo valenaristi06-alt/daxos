@@ -293,16 +293,18 @@ db.exec(`
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS claude_usage (
-    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-    business_id        INTEGER NOT NULL REFERENCES businesses(id),
-    conversation_id    INTEGER REFERENCES conversations(id),
-    model              TEXT NOT NULL,
-    input_tokens       INTEGER NOT NULL DEFAULT 0,
-    output_tokens      INTEGER NOT NULL DEFAULT 0,
-    cache_read_tokens  INTEGER NOT NULL DEFAULT 0,
-    cache_write_tokens INTEGER NOT NULL DEFAULT 0,
-    tts_chars          INTEGER,
-    created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    business_id           INTEGER NOT NULL REFERENCES businesses(id),
+    conversation_id       INTEGER REFERENCES conversations(id),
+    model                 TEXT NOT NULL,
+    input_tokens          INTEGER NOT NULL DEFAULT 0,
+    output_tokens         INTEGER NOT NULL DEFAULT 0,
+    cache_read_tokens     INTEGER NOT NULL DEFAULT 0,
+    cache_write_tokens    INTEGER NOT NULL DEFAULT 0,
+    cache_write_5m_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_write_1h_tokens INTEGER NOT NULL DEFAULT 0,
+    tts_chars             INTEGER,
+    created_at            TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
 
@@ -377,6 +379,22 @@ db.exec(`
     `).run();
     db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('003_plan_cortesia_valentin');
     console.log(`[migration 003] plan_cortesia set for valentin@daxos.lat: ${result.changes} row(s) updated`);
+  }
+
+  if (!applied('004_claude_usage_split_cache')) {
+    const usageCols = db.prepare('PRAGMA table_info(claude_usage)').all().map(c => c.name);
+    const needed5m = !usageCols.includes('cache_write_5m_tokens');
+    const needed1h = !usageCols.includes('cache_write_1h_tokens');
+    if (needed5m) db.exec('ALTER TABLE claude_usage ADD COLUMN cache_write_5m_tokens INTEGER NOT NULL DEFAULT 0');
+    if (needed1h) db.exec('ALTER TABLE claude_usage ADD COLUMN cache_write_1h_tokens INTEGER NOT NULL DEFAULT 0');
+    // Copy historical cache_write_tokens → cache_write_5m_tokens so old cost stays correct
+    if (needed5m || needed1h) {
+      const migrated = db.prepare(
+        'UPDATE claude_usage SET cache_write_5m_tokens = cache_write_tokens WHERE cache_write_5m_tokens = 0 AND cache_write_1h_tokens = 0 AND cache_write_tokens > 0'
+      ).run();
+      console.log(`[migration 004] claude_usage split cache columns added. Migrated ${migrated.changes} rows.`);
+    }
+    db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('004_claude_usage_split_cache');
   }
 
 })();
@@ -1357,11 +1375,12 @@ function purgeOldProcessedMessages() {
 
 // ── Claude usage logging ─────────────────────────────────────────────────────
 
-function logClaudeUsage(businessId, conversationId, model, usage) {
+function logClaudeUsage(businessId, conversationId, model, usage, write5m = 0, write1h = 0) {
   return db.prepare(`
     INSERT INTO claude_usage
-      (business_id, conversation_id, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+      (business_id, conversation_id, model, input_tokens, output_tokens, cache_read_tokens,
+       cache_write_tokens, cache_write_5m_tokens, cache_write_1h_tokens)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     businessId,
     conversationId ?? null,
@@ -1369,7 +1388,9 @@ function logClaudeUsage(businessId, conversationId, model, usage) {
     usage.input_tokens ?? 0,
     usage.output_tokens ?? 0,
     usage.cache_read_input_tokens ?? 0,
-    usage.cache_creation_input_tokens ?? 0
+    usage.cache_creation_input_tokens ?? 0,
+    write5m,
+    write1h
   ).lastInsertRowid;
 }
 
@@ -1387,6 +1408,8 @@ function getClaudeUsageDailySummary(days = 7) {
       SUM(output_tokens)                                        AS output_tokens,
       SUM(cache_read_tokens)                                    AS cache_read_tokens,
       SUM(cache_write_tokens)                                   AS cache_write_tokens,
+      SUM(cache_write_5m_tokens)                               AS cache_write_5m_tokens,
+      SUM(cache_write_1h_tokens)                               AS cache_write_1h_tokens,
       SUM(CASE WHEN tts_chars IS NOT NULL THEN 1 ELSE 0 END)   AS audio_replies,
       SUM(COALESCE(tts_chars, 0))                              AS total_tts_chars
     FROM claude_usage
@@ -1407,6 +1430,8 @@ function getClaudeUsageByBusiness(days = 30) {
       SUM(u.output_tokens)                                        AS output_tokens,
       SUM(u.cache_read_tokens)                                    AS cache_read_tokens,
       SUM(u.cache_write_tokens)                                   AS cache_write_tokens,
+      SUM(u.cache_write_5m_tokens)                               AS cache_write_5m_tokens,
+      SUM(u.cache_write_1h_tokens)                               AS cache_write_1h_tokens,
       SUM(CASE WHEN u.tts_chars IS NOT NULL THEN 1 ELSE 0 END)   AS audio_replies,
       SUM(COALESCE(u.tts_chars, 0))                              AS total_tts_chars
     FROM claude_usage u

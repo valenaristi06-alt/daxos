@@ -864,17 +864,25 @@ app.get('/debug/errores', requireAdmin, (req, res) => {
   const errors = getRecentErrors(20);
   const usage  = getClaudeUsageDailySummary(7);
 
-  const priceIn         = parseFloat(process.env.ANTHROPIC_PRICE_IN         || '3');
-  const priceOut        = parseFloat(process.env.ANTHROPIC_PRICE_OUT        || '15');
-  const priceCacheRead  = parseFloat(process.env.ANTHROPIC_PRICE_CACHE_READ  || '0.30');
-  const priceCacheWrite = parseFloat(process.env.ANTHROPIC_PRICE_CACHE_WRITE || '3.75');
+  const priceIn          = parseFloat(process.env.ANTHROPIC_PRICE_IN           || '3');
+  const priceOut         = parseFloat(process.env.ANTHROPIC_PRICE_OUT          || '15');
+  const priceCacheRead   = parseFloat(process.env.ANTHROPIC_PRICE_CACHE_READ   || '0.30');
+  const priceCacheWrite  = parseFloat(process.env.ANTHROPIC_PRICE_CACHE_WRITE  || '3.75');
+  const priceCacheWrite1h = parseFloat(process.env.ANTHROPIC_PRICE_CACHE_WRITE_1H || '6');
 
   function calcRowCost(r) {
+    const w5m = r.cache_write_5m_tokens ?? 0;
+    const w1h = r.cache_write_1h_tokens ?? 0;
+    // If split unavailable (both 0) but total write > 0, use conservative 1h price
+    const hasSplit = w5m > 0 || w1h > 0 || (r.cache_write_tokens ?? 0) === 0;
+    const writeCost = hasSplit
+      ? (w5m / 1e6) * priceCacheWrite + (w1h / 1e6) * priceCacheWrite1h
+      : ((r.cache_write_tokens ?? 0) / 1e6) * priceCacheWrite1h;
     return (
-      (r.input_tokens / 1e6) * priceIn +
-      (r.output_tokens / 1e6) * priceOut +
-      (r.cache_read_tokens / 1e6) * priceCacheRead +
-      (r.cache_write_tokens / 1e6) * priceCacheWrite
+      ((r.input_tokens ?? 0) / 1e6) * priceIn +
+      ((r.output_tokens ?? 0) / 1e6) * priceOut +
+      ((r.cache_read_tokens ?? 0) / 1e6) * priceCacheRead +
+      writeCost
     );
   }
 
@@ -890,25 +898,34 @@ app.get('/debug/errores', requireAdmin, (req, res) => {
       <td style="padding:4px 8px;font-size:11px;max-width:600px;word-break:break-all">${esc(e.stack).replace(/\n/g, '<br>')}</td>
     </tr>`).join('');
 
-  const usageRows = usage.map(r => `
+  const usageRows = usage.map(r => {
+    const cacheHit = r.cache_read_tokens ?? 0;
+    const w5m = r.cache_write_5m_tokens ?? 0;
+    const w1h = r.cache_write_1h_tokens ?? 0;
+    const totalCacheable = cacheHit + w5m + w1h + (r.input_tokens ?? 0);
+    const cachePct = totalCacheable > 0 ? ((cacheHit / totalCacheable) * 100).toFixed(1) + '%' : '—';
+    return `
     <tr>
       <td style="padding:4px 8px">${r.day}</td>
       <td style="padding:4px 8px;text-align:right">${r.replies}</td>
-      <td style="padding:4px 8px;text-align:right">${r.input_tokens.toLocaleString()}</td>
-      <td style="padding:4px 8px;text-align:right">${r.output_tokens.toLocaleString()}</td>
-      <td style="padding:4px 8px;text-align:right">${r.cache_read_tokens.toLocaleString()}</td>
-      <td style="padding:4px 8px;text-align:right">${r.cache_write_tokens.toLocaleString()}</td>
+      <td style="padding:4px 8px;text-align:right">${(r.input_tokens ?? 0).toLocaleString()}</td>
+      <td style="padding:4px 8px;text-align:right">${(r.output_tokens ?? 0).toLocaleString()}</td>
+      <td style="padding:4px 8px;text-align:right">${cacheHit.toLocaleString()}</td>
+      <td style="padding:4px 8px;text-align:right">${w5m.toLocaleString()}</td>
+      <td style="padding:4px 8px;text-align:right">${w1h.toLocaleString()}</td>
+      <td style="padding:4px 8px;text-align:right">${cachePct}</td>
       <td style="padding:4px 8px;text-align:right">${r.audio_replies}</td>
-      <td style="padding:4px 8px;text-align:right">${r.total_tts_chars.toLocaleString()}</td>
+      <td style="padding:4px 8px;text-align:right">${(r.total_tts_chars ?? 0).toLocaleString()}</td>
       <td style="padding:4px 8px;text-align:right">$${calcRowCost(r).toFixed(4)}</td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Error Log</title>
     <style>body{font-family:monospace;padding:20px}table{border-collapse:collapse;width:100%;margin-bottom:30px}th,td{border:1px solid #ccc;text-align:left;vertical-align:top}th{background:#f0f0f0}</style>
     </head><body>
     <h2>Uso Claude — últimos 7 días</h2>
-    <table><thead><tr><th>Día</th><th>Replies</th><th>Input</th><th>Output</th><th>Cache read</th><th>Cache write</th><th>Audio</th><th>TTS chars</th><th>Costo USD</th></tr></thead>
-    <tbody>${usageRows || '<tr><td colspan="9">Sin datos</td></tr>'}</tbody></table>
+    <table><thead><tr><th>Día</th><th>Replies</th><th>Input</th><th>Output</th><th>Cache read</th><th>Write 5m</th><th>Write 1h</th><th>% caché</th><th>Audio</th><th>TTS chars</th><th>Costo USD</th></tr></thead>
+    <tbody>${usageRows || '<tr><td colspan="11">Sin datos</td></tr>'}</tbody></table>
     <h2>Últimos errores (${errors.length})</h2>
     <table><thead><tr><th>Fecha</th><th>Contexto</th><th>Mensaje</th><th>Stack</th></tr></thead>
     <tbody>${errRows || '<tr><td colspan="4">Sin errores registrados</td></tr>'}</tbody></table>
@@ -918,17 +935,24 @@ app.get('/debug/errores', requireAdmin, (req, res) => {
 app.get('/admin/api/costos', requireAdmin, (req, res) => {
   const days = Math.min(parseInt(req.query.days, 10) || 30, 90);
 
-  const priceIn         = parseFloat(process.env.ANTHROPIC_PRICE_IN         || '3');
-  const priceOut        = parseFloat(process.env.ANTHROPIC_PRICE_OUT        || '15');
-  const priceCacheRead  = parseFloat(process.env.ANTHROPIC_PRICE_CACHE_READ  || '0.30');
-  const priceCacheWrite = parseFloat(process.env.ANTHROPIC_PRICE_CACHE_WRITE || '3.75');
+  const priceIn           = parseFloat(process.env.ANTHROPIC_PRICE_IN             || '3');
+  const priceOut          = parseFloat(process.env.ANTHROPIC_PRICE_OUT            || '15');
+  const priceCacheRead    = parseFloat(process.env.ANTHROPIC_PRICE_CACHE_READ     || '0.30');
+  const priceCacheWrite   = parseFloat(process.env.ANTHROPIC_PRICE_CACHE_WRITE    || '3.75');
+  const priceCacheWrite1h = parseFloat(process.env.ANTHROPIC_PRICE_CACHE_WRITE_1H || '6');
 
   function calcCost(r) {
+    const w5m = r.cache_write_5m_tokens ?? 0;
+    const w1h = r.cache_write_1h_tokens ?? 0;
+    const hasSplit = w5m > 0 || w1h > 0 || (r.cache_write_tokens ?? 0) === 0;
+    const writeCost = hasSplit
+      ? (w5m / 1e6) * priceCacheWrite + (w1h / 1e6) * priceCacheWrite1h
+      : ((r.cache_write_tokens ?? 0) / 1e6) * priceCacheWrite1h;
     return (
-      (r.input_tokens / 1e6) * priceIn +
-      (r.output_tokens / 1e6) * priceOut +
-      (r.cache_read_tokens / 1e6) * priceCacheRead +
-      (r.cache_write_tokens / 1e6) * priceCacheWrite
+      ((r.input_tokens ?? 0) / 1e6) * priceIn +
+      ((r.output_tokens ?? 0) / 1e6) * priceOut +
+      ((r.cache_read_tokens ?? 0) / 1e6) * priceCacheRead +
+      writeCost
     );
   }
 
@@ -938,21 +962,23 @@ app.get('/admin/api/costos', requireAdmin, (req, res) => {
   }));
 
   const totals = rows.reduce((acc, r) => {
-    acc.replies          += r.replies;
-    acc.input_tokens     += r.input_tokens;
-    acc.output_tokens    += r.output_tokens;
-    acc.cache_read_tokens  += r.cache_read_tokens;
-    acc.cache_write_tokens += r.cache_write_tokens;
-    acc.audio_replies    += r.audio_replies;
-    acc.total_tts_chars  += r.total_tts_chars;
-    acc.cost_usd         += r.cost_usd;
+    acc.replies               += r.replies;
+    acc.input_tokens          += r.input_tokens ?? 0;
+    acc.output_tokens         += r.output_tokens ?? 0;
+    acc.cache_read_tokens     += r.cache_read_tokens ?? 0;
+    acc.cache_write_tokens    += r.cache_write_tokens ?? 0;
+    acc.cache_write_5m_tokens += r.cache_write_5m_tokens ?? 0;
+    acc.cache_write_1h_tokens += r.cache_write_1h_tokens ?? 0;
+    acc.audio_replies         += r.audio_replies ?? 0;
+    acc.total_tts_chars       += r.total_tts_chars ?? 0;
+    acc.cost_usd              += r.cost_usd;
     return acc;
-  }, { replies: 0, input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, audio_replies: 0, total_tts_chars: 0, cost_usd: 0 });
+  }, { replies: 0, input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, cache_write_5m_tokens: 0, cache_write_1h_tokens: 0, audio_replies: 0, total_tts_chars: 0, cost_usd: 0 });
   totals.cost_usd = parseFloat(totals.cost_usd.toFixed(6));
 
   res.json({
     days,
-    prices: { in: priceIn, out: priceOut, cache_read: priceCacheRead, cache_write: priceCacheWrite },
+    prices: { in: priceIn, out: priceOut, cache_read: priceCacheRead, cache_write: priceCacheWrite, cache_write_1h: priceCacheWrite1h },
     rows,
     totals,
   });
