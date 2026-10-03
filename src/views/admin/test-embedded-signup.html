@@ -9,7 +9,8 @@
     h1 { font-size: 1.1rem; margin-bottom: 8px; color: #f97316; }
     .sub { font-size: 13px; color: #9ca3af; margin-bottom: 24px; }
     .sub a { color: #f97316; }
-    #cfg { font-size: 13px; margin-bottom: 20px; }
+    #cfg { font-size: 13px; margin-bottom: 8px; }
+    #sdk-status { font-size: 13px; margin-bottom: 20px; color: #9ca3af; }
     button { background: #f97316; color: #fff; border: none; padding: 10px 20px; cursor: pointer; border-radius: 6px; font-size: 14px; font-family: monospace; }
     button:disabled { background: #555; cursor: not-allowed; }
     #log { margin-top: 24px; background: #1a1a1a; border: 1px solid #333; padding: 16px; border-radius: 6px; min-height: 80px; }
@@ -21,8 +22,23 @@
     .empty { color: #555; font-size: 13px; }
   </style>
   <script>
+    // Flags: button only enabled when BOTH sdk and config are ready
+    window._esTest = { sdkReady: false, configId: null };
+
     window.fbAsyncInit = function () {
       FB.init({ appId: '1025010310140011', autoLogAppEvents: true, xfbml: false, version: 'v21.0' });
+      window._esTest.sdkReady = true;
+      // SDK can fire before body is parsed — defer DOM access if needed
+      function onSdkDomReady() {
+        var el = document.getElementById('sdk-status');
+        if (el) { el.textContent = 'SDK de Meta: listo ✓'; el.style.color = '#4ade80'; }
+        if (typeof maybeEnableBtn === 'function') maybeEnableBtn();
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', onSdkDomReady);
+      } else {
+        onSdkDomReady();
+      }
     };
   </script>
   <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
@@ -32,12 +48,12 @@
   <p class="sub">Página de prueba solo para admin. No guarda nada ni toca producción. <a href="/admin/inicio">← Panel</a></p>
 
   <div id="cfg">Cargando config…</div>
-  <button id="btn" disabled>Probar Embedded Signup</button>
+  <div id="sdk-status">SDK de Meta: cargando…</div>
+  <button id="btn" disabled>Cargando SDK de Meta…</button>
   <div id="log"><span class="empty">Sin eventos aún.</span></div>
 
   <script>
     const VERSION = 'v21.0';
-    let configId = null;
 
     function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
@@ -61,19 +77,43 @@
       } catch (_) {}
     }
 
+    function maybeEnableBtn() {
+      const { sdkReady, configId } = window._esTest;
+      const btn = document.getElementById('btn');
+      if (sdkReady && configId) {
+        btn.disabled = false;
+        btn.textContent = 'Probar Embedded Signup';
+      }
+    }
+
+    // If fbAsyncInit already fired before this script ran, apply its DOM updates now
+    if (window._esTest.sdkReady) {
+      const el = document.getElementById('sdk-status');
+      if (el) { el.textContent = 'SDK de Meta: listo ✓'; el.style.color = '#4ade80'; }
+    }
+
+    // Capture SDK/global JS errors and show on page
+    window.onerror = function (msg, src, line, col, err) {
+      addEntry('err', 'Error JS:', msg + (src ? '  src=' + src.replace(/^https?:\/\/[^/]+/, '') : '') + (line ? ':' + line : ''));
+      return false;
+    };
+
+    // Load server config
     fetch('/api/config').then(r => r.json()).then(cfg => {
-      configId = cfg.whatsappConfigId || null;
+      const id = cfg.whatsappConfigId || null;
+      window._esTest.configId = id;
       const el = document.getElementById('cfg');
-      if (configId) {
-        el.innerHTML = '<span style="color:#4ade80">config_id: ' + esc(configId) + ' &nbsp;·&nbsp; version: ' + VERSION + ' &nbsp;·&nbsp; appId: 1025010310140011</span>';
+      if (id) {
+        el.innerHTML = '<span style="color:#4ade80">config_id: ' + esc(id) + ' &nbsp;·&nbsp; version: ' + VERSION + ' &nbsp;·&nbsp; appId: 1025010310140011</span>';
       } else {
         el.innerHTML = '<span style="color:#f87171">WHATSAPP_CONFIG_ID no está configurado en el servidor</span>';
       }
-      document.getElementById('btn').disabled = !configId;
+      maybeEnableBtn();
     }).catch(err => {
       document.getElementById('cfg').innerHTML = '<span style="color:#f87171">Error al cargar config: ' + esc(err.message) + '</span>';
     });
 
+    // Listen to popup messages from Meta
     window.addEventListener('message', function (event) {
       if (!event.origin.endsWith('.facebook.com') && !event.origin.endsWith('.meta.com')) return;
       let data;
@@ -107,21 +147,44 @@
     });
 
     document.getElementById('btn').addEventListener('click', function () {
-      if (!configId) return;
+      const { sdkReady, configId } = window._esTest;
+
+      if (!sdkReady) {
+        addEntry('err', 'SDK no listo:', 'FB.init no completó todavía. Esperá y volvé a intentar.');
+        return;
+      }
+      if (!configId) {
+        addEntry('err', 'Config:', 'WHATSAPP_CONFIG_ID no configurado en el servidor.');
+        return;
+      }
+      if (typeof FB === 'undefined' || typeof FB.login !== 'function') {
+        addEntry('err', 'SDK no disponible:', 'FB.login no existe. Revisá que el SDK cargó correctamente.');
+        serverLog('es-test-error', 'FB.login undefined at click time');
+        return;
+      }
+
       this.disabled = true;
       addEntry('ok', 'Popup:', 'Abriendo…');
       serverLog('es-test-opened', 'config_id=' + configId + ' version=' + VERSION);
 
+      const clickTs = Date.now();
+
       FB.login(function (response) {
+        const elapsed = Date.now() - clickTs;
+
         if (response.authResponse) {
           const code = response.authResponse.code || '';
           const codeShort = code ? code.slice(0, 6) + '…' : '(vacío)';
-          addEntry('ok', 'FB.login callback:', 'status=connected  code=' + codeShort);
-          serverLog('es-test-callback', 'source=fb.login status=connected code_prefix=' + codeShort);
+          addEntry('ok', 'FB.login callback:', 'status=connected  code=' + codeShort + '  (' + elapsed + 'ms)');
+          serverLog('es-test-callback', 'source=fb.login status=connected code_prefix=' + codeShort + ' elapsed=' + elapsed + 'ms');
         } else {
           const status = response.status || 'unknown';
-          addEntry('warn', 'FB.login callback:', 'status=' + status + '  (sin authResponse)');
-          serverLog('es-test-callback', 'source=fb.login status=' + status + ' no_auth_response=true');
+          const instant = elapsed < 500;
+          addEntry(instant ? 'err' : 'warn', 'FB.login callback:', 'status=' + status + '  (sin authResponse)  ' + elapsed + 'ms' + (instant ? '  ← popup no se abrió, posible dominio no permitido en Meta app' : ''));
+          if (instant) {
+            addEntry('warn', 'Revisá en Meta App Dashboard:', 'App Domains y JS SDK allowed domains deben incluir daxos.lat');
+          }
+          serverLog('es-test-callback', 'source=fb.login status=' + status + ' no_auth_response=true elapsed=' + elapsed + 'ms instant=' + instant);
         }
         document.getElementById('btn').disabled = false;
       }, {
