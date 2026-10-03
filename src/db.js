@@ -292,6 +292,21 @@ db.exec(`
 `);
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS claude_usage (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    business_id        INTEGER NOT NULL REFERENCES businesses(id),
+    conversation_id    INTEGER REFERENCES conversations(id),
+    model              TEXT NOT NULL,
+    input_tokens       INTEGER NOT NULL DEFAULT 0,
+    output_tokens      INTEGER NOT NULL DEFAULT 0,
+    cache_read_tokens  INTEGER NOT NULL DEFAULT 0,
+    cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+    tts_chars          INTEGER,
+    created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS payments (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     business_id     INTEGER NOT NULL REFERENCES businesses(id),
@@ -1144,6 +1159,10 @@ module.exports = {
   setSilentUntil,
   clearSilentUntil,
   setConversationSilent,
+  logClaudeUsage,
+  setClaudeUsageTtsChars,
+  getClaudeUsageDailySummary,
+  getClaudeUsageByBusiness,
 };
 
 function setWeeklySummaryEnabled(businessId, enabled) {
@@ -1333,4 +1352,66 @@ function deleteProcessedMessage(businessId, msgId) {
 
 function purgeOldProcessedMessages() {
   db.prepare("DELETE FROM processed_messages WHERE created_at < datetime('now', '-7 days')").run();
+}
+
+// ── Claude usage logging ─────────────────────────────────────────────────────
+
+function logClaudeUsage(businessId, conversationId, model, usage) {
+  return db.prepare(`
+    INSERT INTO claude_usage
+      (business_id, conversation_id, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    businessId,
+    conversationId ?? null,
+    model,
+    usage.input_tokens ?? 0,
+    usage.output_tokens ?? 0,
+    usage.cache_read_input_tokens ?? 0,
+    usage.cache_creation_input_tokens ?? 0
+  ).lastInsertRowid;
+}
+
+function setClaudeUsageTtsChars(usageId, chars) {
+  if (!usageId) return;
+  db.prepare('UPDATE claude_usage SET tts_chars = ? WHERE id = ?').run(chars, usageId);
+}
+
+function getClaudeUsageDailySummary(days = 7) {
+  return db.prepare(`
+    SELECT
+      date(created_at)                                          AS day,
+      COUNT(*)                                                  AS replies,
+      SUM(input_tokens)                                         AS input_tokens,
+      SUM(output_tokens)                                        AS output_tokens,
+      SUM(cache_read_tokens)                                    AS cache_read_tokens,
+      SUM(cache_write_tokens)                                   AS cache_write_tokens,
+      SUM(CASE WHEN tts_chars IS NOT NULL THEN 1 ELSE 0 END)   AS audio_replies,
+      SUM(COALESCE(tts_chars, 0))                              AS total_tts_chars
+    FROM claude_usage
+    WHERE created_at >= datetime('now', ?)
+    GROUP BY date(created_at)
+    ORDER BY day DESC
+  `).all(`-${days} days`);
+}
+
+function getClaudeUsageByBusiness(days = 30) {
+  return db.prepare(`
+    SELECT
+      date(u.created_at)                                          AS day,
+      u.business_id,
+      b.name                                                      AS business_name,
+      COUNT(*)                                                    AS replies,
+      SUM(u.input_tokens)                                         AS input_tokens,
+      SUM(u.output_tokens)                                        AS output_tokens,
+      SUM(u.cache_read_tokens)                                    AS cache_read_tokens,
+      SUM(u.cache_write_tokens)                                   AS cache_write_tokens,
+      SUM(CASE WHEN u.tts_chars IS NOT NULL THEN 1 ELSE 0 END)   AS audio_replies,
+      SUM(COALESCE(u.tts_chars, 0))                              AS total_tts_chars
+    FROM claude_usage u
+    JOIN businesses b ON b.id = u.business_id
+    WHERE u.created_at >= datetime('now', ?)
+    GROUP BY date(u.created_at), u.business_id
+    ORDER BY day DESC, u.business_id
+  `).all(`-${days} days`);
 }

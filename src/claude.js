@@ -1,5 +1,8 @@
 const Anthropic = require('@anthropic-ai/sdk');
-const { getRuntimeConfig } = require('./db');
+const { getRuntimeConfig, logClaudeUsage, logError } = require('./db');
+
+const _lastUsageByConv = new Map();
+function getLastClaudeUsageId(convId) { return _lastUsageByConv.get(convId) ?? null; }
 
 let _localConfig = null;
 try { _localConfig = require('./config.local'); } catch (_) {}
@@ -193,7 +196,7 @@ CÓMO HACERLO BIEN:
   return { staticText: staticLines.join('\n'), dynamicText: dynamicLines.join('\n') };
 }
 
-async function generateReply(business, history, newMessage, label = null, bookingContext = null, runtimeCtx = null) {
+async function generateReply(business, history, newMessage, label = null, bookingContext = null, runtimeCtx = null, conversationId = null) {
   const { staticText, dynamicText } = buildSystemPrompt(business, label, bookingContext, runtimeCtx);
 
   // Build system blocks: static part is marked for caching, dynamic part is always fresh.
@@ -238,6 +241,13 @@ async function generateReply(business, history, newMessage, label = null, bookin
     `[claude:cache] biz=${business.id} in=${u.input_tokens} out=${u.output_tokens}` +
     ` cache_read=${u.cache_read_input_tokens ?? 0} cache_write=${u.cache_creation_input_tokens ?? 0}`
   );
+
+  try {
+    const usageId = logClaudeUsage(business.id, conversationId, response.model || 'claude-sonnet-4-6', u);
+    if (conversationId != null) _lastUsageByConv.set(conversationId, usageId);
+  } catch (usageErr) {
+    logError('claude-usage-log', { message: usageErr.message, stack: usageErr.stack || '' });
+  }
 
   return response.content[0].text;
 }
@@ -306,4 +316,4 @@ async function summarizeWebsite(text) {
   return response.content[0].text.trim();
 }
 
-module.exports = { initAnthropicKey, generateReply, analyzeStyle, summarizeWebsite };
+module.exports = { initAnthropicKey, generateReply, analyzeStyle, summarizeWebsite, getLastClaudeUsageId };

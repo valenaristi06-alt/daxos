@@ -20,7 +20,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent } = require('./db');
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -28,7 +28,7 @@ if (_apiKey) {
   try { setRuntimeConfig('ANTHROPIC_API_KEY', _apiKey); } catch (_) {}
   console.log('[startup] PID=' + process.pid + ' key saved to DB');
 }
-const { generateReply, analyzeStyle, summarizeWebsite, initAnthropicKey } = require('./claude');
+const { generateReply, analyzeStyle, summarizeWebsite, initAnthropicKey, getLastClaudeUsageId } = require('./claude');
 initAnthropicKey(_apiKey);
 const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = require('./bookings');
 const { sendWeeklySummaries } = require('./weekly');
@@ -831,22 +831,102 @@ app.post('/api/business/preview-chat', (req, res, next) => {
   }
 });
 
-app.get('/debug/errores', requireAuth, (req, res) => {
+app.get('/debug/errores', requireAdmin, (req, res) => {
   const errors = getRecentErrors(20);
-  const rows = errors.map(e => `
+  const usage  = getClaudeUsageDailySummary(7);
+
+  const priceIn         = parseFloat(process.env.ANTHROPIC_PRICE_IN         || '3');
+  const priceOut        = parseFloat(process.env.ANTHROPIC_PRICE_OUT        || '15');
+  const priceCacheRead  = parseFloat(process.env.ANTHROPIC_PRICE_CACHE_READ  || '0.30');
+  const priceCacheWrite = parseFloat(process.env.ANTHROPIC_PRICE_CACHE_WRITE || '3.75');
+
+  function calcRowCost(r) {
+    return (
+      (r.input_tokens / 1e6) * priceIn +
+      (r.output_tokens / 1e6) * priceOut +
+      (r.cache_read_tokens / 1e6) * priceCacheRead +
+      (r.cache_write_tokens / 1e6) * priceCacheWrite
+    );
+  }
+
+  function esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  const errRows = errors.map(e => `
     <tr>
-      <td style="white-space:nowrap;padding:4px 8px">${e.created_at}</td>
-      <td style="padding:4px 8px">${e.context}</td>
-      <td style="padding:4px 8px">${e.message}</td>
-      <td style="padding:4px 8px;font-size:11px;max-width:600px;word-break:break-all">${(e.stack || '').replace(/\n/g, '<br>')}</td>
+      <td style="white-space:nowrap;padding:4px 8px">${esc(e.created_at)}</td>
+      <td style="padding:4px 8px">${esc(e.context)}</td>
+      <td style="padding:4px 8px">${esc(e.message)}</td>
+      <td style="padding:4px 8px;font-size:11px;max-width:600px;word-break:break-all">${esc(e.stack).replace(/\n/g, '<br>')}</td>
     </tr>`).join('');
+
+  const usageRows = usage.map(r => `
+    <tr>
+      <td style="padding:4px 8px">${r.day}</td>
+      <td style="padding:4px 8px;text-align:right">${r.replies}</td>
+      <td style="padding:4px 8px;text-align:right">${r.input_tokens.toLocaleString()}</td>
+      <td style="padding:4px 8px;text-align:right">${r.output_tokens.toLocaleString()}</td>
+      <td style="padding:4px 8px;text-align:right">${r.cache_read_tokens.toLocaleString()}</td>
+      <td style="padding:4px 8px;text-align:right">${r.cache_write_tokens.toLocaleString()}</td>
+      <td style="padding:4px 8px;text-align:right">${r.audio_replies}</td>
+      <td style="padding:4px 8px;text-align:right">${r.total_tts_chars.toLocaleString()}</td>
+      <td style="padding:4px 8px;text-align:right">$${calcRowCost(r).toFixed(4)}</td>
+    </tr>`).join('');
+
   res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Error Log</title>
-    <style>body{font-family:monospace;padding:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;text-align:left;vertical-align:top}th{background:#f0f0f0}</style>
+    <style>body{font-family:monospace;padding:20px}table{border-collapse:collapse;width:100%;margin-bottom:30px}th,td{border:1px solid #ccc;text-align:left;vertical-align:top}th{background:#f0f0f0}</style>
     </head><body>
+    <h2>Uso Claude — últimos 7 días</h2>
+    <table><thead><tr><th>Día</th><th>Replies</th><th>Input</th><th>Output</th><th>Cache read</th><th>Cache write</th><th>Audio</th><th>TTS chars</th><th>Costo USD</th></tr></thead>
+    <tbody>${usageRows || '<tr><td colspan="9">Sin datos</td></tr>'}</tbody></table>
     <h2>Últimos errores (${errors.length})</h2>
     <table><thead><tr><th>Fecha</th><th>Contexto</th><th>Mensaje</th><th>Stack</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="4">Sin errores registrados</td></tr>'}</tbody></table>
+    <tbody>${errRows || '<tr><td colspan="4">Sin errores registrados</td></tr>'}</tbody></table>
     </body></html>`);
+});
+
+app.get('/admin/api/costos', requireAdmin, (req, res) => {
+  const days = Math.min(parseInt(req.query.days, 10) || 30, 90);
+
+  const priceIn         = parseFloat(process.env.ANTHROPIC_PRICE_IN         || '3');
+  const priceOut        = parseFloat(process.env.ANTHROPIC_PRICE_OUT        || '15');
+  const priceCacheRead  = parseFloat(process.env.ANTHROPIC_PRICE_CACHE_READ  || '0.30');
+  const priceCacheWrite = parseFloat(process.env.ANTHROPIC_PRICE_CACHE_WRITE || '3.75');
+
+  function calcCost(r) {
+    return (
+      (r.input_tokens / 1e6) * priceIn +
+      (r.output_tokens / 1e6) * priceOut +
+      (r.cache_read_tokens / 1e6) * priceCacheRead +
+      (r.cache_write_tokens / 1e6) * priceCacheWrite
+    );
+  }
+
+  const rows = getClaudeUsageByBusiness(days).map(r => ({
+    ...r,
+    cost_usd: parseFloat(calcCost(r).toFixed(6)),
+  }));
+
+  const totals = rows.reduce((acc, r) => {
+    acc.replies          += r.replies;
+    acc.input_tokens     += r.input_tokens;
+    acc.output_tokens    += r.output_tokens;
+    acc.cache_read_tokens  += r.cache_read_tokens;
+    acc.cache_write_tokens += r.cache_write_tokens;
+    acc.audio_replies    += r.audio_replies;
+    acc.total_tts_chars  += r.total_tts_chars;
+    acc.cost_usd         += r.cost_usd;
+    return acc;
+  }, { replies: 0, input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, audio_replies: 0, total_tts_chars: 0, cost_usd: 0 });
+  totals.cost_usd = parseFloat(totals.cost_usd.toFixed(6));
+
+  res.json({
+    days,
+    prices: { in: priceIn, out: priceOut, cache_read: priceCacheRead, cache_write: priceCacheWrite },
+    rows,
+    totals,
+  });
 });
 
 app.post('/test/simulate', async (req, res) => {
@@ -1127,7 +1207,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
       generateReply(business, history, text, conversation.label || null, {
         enabled: !!business.booking_enabled,
         state: currentBookingState,
-      }, runtimeCtx),
+      }, runtimeCtx, conversation.id),
       sleep(delayMs),
     ]);
     logError('webhook-claude-ok', { message: `business_id=${business.id} reply_length=${rawReply.length}`, stack: '' });
@@ -1295,6 +1375,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
       try {
         logError('tts-text', { message: `business_id=${business.id} text=${JSON.stringify(reply)}`, stack: '' });
         const mp3 = await generateAudioBuffer(business.voice_id, reply);
+        try { setClaudeUsageTtsChars(getLastClaudeUsageId(conversation.id), reply.length); } catch (_) {}
         logError('tts-buffers', { message: `mp3=${mp3.length}b`, stack: '' });
         const ogg = await convertToOgg(mp3);
         logError('tts-buffers', { message: `ogg=${ogg.length}b mime=audio/ogg; codecs=opus`, stack: '' });
