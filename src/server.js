@@ -2427,6 +2427,18 @@ app.all('/admin/api/kapso-rescue', requireAdmin, async (req, res) => {
   }
 });
 
+app.get('/admin/test-embedded-signup', requireAdmin, (_req, res) => {
+  res.sendFile(path.join(__dirname, 'views/admin/test-embedded-signup.html'));
+});
+
+app.post('/admin/api/es-test-log', requireAdmin, (req, res) => {
+  const { context, message } = req.body || {};
+  if (typeof context === 'string' && typeof message === 'string') {
+    logError(context.slice(0, 64), { message: message.slice(0, 500), stack: '' });
+  }
+  res.json({ ok: true });
+});
+
 // Temporary one-shot route to load WhatsApp credentials for a business by owner email.
 // Protected by ADMIN_SET_WA_TOKEN env var (Bearer token). Remove once credentials are loaded.
 app.post('/admin/set-wa-credentials', (req, res) => {

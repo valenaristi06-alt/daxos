@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Test Embedded Signup — Admin</title>
+  <style>
+    body { font-family: monospace; background: #111; color: #eee; padding: 32px; max-width: 660px; margin: auto; }
+    h1 { font-size: 1.1rem; margin-bottom: 8px; color: #f97316; }
+    .sub { font-size: 13px; color: #9ca3af; margin-bottom: 24px; }
+    .sub a { color: #f97316; }
+    #cfg { font-size: 13px; margin-bottom: 20px; }
+    button { background: #f97316; color: #fff; border: none; padding: 10px 20px; cursor: pointer; border-radius: 6px; font-size: 14px; font-family: monospace; }
+    button:disabled { background: #555; cursor: not-allowed; }
+    #log { margin-top: 24px; background: #1a1a1a; border: 1px solid #333; padding: 16px; border-radius: 6px; min-height: 80px; }
+    .entry { margin-bottom: 6px; padding: 5px 8px; border-radius: 4px; font-size: 12px; word-break: break-all; }
+    .ok   { background: #0d2a0d; color: #4ade80; }
+    .warn { background: #2a2000; color: #facc15; }
+    .err  { background: #2a0d0d; color: #f87171; }
+    .lbl  { color: #9ca3af; margin-right: 6px; }
+    .empty { color: #555; font-size: 13px; }
+  </style>
+  <script>
+    window.fbAsyncInit = function () {
+      FB.init({ appId: '1025010310140011', autoLogAppEvents: true, xfbml: false, version: 'v21.0' });
+    };
+  </script>
+  <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
+</head>
+<body>
+  <h1>Test — Meta Embedded Signup</h1>
+  <p class="sub">Página de prueba solo para admin. No guarda nada ni toca producción. <a href="/admin/inicio">← Panel</a></p>
+
+  <div id="cfg">Cargando config…</div>
+  <button id="btn" disabled>Probar Embedded Signup</button>
+  <div id="log"><span class="empty">Sin eventos aún.</span></div>
+
+  <script>
+    const VERSION = 'v21.0';
+    let configId = null;
+
+    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function addEntry(type, label, value) {
+      const log = document.getElementById('log');
+      const empty = log.querySelector('.empty');
+      if (empty) empty.remove();
+      const d = document.createElement('div');
+      d.className = 'entry ' + type;
+      d.innerHTML = '<span class="lbl">' + esc(label) + '</span>' + esc(value);
+      log.appendChild(d);
+    }
+
+    async function serverLog(context, message) {
+      try {
+        await fetch('/admin/api/es-test-log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ context, message }),
+        });
+      } catch (_) {}
+    }
+
+    fetch('/api/config').then(r => r.json()).then(cfg => {
+      configId = cfg.whatsappConfigId || null;
+      const el = document.getElementById('cfg');
+      if (configId) {
+        el.innerHTML = '<span style="color:#4ade80">config_id: ' + esc(configId) + ' &nbsp;·&nbsp; version: ' + VERSION + ' &nbsp;·&nbsp; appId: 1025010310140011</span>';
+      } else {
+        el.innerHTML = '<span style="color:#f87171">WHATSAPP_CONFIG_ID no está configurado en el servidor</span>';
+      }
+      document.getElementById('btn').disabled = !configId;
+    }).catch(err => {
+      document.getElementById('cfg').innerHTML = '<span style="color:#f87171">Error al cargar config: ' + esc(err.message) + '</span>';
+    });
+
+    window.addEventListener('message', function (event) {
+      if (!event.origin.endsWith('.facebook.com') && !event.origin.endsWith('.meta.com')) return;
+      let data;
+      try { data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; } catch { return; }
+
+      if (data.type !== 'WA_EMBEDDED_SIGNUP') {
+        addEntry('warn', 'Mensaje Meta:', 'type=' + (data.type || 'desconocido') + ' (no es WA_EMBEDDED_SIGNUP)');
+        return;
+      }
+
+      const ev = data.event;
+      if (ev === 'FINISH') {
+        const code = (data.authResponse && data.authResponse.code) ? data.authResponse.code : '';
+        const codeShort = code ? code.slice(0, 6) + '…' : '(vacío)';
+        const phoneId = (data.data && data.data.phone_number_id) || '-';
+        const wabaId  = (data.data && data.data.waba_id) || '-';
+        addEntry('ok', 'FINISH:', 'code=' + codeShort + '  phone_number_id=' + phoneId + '  waba_id=' + wabaId);
+        serverLog('es-test-callback', 'event=FINISH code_prefix=' + codeShort + ' phone_number_id=' + phoneId + ' waba_id=' + wabaId);
+      } else if (ev === 'CANCEL') {
+        addEntry('warn', 'CANCEL:', 'El usuario canceló antes de terminar');
+        serverLog('es-test-callback', 'event=CANCEL');
+      } else if (ev === 'ERROR') {
+        const msg = (data.data && data.data.error_message) ? data.data.error_message : JSON.stringify(data.data || {});
+        addEntry('err', 'ERROR:', msg);
+        serverLog('es-test-error', 'event=ERROR msg=' + msg);
+      } else {
+        addEntry('warn', 'Evento desconocido: ' + ev, JSON.stringify(data.data || {}));
+      }
+
+      document.getElementById('btn').disabled = false;
+    });
+
+    document.getElementById('btn').addEventListener('click', function () {
+      if (!configId) return;
+      this.disabled = true;
+      addEntry('ok', 'Popup:', 'Abriendo…');
+      serverLog('es-test-opened', 'config_id=' + configId + ' version=' + VERSION);
+
+      FB.login(function (response) {
+        if (response.authResponse) {
+          const code = response.authResponse.code || '';
+          const codeShort = code ? code.slice(0, 6) + '…' : '(vacío)';
+          addEntry('ok', 'FB.login callback:', 'status=connected  code=' + codeShort);
+          serverLog('es-test-callback', 'source=fb.login status=connected code_prefix=' + codeShort);
+        } else {
+          const status = response.status || 'unknown';
+          addEntry('warn', 'FB.login callback:', 'status=' + status + '  (sin authResponse)');
+          serverLog('es-test-callback', 'source=fb.login status=' + status + ' no_auth_response=true');
+        }
+        document.getElementById('btn').disabled = false;
+      }, {
+        config_id: configId,
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: { setup: {}, featureType: '', sessionInfoVersion: '2' },
+      });
+    });
+  </script>
+</body>
+</html>
