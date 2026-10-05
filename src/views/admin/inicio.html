@@ -108,6 +108,17 @@
     }
     .billing-btn:hover { border-color: var(--accent); color: var(--accent); }
     .billing-btn svg { flex-shrink: 0; }
+    .billing-incomplete-badge {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.06em;
+      color: #f97316;
+      border: 1px solid #f97316;
+      padding: 1px 5px;
+      margin-left: 6px;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
     .section-title {
       font-family: var(--mono);
       font-size: 10px;
@@ -361,8 +372,10 @@
       const isPaying = b.plan && b.plan !== 'arranque' && !b.plan_cortesia;
       const planLabel = b.plan || 'arranque';
       const st = bizStatus(b);
+      const billingBadge = (b.billing_requires_invoice && !b.billing_complete)
+        ? '<span class="billing-incomplete-badge">⚠ factura</span>' : '';
       return `<tr>
-        <td><a class="biz-link" href="/admin/negocio/${b.id}">${escHtml(b.name)}</a><span class="biz-status ${st.cls}">${st.label}</span></td>
+        <td><a class="biz-link" href="/admin/negocio/${b.id}">${escHtml(b.name)}</a><span class="biz-status ${st.cls}">${st.label}</span>${billingBadge}</td>
         <td class="muted-text">${escHtml(b.owner_email || '—')}</td>
         <td><span class="plan-pill ${isPaying ? 'paying' : ''}">${planLabel}</span></td>
         <td class="muted-text">${fmt(b.created_at)}</td>

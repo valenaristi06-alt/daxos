@@ -251,6 +251,14 @@
         <button class="btn-action-ghost" id="btn-unsilence" onclick="clearSilence()" style="display:none">Quitar silencio</button>
       </div>
     </div>
+    <div class="action-card">
+      <div class="action-card-title">Facturación</div>
+      <div class="action-status" id="billing-status">Cargando…</div>
+      <div id="billing-data"></div>
+      <div class="action-row" id="billing-copy-row" style="display:none; margin-top:10px;">
+        <button class="btn-action-ghost" onclick="copyBillingData()">Copiar datos</button>
+      </div>
+    </div>
 
   </main>
 </div>
@@ -393,6 +401,55 @@
 
     // Silence status
     renderSilenceStatus(d.silent_until || null);
+
+    // Billing card — all user content via textContent, never innerHTML
+    window._bizBillingData = d;
+    const billingStatusEl  = document.getElementById('billing-status');
+    const billingDataEl    = document.getElementById('billing-data');
+    const billingCopyRow   = document.getElementById('billing-copy-row');
+
+    if (!d.billing_requires_invoice) {
+      billingStatusEl.textContent = 'No requiere factura';
+    } else {
+      const isComplete = d.billing_legal_name && d.billing_rut && d.billing_address && d.billing_email;
+      if (isComplete) {
+        billingStatusEl.textContent = 'Datos completos';
+        billingStatusEl.classList.add('active');
+        billingCopyRow.style.display = '';
+      } else {
+        billingStatusEl.textContent = 'Faltan datos';
+      }
+      [
+        ['Razón social', d.billing_legal_name],
+        ['RUT',          d.billing_rut],
+        ['Domicilio',    d.billing_address],
+        ['Mail',         d.billing_email],
+      ].forEach(([label, value]) => {
+        const div = document.createElement('div');
+        div.className = 'field-row';
+        const k = document.createElement('span');
+        k.className = 'field-key';
+        k.textContent = label;
+        const v = document.createElement('span');
+        v.className = 'field-val';
+        v.textContent = value || '—';
+        div.appendChild(k);
+        div.appendChild(v);
+        billingDataEl.appendChild(div);
+      });
+    }
+  }
+
+  function copyBillingData() {
+    const d = window._bizBillingData;
+    if (!d) return;
+    const text = [
+      'Razón social: ' + (d.billing_legal_name || '—'),
+      'RUT: '          + (d.billing_rut          || '—'),
+      'Domicilio: '    + (d.billing_address       || '—'),
+      'Mail: '         + (d.billing_email          || '—'),
+    ].join('\n');
+    navigator.clipboard.writeText(text).catch(() => {});
   }
 
   document.getElementById('btn-logout').addEventListener('click', async () => {

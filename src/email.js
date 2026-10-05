@@ -279,4 +279,21 @@ async function sendTrialEndedEmail({ to, businessName }) {
   if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
 }
 
-module.exports = { sendPauseEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail };
+async function sendBillingDataEmail({ adminEmail, businessName, businessId }) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) { console.warn('[resend] RESEND_API_KEY not set, skipping billing notification email'); return; }
+  const body = {
+    from: 'Daxos Admin <notificaciones@daxos.lat>',
+    to: [adminEmail],
+    subject: `Nuevos datos de facturación — ${businessName}`,
+    html: `<p>El negocio <strong>${escapeHtml(businessName)}</strong> (id: ${Number(businessId)}) completó sus datos de facturación.</p>`,
+  };
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
+}
+
+module.exports = { sendPauseEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail };

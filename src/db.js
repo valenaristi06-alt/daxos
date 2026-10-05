@@ -411,6 +411,20 @@ db.exec(`
     console.log('[migration 005] trial grace columns added');
   }
 
+  if (!applied('006_billing')) {
+    const bizC6 = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+    if (!bizC6.includes('billing_requires_invoice')) db.exec('ALTER TABLE businesses ADD COLUMN billing_requires_invoice INTEGER NOT NULL DEFAULT 0');
+    if (!bizC6.includes('billing_legal_name'))       db.exec('ALTER TABLE businesses ADD COLUMN billing_legal_name TEXT');
+    if (!bizC6.includes('billing_rut'))              db.exec('ALTER TABLE businesses ADD COLUMN billing_rut TEXT');
+    if (!bizC6.includes('billing_address'))          db.exec('ALTER TABLE businesses ADD COLUMN billing_address TEXT');
+    if (!bizC6.includes('billing_email'))            db.exec('ALTER TABLE businesses ADD COLUMN billing_email TEXT');
+    if (!bizC6.includes('billing_updated_at'))       db.exec('ALTER TABLE businesses ADD COLUMN billing_updated_at TEXT');
+    // billing_notified_at: last time admin was emailed about this business's billing data (1/day throttle, DB-persisted)
+    if (!bizC6.includes('billing_notified_at'))      db.exec('ALTER TABLE businesses ADD COLUMN billing_notified_at TEXT');
+    db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('006_billing');
+    console.log('[migration 006] billing columns added');
+  }
+
 })();
 
 // --- businesses ---
@@ -931,6 +945,30 @@ function resumeTrialPausedConversations(businessId) {
   ).run(businessId).changes;
 }
 
+function setBillingData(businessId, { billing_requires_invoice, billing_legal_name, billing_rut, billing_address, billing_email }) {
+  db.prepare(`
+    UPDATE businesses SET
+      billing_requires_invoice = ?,
+      billing_legal_name = ?,
+      billing_rut = ?,
+      billing_address = ?,
+      billing_email = ?,
+      billing_updated_at = datetime('now')
+    WHERE id = ?
+  `).run(
+    billing_requires_invoice ? 1 : 0,
+    billing_legal_name || null,
+    billing_rut || null,
+    billing_address || null,
+    billing_email || null,
+    businessId
+  );
+}
+
+function setBillingNotifiedAt(businessId, isoUtc) {
+  db.prepare('UPDATE businesses SET billing_notified_at = ? WHERE id = ?').run(isoUtc, businessId);
+}
+
 // Returns all arranque businesses in trial (no plan_paid_at, no plan_cortesia) with owner contact info.
 function getTrialBusinesses() {
   return db.prepare(`
@@ -948,6 +986,8 @@ function getAllBusinesses() {
     SELECT
       b.id, b.name, b.plan, b.plan_cortesia, b.trial_ends_at, b.plan_expires_at, b.subscription_status,
       b.created_at, b.whatsapp_number, b.response_mode, b.voice_id, b.website_url,
+      b.billing_requires_invoice,
+      CASE WHEN b.billing_legal_name IS NOT NULL AND b.billing_rut IS NOT NULL AND b.billing_address IS NOT NULL AND b.billing_email IS NOT NULL THEN 1 ELSE 0 END AS billing_complete,
       u.email as owner_email,
       (SELECT COUNT(*) FROM conversations c WHERE c.business_id = b.id) as conv_count,
       (SELECT COUNT(*) FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.business_id = b.id) as msg_count,
@@ -1190,6 +1230,8 @@ module.exports = {
   markConversationPausedByTrial,
   resumeTrialPausedConversations,
   getTrialBusinesses,
+  setBillingData,
+  setBillingNotifiedAt,
   createBooking,
   getBookingById,
   getBookingByCode,

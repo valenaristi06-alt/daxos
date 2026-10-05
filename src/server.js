@@ -24,7 +24,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness } = require('./db');
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -37,7 +37,7 @@ initAnthropicKey(_apiKey);
 const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = require('./bookings');
 const { sendWeeklySummaries } = require('./weekly');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
-const { sendPauseEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail } = require('./email');
+const { sendPauseEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail } = require('./email');
 const { runBackup, maybeScheduledBackup, maybeSilenceAlert, startupBackupCheck, getLatestBackupMeta, listAllBackups } = require('./backup');
 
 const upload = multer({
@@ -188,6 +188,7 @@ const OWNER_BUSINESS_FIELDS = new Set([
   'wa_provider', 'phone_number_id', 'waba_id', 'wa_payment_confirmed', 'wa_connected_at',
   'kapso_customer_id',
   'booking_enabled', 'weekly_summary_enabled',
+  'billing_requires_invoice', 'billing_legal_name', 'billing_rut', 'billing_address', 'billing_email', 'billing_updated_at',
 ]);
 
 function ownerView(biz) {
@@ -358,6 +359,67 @@ app.put('/api/business', requireAuth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+app.put('/api/business/billing', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'No tenés un negocio configurado.' });
+
+  let { billing_requires_invoice, billing_legal_name, billing_rut, billing_address, billing_email } = req.body;
+
+  // Normalize RUT: strip spaces, dots, dashes; store cleaned digits only
+  if (billing_rut != null) billing_rut = String(billing_rut).replace(/[\s.\-]/g, '');
+
+  const requiresInvoice = !!billing_requires_invoice;
+
+  // Validate only when invoice is required
+  if (requiresInvoice) {
+    if (!billing_legal_name?.trim()) {
+      return res.status(400).json({ error: 'La razón social es obligatoria.', field: 'billing_legal_name' });
+    }
+    if (billing_legal_name.trim().length > 200) {
+      return res.status(400).json({ error: 'La razón social es muy larga (máx 200 caracteres).', field: 'billing_legal_name' });
+    }
+    if (billing_rut && !/^\d{12}$/.test(billing_rut)) {
+      return res.status(400).json({ error: 'El RUT debe tener exactamente 12 dígitos numéricos.', field: 'billing_rut' });
+    }
+    if (billing_address && billing_address.trim().length > 300) {
+      return res.status(400).json({ error: 'El domicilio es muy largo (máx 300 caracteres).', field: 'billing_address' });
+    }
+    if (billing_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billing_email)) {
+      return res.status(400).json({ error: 'El mail de facturación es inválido.', field: 'billing_email' });
+    }
+    if (billing_email && billing_email.length > 254) {
+      return res.status(400).json({ error: 'El mail de facturación es muy largo.', field: 'billing_email' });
+    }
+  }
+
+  setBillingData(user.business_id, {
+    billing_requires_invoice: requiresInvoice ? 1 : 0,
+    billing_legal_name: billing_legal_name?.trim() || null,
+    billing_rut: billing_rut || null,
+    billing_address: billing_address?.trim() || null,
+    billing_email: billing_email?.trim() || null,
+  });
+
+  console.log('[billing-data-saved] business', user.business_id);
+
+  // Admin email: max 1/day/business, throttle stored in DB
+  if (requiresInvoice && billing_legal_name?.trim() && billing_rut && billing_address?.trim() && billing_email?.trim()) {
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (adminEmail) {
+      const biz = getBusinessById(user.business_id);
+      const now = Date.now();
+      const lastNotMs = parseSqliteUtc(biz.billing_notified_at);
+      if (!lastNotMs || toUYDateStr(lastNotMs) !== toUYDateStr(now)) {
+        setBillingNotifiedAt(user.business_id, new Date(now).toISOString());
+        sendBillingDataEmail({ adminEmail, businessName: biz.name, businessId: biz.id })
+          .catch(e => logError('billing-data-email', { message: e.message, stack: '' }));
+      }
+    }
+  }
+
+  res.json(ownerView(getBusinessById(user.business_id)));
 });
 
 app.post('/api/business/analyze-style', requireAuth, async (req, res) => {
