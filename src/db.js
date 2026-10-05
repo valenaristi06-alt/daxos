@@ -397,6 +397,20 @@ db.exec(`
     db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('004_claude_usage_split_cache');
   }
 
+  if (!applied('005_trial_grace')) {
+    const bizC  = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+    const convC = db.prepare('PRAGMA table_info(conversations)').all().map(c => c.name);
+    if (!bizC.includes('trial_warned_at'))          db.exec('ALTER TABLE businesses ADD COLUMN trial_warned_at TEXT');
+    if (!bizC.includes('trial_grace_started_at'))   db.exec('ALTER TABLE businesses ADD COLUMN trial_grace_started_at TEXT');
+    // trial_grace_notified_at: ISO UTC of last trial-related email sent to owner (1/day throttle)
+    if (!bizC.includes('trial_grace_notified_at'))  db.exec('ALTER TABLE businesses ADD COLUMN trial_grace_notified_at TEXT');
+    if (!convC.includes('trial_ended_notified_at')) db.exec('ALTER TABLE conversations ADD COLUMN trial_ended_notified_at TEXT');
+    // paused_reason: 'trial' for trial-end pauses; NULL for manual/human pauses
+    if (!convC.includes('paused_reason'))           db.exec('ALTER TABLE conversations ADD COLUMN paused_reason TEXT');
+    db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('005_trial_grace');
+    console.log('[migration 005] trial grace columns added');
+  }
+
 })();
 
 // --- businesses ---
@@ -519,7 +533,7 @@ function getConversationsNeedingHumanResume() {
 function autoResumeExpiredConversations() {
   const cutoff = Math.floor(Date.now() / 1000) - 24 * 60 * 60;
   const result = db.prepare(
-    'UPDATE conversations SET needs_attention = 0, paused_at = NULL, auto_resumed_at = unixepoch() WHERE needs_attention = 1 AND paused_at IS NOT NULL AND paused_at < ?'
+    "UPDATE conversations SET needs_attention = 0, paused_at = NULL, auto_resumed_at = unixepoch() WHERE needs_attention = 1 AND paused_at IS NOT NULL AND paused_at < ? AND (paused_reason IS NULL OR paused_reason != 'trial')"
   ).run(cutoff);
   return result.changes;
 }
@@ -839,6 +853,8 @@ function upgradePlan(businessId, plan, paidAt, expiresAt) {
   db.prepare(`
     UPDATE businesses SET plan = ?, plan_paid_at = ?, plan_expires_at = ?, subscription_status = 'active' WHERE id = ?
   `).run(plan, paidAt, expiresAt, businessId);
+  const resumed = resumeTrialPausedConversations(businessId);
+  if (resumed > 0) console.log(`[upgradePlan] reactivated ${resumed} trial-paused conversation(s) for business ${businessId}`);
 }
 
 function setSubscriptionStatus(businessId, status) {
@@ -887,6 +903,42 @@ function getTrialConversationCount(businessId, trialStartsAt) {
     JOIN conversations c ON c.id = m.conversation_id
     WHERE c.business_id = ? AND m.role = 'user' AND m.created_at >= ? AND c.silent = 0
   `).get(businessId, trialStartsAt).n;
+}
+
+function setTrialWarnedAt(businessId, isoUtc) {
+  db.prepare('UPDATE businesses SET trial_warned_at = ? WHERE id = ?').run(isoUtc, businessId);
+}
+
+function setTrialGraceStartedAt(businessId, isoUtc) {
+  db.prepare('UPDATE businesses SET trial_grace_started_at = ? WHERE id = ?').run(isoUtc, businessId);
+}
+
+function setTrialGraceNotifiedAt(businessId, isoUtc) {
+  db.prepare('UPDATE businesses SET trial_grace_notified_at = ? WHERE id = ?').run(isoUtc, businessId);
+}
+
+function setTrialEndedNotifiedAt(convId, isoUtc) {
+  db.prepare('UPDATE conversations SET trial_ended_notified_at = ? WHERE id = ?').run(isoUtc, convId);
+}
+
+function markConversationPausedByTrial(convId) {
+  db.prepare("UPDATE conversations SET needs_attention = 1, paused_at = unixepoch(), paused_reason = 'trial' WHERE id = ?").run(convId);
+}
+
+function resumeTrialPausedConversations(businessId) {
+  return db.prepare(
+    "UPDATE conversations SET needs_attention = 0, paused_at = NULL, paused_reason = NULL WHERE business_id = ? AND paused_reason = 'trial'"
+  ).run(businessId).changes;
+}
+
+// Returns all arranque businesses in trial (no plan_paid_at, no plan_cortesia) with owner contact info.
+function getTrialBusinesses() {
+  return db.prepare(`
+    SELECT b.*, u.email AS owner_email, u.phone AS owner_phone
+    FROM businesses b
+    LEFT JOIN users u ON u.business_id = b.id
+    WHERE b.plan = 'arranque' AND b.plan_cortesia = 0 AND b.plan_paid_at IS NULL AND b.trial_starts_at IS NOT NULL
+  `).all().map(row => ({ ...deserializeBusiness(row), owner_email: row.owner_email, owner_phone: row.owner_phone }));
 }
 
 // --- admin queries (read-only) ---
@@ -1131,6 +1183,13 @@ module.exports = {
   setBookingEnabled,
   getTrialMessageCount,
   getTrialConversationCount,
+  setTrialWarnedAt,
+  setTrialGraceStartedAt,
+  setTrialGraceNotifiedAt,
+  setTrialEndedNotifiedAt,
+  markConversationPausedByTrial,
+  resumeTrialPausedConversations,
+  getTrialBusinesses,
   createBooking,
   getBookingById,
   getBookingByCode,

@@ -811,27 +811,32 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
             <a href="https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan" target="_blank" rel="noopener" class="trial-action">Quiero activar mi plan</a>`;
           banner.style.display = 'flex';
         }
-      } else if (b.plan === 'arranque') {
+      } else if (b.plan === 'arranque' && !b.plan_paid_at) {
         if (!b.trial_starts_at) {
           banner.className = 'trial-banner trial-banner--active';
           banner.innerHTML = '<span class="trial-msg">Conectá tu WhatsApp para empezar tu prueba de 14 días.</span>';
           banner.style.display = 'flex';
-        } else if (b.trial_conv_count !== undefined && b.trial_conv_count >= b.trial_conv_limit) {
+        } else if (b.trial_grace_started_at) {
+          const graceStart = new Date(b.trial_grace_started_at.endsWith('Z') ? b.trial_grace_started_at : b.trial_grace_started_at + 'Z');
+          const graceHoursLeft = Math.max(0, 72 - (Date.now() - graceStart.getTime()) / 3600000);
           banner.className = 'trial-banner trial-banner--expired';
-          banner.innerHTML = `<span class="trial-msg">Alcanzaste el límite de ${b.trial_conv_limit} conversaciones de prueba.</span>
-            <a href="https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan" target="_blank" rel="noopener" class="trial-action">Quiero activar mi plan</a>`;
+          banner.innerHTML = `<span class="trial-msg">Prueba vencida — modo de gracia: ${Math.ceil(graceHoursLeft)} h restantes.</span>
+            <a href="https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan" target="_blank" rel="noopener" class="trial-action">Activar mi plan</a>`;
           banner.style.display = 'flex';
-        } else if (b.trial_ends_at) {
-          const endsAt = new Date(b.trial_ends_at);
-          const now = new Date();
-          if (endsAt < now) {
+        } else {
+          const startsAt = new Date(b.trial_starts_at.endsWith('Z') ? b.trial_starts_at : b.trial_starts_at + 'Z');
+          const daysElapsed = Math.floor((Date.now() - startsAt.getTime()) / 86400000);
+          const dayNum  = Math.min(daysElapsed + 1, 14);
+          const convCount = b.trial_conv_count ?? 0;
+          const convLimit = b.trial_conv_limit ?? 150;
+          const trialOver = (b.trial_ends_at && new Date(b.trial_ends_at.endsWith('Z') ? b.trial_ends_at : b.trial_ends_at + 'Z') < new Date()) || convCount >= convLimit;
+          if (trialOver) {
             banner.className = 'trial-banner trial-banner--expired';
             banner.innerHTML = `<span class="trial-msg">Tu prueba gratuita terminó.</span>
               <a href="https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan" target="_blank" rel="noopener" class="trial-action">Quiero activar mi plan</a>`;
           } else {
-            const daysLeft = Math.ceil((endsAt - now) / (1000 * 60 * 60 * 24));
             banner.className = 'trial-banner trial-banner--active';
-            banner.innerHTML = `<span class="trial-msg">Te ${daysLeft === 1 ? 'queda 1 día' : `quedan ${daysLeft} días`} de prueba gratis.</span>`;
+            banner.innerHTML = `<span class="trial-msg">Prueba: día ${dayNum} de 14 · ${convCount} de ${convLimit} conversaciones.</span>`;
           }
           banner.style.display = 'flex';
         }
