@@ -24,7 +24,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h } = require('./db');
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -37,7 +37,7 @@ initAnthropicKey(_apiKey);
 const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = require('./bookings');
 const { sendWeeklySummaries } = require('./weekly');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
-const { sendPauseEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail } = require('./email');
+const { sendPauseEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail } = require('./email');
 const { runBackup, maybeScheduledBackup, maybeSilenceAlert, startupBackupCheck, getLatestBackupMeta, listAllBackups } = require('./backup');
 
 const upload = multer({
@@ -2951,11 +2951,79 @@ async function runKeywordPauseFollowupJobs() {
   }
 }
 
+async function runWaSilenceCheck() {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (!adminEmail) return;
+
+  const silenceHours = parseFloat(process.env.WA_SILENCE_HOURS || '6');
+  const thresholdSec = Math.round(silenceHours * 3600);
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  // Only run between 9:00 and 23:00 UY (UTC-3, no DST)
+  const mvd = getMvdDate();
+  const nowMin = mvd.getUTCHours() * 60 + mvd.getUTCMinutes();
+  if (nowMin < 9 * 60 || nowMin >= 23 * 60) {
+    logError('wa-silence-check', { message: `skip — outside window nowMin=${nowMin}`, stack: '' });
+    return;
+  }
+
+  const businesses = getConnectedBusinesses();
+  let alerted = 0, recovered = 0, ok = 0;
+
+  for (const biz of businesses) {
+    const lastMsg = getLastCustomerMessage(biz.id); // { customer_id, content, msg_at } | null
+
+    // Baseline: last incoming message, or wa_connected_at if no messages yet
+    let baselineSec = lastMsg ? lastMsg.msg_at : null;
+    if (!baselineSec && biz.wa_connected_at) {
+      const connMs = parseSqliteUtc(biz.wa_connected_at);
+      baselineSec = connMs ? Math.floor(connMs / 1000) : null;
+    }
+
+    const isSilent = !baselineSec || (nowSec - baselineSec >= thresholdSec);
+
+    if (isSilent && !biz.wa_silence_alerted_at) {
+      const lastMsgAt = lastMsg ? new Date(lastMsg.msg_at * 1000).toISOString() : null;
+      await sendWaSilenceAlertEmail({
+        adminEmail,
+        businessName: biz.name,
+        phoneNumber:  biz.whatsapp_number || biz.phone_number_id,
+        lastMessageAt: lastMsgAt,
+        silenceHours,
+      }).catch(err => logError('wa-silence-alert', { message: `email failed biz=${biz.id}: ${err.message}`, stack: '' }));
+      setWaSilenceAlertedAt(biz.id, nowSec);
+      logError('wa-silence-check', { message: `alerted biz=${biz.id} name="${biz.name}" last_msg_epoch=${lastMsg?.msg_at ?? 'never'} threshold_h=${silenceHours}`, stack: '' });
+      alerted++;
+    } else if (!isSilent && biz.wa_silence_alerted_at) {
+      const lastMsgAt = lastMsg ? new Date(lastMsg.msg_at * 1000).toISOString() : null;
+      await sendWaSilenceRecoveryEmail({
+        adminEmail,
+        businessName: biz.name,
+        phoneNumber:  biz.whatsapp_number || biz.phone_number_id,
+        lastMessageAt: lastMsgAt,
+      }).catch(err => logError('wa-silence-alert', { message: `recovery email failed biz=${biz.id}: ${err.message}`, stack: '' }));
+      clearWaSilenceAlertedAt(biz.id);
+      logError('wa-silence-check', { message: `recovered biz=${biz.id} name="${biz.name}" last_msg_epoch=${lastMsg?.msg_at}`, stack: '' });
+      recovered++;
+    } else {
+      ok++;
+    }
+  }
+
+  logError('wa-silence-check', {
+    message: `cycle done businesses=${businesses.length} alerted=${alerted} recovered=${recovered} ok=${ok} window_min=${nowMin}`,
+    stack: '',
+  });
+}
+
 // Human-pause timeout check — every 5 minutes
 setInterval(resumeHumanTimedOut, 5 * 60 * 1000);
 setInterval(() => {
   runKeywordPauseFollowupJobs().catch(err => logError('pause-followup-job', { message: err.message, stack: '' }));
 }, 5 * 60 * 1000);
+setInterval(() => {
+  runWaSilenceCheck().catch(err => logError('wa-silence-check', { message: `job error: ${err.message}`, stack: '' }));
+}, 30 * 60 * 1000);
 
 setInterval(() => {
   checkBookingTimeouts({ getCredentialsForBusiness: getBookingCredentials })
@@ -3035,6 +3103,24 @@ app.post('/admin/api/run-trial-check', requireBearerToken, async (req, res) => {
 app.post('/admin/api/run-pause-jobs', requireBearerToken, async (req, res) => {
   try { await runKeywordPauseFollowupJobs(); res.json({ ok: true }); }
   catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/admin/api/run-silence-check', requireBearerToken, async (_req, res) => {
+  try {
+    const businesses = getConnectedBusinesses();
+    await runWaSilenceCheck();
+    const after = getConnectedBusinesses();
+    const summary = after.map(b => ({
+      id: b.id,
+      name: b.name,
+      phone_number_id: b.phone_number_id,
+      wa_silence_alerted_at: b.wa_silence_alerted_at,
+      last_msg: getLastCustomerMessage(b.id)?.msg_at ?? null,
+    }));
+    res.json({ ok: true, checked: businesses.length, businesses: summary });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/admin/api/run-auto-resume', requireBearerToken, (req, res) => {

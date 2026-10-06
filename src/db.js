@@ -438,6 +438,13 @@ db.exec(`
     console.log('[migration 006] billing columns added');
   }
 
+  if (!applied('008_wa_silence')) {
+    const bizC8 = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+    if (!bizC8.includes('wa_silence_alerted_at')) db.exec('ALTER TABLE businesses ADD COLUMN wa_silence_alerted_at INTEGER');
+    db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('008_wa_silence');
+    console.log('[migration 008] wa_silence_alerted_at added');
+  }
+
 })();
 
 // --- businesses ---
@@ -1374,6 +1381,9 @@ module.exports = {
   setPause24hSent,
   getKeywordPausedNeedingFollowup,
   getKeywordPausedNeeding24h,
+  getConnectedBusinesses,
+  setWaSilenceAlertedAt,
+  clearWaSilenceAlertedAt,
 };
 
 function setWeeklySummaryEnabled(businessId, enabled) {
@@ -1632,4 +1642,18 @@ function getClaudeUsageByBusiness(days = 30) {
     GROUP BY date(u.created_at), u.business_id
     ORDER BY day DESC, u.business_id
   `).all(`-${days} days`);
+}
+
+function getConnectedBusinesses() {
+  return db.prepare(
+    'SELECT id, name, whatsapp_number, phone_number_id, wa_connected_at, wa_silence_alerted_at FROM businesses WHERE phone_number_id IS NOT NULL'
+  ).all();
+}
+
+function setWaSilenceAlertedAt(businessId, epochSec) {
+  db.prepare('UPDATE businesses SET wa_silence_alerted_at = ? WHERE id = ?').run(epochSec, businessId);
+}
+
+function clearWaSilenceAlertedAt(businessId) {
+  db.prepare('UPDATE businesses SET wa_silence_alerted_at = NULL WHERE id = ?').run(businessId);
 }

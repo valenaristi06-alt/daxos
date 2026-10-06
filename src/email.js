@@ -331,4 +331,47 @@ async function sendPause24hReminderEmail({ to, businessName, conversationId, cus
   if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
 }
 
-module.exports = { sendPauseEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail };
+async function sendWaSilenceAlertEmail({ adminEmail, businessName, phoneNumber, lastMessageAt, silenceHours }) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) { console.warn('[resend] RESEND_API_KEY not set, skipping WA silence alert'); return; }
+  const lastMsgStr = lastMessageAt
+    ? `<strong>${escapeHtml(lastMessageAt)}</strong>`
+    : '<em>sin mensajes registrados</em>';
+  const body = {
+    from: 'Daxos <notificaciones@daxos.lat>',
+    to: [adminEmail],
+    subject: `Sin mensajes entrantes — ${escapeHtml(businessName)}`,
+    html: `
+      <p>Hola,</p>
+      <p>El negocio <strong>${escapeHtml(businessName)}</strong> (número: <strong>${escapeHtml(String(phoneNumber || ''))}</strong>) no recibió mensajes entrantes de clientes en las últimas <strong>${silenceHours} horas</strong>.</p>
+      <p>Último mensaje entrante: ${lastMsgStr}</p>
+      <p><strong>Qué revisar:</strong></p>
+      <ul>
+        <li>Kapso &gt; Números de teléfono (cartel "Necesita volver a conectarse")</li>
+        <li>Meta Business &gt; Cuentas de WhatsApp (estado de la cuenta)</li>
+      </ul>
+    `,
+  };
+  const res = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
+}
+
+async function sendWaSilenceRecoveryEmail({ adminEmail, businessName, phoneNumber, lastMessageAt }) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) { console.warn('[resend] RESEND_API_KEY not set, skipping WA silence recovery'); return; }
+  const lastMsgStr = lastMessageAt ? `<strong>${escapeHtml(lastMessageAt)}</strong>` : '<em>desconocido</em>';
+  const body = {
+    from: 'Daxos <notificaciones@daxos.lat>',
+    to: [adminEmail],
+    subject: `Mensajes recuperados — ${escapeHtml(businessName)}`,
+    html: `
+      <p>Hola,</p>
+      <p>El negocio <strong>${escapeHtml(businessName)}</strong> (número: <strong>${escapeHtml(String(phoneNumber || ''))}</strong>) volvió a recibir mensajes entrantes.</p>
+      <p>Último mensaje entrante: ${lastMsgStr}</p>
+    `,
+  };
+  const res = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
+}
+
+module.exports = { sendPauseEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail };
