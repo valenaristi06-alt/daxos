@@ -163,6 +163,9 @@ app.get('/register', (req, res) => {
 });
 
 app.use(express.static(path.join(__dirname, '../public')));
+app.get('/ayuda/conectar-whatsapp', (_req, res) => {
+  res.sendFile(path.join(__dirname, '../public/ayuda/conectar-whatsapp.html'));
+});
 app.use('/uploads', express.static(path.join(__dirname, '../data/uploads')));
 
 app.get('/health', (req, res) => {
@@ -2611,7 +2614,7 @@ app.post('/api/whatsapp/connect', requireAuth, async (req, res) => {
           allowed_connection_types: ['coexistence'],
           meta_billing_mode: 'customer_managed',
           success_redirect_url: 'https://daxos.lat/dashboard?wa=ok',
-          failure_redirect_url: 'https://daxos.lat/dashboard?wa=error',
+          failure_redirect_url: `${process.env.APP_URL || 'https://daxos.lat'}/ayuda/conectar-whatsapp?desde=kapso`,
         },
       }),
     });

@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/logodaxosnaranjanofondo.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Errores al conectar WhatsApp — Daxos</title>
+  <link rel="stylesheet" href="/dashboard.css" />
+  <style>
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+    .page-wrap {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    .page-logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 32px;
+    }
+    .page-logo img { height: 24px; width: auto; }
+
+    h1 {
+      font-family: var(--serif);
+      font-size: 24px;
+      font-weight: 400;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+
+    .lead {
+      font-size: 14px;
+      color: var(--muted-2);
+      line-height: 1.7;
+      margin-bottom: 32px;
+    }
+    .lead strong { color: var(--text); }
+
+    /* Banner desde=kapso */
+    .banner-kapso {
+      display: none;
+      margin-bottom: 28px;
+      padding: 14px 18px;
+      background: rgba(133, 77, 14, 0.15);
+      border: 1px solid rgba(196, 92, 26, 0.4);
+      border-radius: 7px;
+      font-size: 14px;
+      color: #fbbf24;
+      line-height: 1.6;
+    }
+
+    /* Error table */
+    .error-table-wrap {
+      overflow-x: auto;
+      margin-bottom: 40px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    thead tr { background: var(--surface); }
+    th {
+      text-align: left;
+      padding: 10px 14px;
+      color: var(--muted-2);
+      font-weight: 500;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      line-height: 1.55;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:nth-child(even) td { background: rgba(255,255,255,0.015); }
+    .code-tag {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--accent);
+      white-space: nowrap;
+    }
+    .step-link {
+      color: #93c5fd;
+      font-weight: 600;
+    }
+
+    /* Error section */
+    .error-section {
+      margin-bottom: 40px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .error-section-header {
+      padding: 16px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .error-section-header h2 {
+      font-family: var(--sans);
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .error-code-badge {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--accent);
+      background: var(--accent-dim);
+      padding: 2px 8px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    .error-section-body {
+      padding: 18px 20px;
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--muted-2);
+    }
+    .error-section-body p { margin-bottom: 12px; }
+    .error-section-body p:last-child { margin-bottom: 0; }
+    .error-section-body strong { color: var(--text); }
+    .error-section-body ol {
+      margin: 12px 0 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .warning-box {
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: rgba(127,29,29,0.2);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 6px;
+      font-size: 13px;
+      color: #fca5a5;
+      line-height: 1.6;
+    }
+    .warning-box strong { color: #fecaca; }
+
+    /* WA button */
+    .btn-wa {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 18px;
+      background: #25D366;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: background 0.15s;
+      margin-top: 14px;
+    }
+    .btn-wa:hover { background: #1ebe5a; }
+
+    /* Cuándo escribirnos */
+    .contact-section {
+      margin-top: 40px;
+      padding: 22px 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .contact-section h2 {
+      font-family: var(--serif);
+      font-size: 18px;
+      font-weight: 400;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+    .contact-section p { font-size: 14px; color: var(--muted-2); line-height: 1.65; margin-bottom: 10px; }
+    .contact-section ul { margin: 8px 0 16px 18px; font-size: 14px; color: var(--muted-2); line-height: 1.7; display: flex; flex-direction: column; gap: 4px; }
+
+    .footer-back {
+      margin-top: 28px;
+      font-size: 13px;
+    }
+    .footer-back a { color: var(--muted-2); text-decoration: none; transition: color 0.15s; }
+    .footer-back a:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<div class="page-wrap">
+
+  <a href="/antes-de-conectar.html" class="page-logo">
+    <img src="/logodaxosnaranjanofondo.png" alt="">DAXOS
+  </a>
+
+  <!-- Banner cuando viene de failure_redirect de Kapso -->
+  <div class="banner-kapso" id="banner-kapso">
+    Hubo un problema durante la conexión de WhatsApp. Estos son los errores más comunes con sus soluciones.
+  </div>
+
+  <h1>Errores al conectar WhatsApp</h1>
+  <p class="lead">
+    Buscá el número que aparece entre paréntesis en el mensaje de Meta, por ejemplo <strong>(#2655093)</strong>.
+    Es la forma segura de identificar el error, porque el texto puede cambiar según el idioma.
+  </p>
+
+  <!-- Tabla de errores -->
+  <div class="error-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Código</th>
+          <th>Qué dice Meta (resumido)</th>
+          <th>Qué hacer</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="code-tag">#3441061</span></td>
+          <td>Tu número está vinculado a los "eventos automáticos"</td>
+          <td><a href="#error-a" class="step-link">Ver pasos A</a></td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">#2655082</span> / <span class="code-tag">#2655123</span></td>
+          <td>El número ya está vinculado a una página de Facebook</td>
+          <td><a href="#error-b" class="step-link">Ver pasos B</a></td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">#2655093</span></td>
+          <td>El negocio ya comparte esta cuenta de WhatsApp Business con un socio</td>
+          <td><a href="#error-c" class="step-link">Ver pasos C</a></td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">#3441049</span> / <span class="code-tag">#2655094</span></td>
+          <td>El número ya está conectado a otra plataforma</td>
+          <td>En la app: <strong>Configuración → Cuenta → Plataforma para empresas</strong> → tocá la plataforma → Desconectar. Esperá 15 minutos y volvé a intentar.</td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">#3441045</span></td>
+          <td>Tu número no es elegible todavía</td>
+          <td>Meta necesita ver más actividad en la app WhatsApp Business. Seguí usándola normalmente y probá más adelante. No borres ni vuelvas a crear la cuenta.</td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">#2655095</span> / <span class="code-tag">#2655048</span></td>
+          <td>Tu número no está registrado en WhatsApp Business</td>
+          <td>Tu número está en el WhatsApp común. Pasalo a la app WhatsApp Business y volvé a intentar.</td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">#4563015</span></td>
+          <td>Actualizá tu app</td>
+          <td>Actualizá WhatsApp Business desde la tienda de tu celular.</td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">#3441042</span></td>
+          <td>No está disponible para números de esta región</td>
+          <td>Este número no se puede conectar en modo coexistencia. <a href="https://wa.me/59892052508?text=Hola%2C%20necesito%20ayuda%20para%20conectar%20mi%20WhatsApp%20a%20Daxos." target="_blank" rel="noopener" style="color:#93c5fd">Escribinos</a>.</td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">#3441041</span></td>
+          <td>El número no está asociado al negocio que elegiste</td>
+          <td>Revisá que elegiste el portfolio correcto. Si sigue, seguí los pasos C.</td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">#2655089</span> / <span class="code-tag">#3441040</span></td>
+          <td>Tu cuenta de WhatsApp Business está restringida</td>
+          <td>Solo Meta lo puede resolver. Entrá a Business Support Home, buscá tu cuenta y pedí una revisión si aparece la opción. <a href="https://wa.me/59892052508?text=Hola%2C%20necesito%20ayuda%20para%20conectar%20mi%20WhatsApp%20a%20Daxos." target="_blank" rel="noopener" style="color:#93c5fd">Escribinos</a>.</td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">#2859009</span> / <span class="code-tag">#4612001</span></td>
+          <td>Tenés que activar la autenticación en dos pasos</td>
+          <td>Con el #4612001: activala en tu cuenta de Facebook (Centro de cuentas → Contraseña y seguridad). Con el #2859009: activala en la configuración de tu portfolio comercial, siguiendo el enlace del mensaje. Después volvé a intentar.</td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">#3441047</span></td>
+          <td>Función no disponible para cuentas con mensajes de marketing</td>
+          <td><a href="https://wa.me/59892052508?text=Hola%2C%20necesito%20ayuda%20para%20conectar%20mi%20WhatsApp%20a%20Daxos." target="_blank" rel="noopener" style="color:#93c5fd">Escribinos</a> — este caso requiere atención directa.</td>
+        </tr>
+        <tr>
+          <td><span class="code-tag">#3441033</span> / <span class="code-tag">#3441046</span></td>
+          <td>Intentaste demasiadas veces</td>
+          <td>Esperá y volvé a intentar más tarde. Meta no dice cuánto. Si el mensaje dice que ingresaste mal el código demasiadas veces, Meta pide esperar unas 12 horas.</td>
+        </tr>
+        <tr>
+          <td>Sin código</td>
+          <td>No tenés permiso para crear cuentas de WhatsApp Business</td>
+          <td>Necesitás ser administrador del portfolio comercial. Pedile acceso a quien lo maneje.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Error A -->
+  <div class="error-section" id="error-a">
+    <div class="error-section-header">
+      <span class="error-code-badge">#3441061</span>
+      <h2>A. "Eventos automáticos"</h2>
+    </div>
+    <div class="error-section-body">
+      <p>Aparece cuando el número está atado a la medición de anuncios que llevan a WhatsApp.</p>
+      <ol>
+        <li>En la app WhatsApp Business: <strong>Herramientas para la empresa → Listas</strong>, y desactivá las <strong>listas automáticas</strong>. Es lo que indica el propio mensaje de Meta.</li>
+        <li>Si el error sigue: en <strong>business.facebook.com</strong> andá a <strong>Configuración → Cuentas → Cuentas de WhatsApp</strong>, elegí tu cuenta, pestaña <strong>Resumen</strong>, sección <strong>Privacidad y uso compartido de datos</strong>, y apagá los interruptores <strong>"Identificar automáticamente…"</strong>.</li>
+        <li>Volvé a intentar la conexión.</li>
+        <li>Cuando termines de conectar, volvé a activar lo que apagaste, para que tus anuncios sigan midiendo resultados.</li>
+      </ol>
+      <a href="https://wa.me/59892052508?text=Hola%2C%20necesito%20ayuda%20para%20conectar%20mi%20WhatsApp%20a%20Daxos." target="_blank" rel="noopener" class="btn-wa">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.855L.057 23.886a.5.5 0 0 0 .608.617l6.224-1.633A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.686-.528-5.208-1.44l-.374-.22-3.894 1.022 1.001-3.804-.242-.392A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+        ¿Te trabaste? Escribinos
+      </a>
+    </div>
+  </div>
+
+  <!-- Error B -->
+  <div class="error-section" id="error-b">
+    <div class="error-section-header">
+      <span class="error-code-badge">#2655082</span> &nbsp;<span class="error-code-badge">#2655123</span>
+      <h2>B. "Página de Facebook"</h2>
+    </div>
+    <div class="error-section-body">
+      <p>Tu número está vinculado a tu página de Facebook, normalmente por los anuncios que llevan a WhatsApp. Mientras esté desvinculado, esos anuncios pueden quedar en pausa.</p>
+      <ol>
+        <li>En Facebook, cambiá a tu página.</li>
+        <li>Andá a <strong>Configuración y privacidad → Configuración → Cuentas vinculadas → WhatsApp</strong>.</li>
+        <li>Al lado de tu número, tocá <strong>Eliminar</strong> y confirmá. Esto corta el vínculo entre la página y el número — no es lo mismo que eliminar tu cuenta de WhatsApp.</li>
+        <li>Volvé a intentar la conexión.</li>
+        <li>Cuando termines, volvé a vincular el número a la página desde ese mismo lugar.</li>
+      </ol>
+      <a href="https://wa.me/59892052508?text=Hola%2C%20necesito%20ayuda%20para%20conectar%20mi%20WhatsApp%20a%20Daxos." target="_blank" rel="noopener" class="btn-wa">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.855L.057 23.886a.5.5 0 0 0 .608.617l6.224-1.633A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.686-.528-5.208-1.44l-.374-.22-3.894 1.022 1.001-3.804-.242-.392A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+        ¿Te trabaste? Escribinos
+      </a>
+    </div>
+  </div>
+
+  <!-- Error C -->
+  <div class="error-section" id="error-c">
+    <div class="error-section-header">
+      <span class="error-code-badge">#2655093</span>
+      <h2>C. "Ya comparte esta cuenta con un socio"</h2>
+    </div>
+    <div class="error-section-body">
+      <p>Aparece cuando el número estuvo conectado antes a otra plataforma (por ejemplo Manychat) y quedó algún vínculo viejo. A veces la app no muestra nada conectado y el error sigue igual.</p>
+      <ol>
+        <li>Si usaste otra plataforma, pedile que te desconecte desde su web o app. Después revisá en WhatsApp Business: <strong>Configuración → Cuenta → Plataforma para empresas</strong>, que no quede ninguna conectada.</li>
+        <li>En <strong>business.facebook.com</strong> andá a <strong>Configuración → Cuentas → Cuentas de WhatsApp</strong> y elegí la cuenta de este número.</li>
+        <li>En <strong>Resumen → Método de pago</strong>, fijate si dice <strong>línea de crédito</strong> y de qué proveedor. Que la pestaña Socios esté vacía no alcanza para saber que se soltó.</li>
+        <li>Si figura la línea de crédito de otro proveedor, pedile a ese proveedor que la revoque para esta cuenta y que te lo confirme. Si el proveedor que figura es Kapso, escribinos.</li>
+        <li><strong>Antes de seguir, escribinos.</strong> El paso siguiente es eliminar esa cuenta de WhatsApp de tu portfolio comercial, esperar 5 minutos y volver a conectar. No borra tu app ni tus chats, pero si tenés plantillas de mensajes guardadas en esa cuenta, se pierden. Lo hacemos con vos.</li>
+      </ol>
+      <div class="warning-box">
+        <strong>Nunca elimines tu cuenta desde la app</strong> (Configuración → Cuenta → Eliminar cuenta) para intentar arreglar un error de conexión. Eso borra tu historial de mensajes y tu copia de seguridad, te saca de todos tus grupos y no se puede deshacer.
+      </div>
+      <a href="https://wa.me/59892052508?text=Hola%2C%20necesito%20ayuda%20para%20conectar%20mi%20WhatsApp%20a%20Daxos." target="_blank" rel="noopener" class="btn-wa">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.855L.057 23.886a.5.5 0 0 0 .608.617l6.224-1.633A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.686-.528-5.208-1.44l-.374-.22-3.894 1.022 1.001-3.804-.242-.392A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+        ¿Te trabaste? Escribinos
+      </a>
+    </div>
+  </div>
+
+  <!-- Cuándo escribirnos -->
+  <div class="contact-section">
+    <h2>¿Cuándo escribirnos?</h2>
+    <p>Escribinos por WhatsApp si el error no está en la tabla, si seguiste los pasos y sigue igual, o antes de eliminar cualquier cuenta de tu Meta Business.</p>
+    <p>Para ayudarte rápido, mandanos:</p>
+    <ul>
+      <li>Tu número de WhatsApp.</li>
+      <li>Una <strong>captura del error completo</strong>, con el código entre paréntesis.</li>
+      <li>El <strong>Session ID</strong> que aparece abajo en la ventana de Meta, si lo ves.</li>
+      <li>Qué pasos ya hiciste de esta guía.</li>
+      <li>Si alguna vez usaste otra plataforma con este número (Manychat u otra), cuál.</li>
+    </ul>
+    <p>No hace falta que tengas todos los datos para escribirnos.</p>
+    <a href="https://wa.me/59892052508?text=Hola%2C%20necesito%20ayuda%20para%20conectar%20mi%20WhatsApp%20a%20Daxos." target="_blank" rel="noopener" class="btn-wa">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.855L.057 23.886a.5.5 0 0 0 .608.617l6.224-1.633A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.686-.528-5.208-1.44l-.374-.22-3.894 1.022 1.001-3.804-.242-.392A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+      Escribinos por WhatsApp
+    </a>
+  </div>
+
+  <div class="footer-back">
+    <a href="/antes-de-conectar.html">← Volver a "Antes de conectar"</a>
+  </div>
+
+</div>
+
+<script>
+  // Mostrar banner si viene de Kapso failure redirect
+  if (new URLSearchParams(window.location.search).get('desde') === 'kapso') {
+    document.getElementById('banner-kapso').style.display = '';
+  }
+</script>
+</body>
+</html>

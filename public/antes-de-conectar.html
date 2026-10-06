@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/logodaxosnaranjanofondo.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Antes de conectar tu WhatsApp — Daxos</title>
+  <link rel="stylesheet" href="/dashboard.css" />
+  <style>
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+    .page-wrap {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 36px;
+    }
+    .page-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .page-logo img { height: 24px; width: auto; }
+
+    h1 {
+      font-family: var(--serif);
+      font-size: 22px;
+      font-weight: 400;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .page-subtitle {
+      font-size: 14px;
+      color: var(--muted-2);
+      margin-bottom: 32px;
+      line-height: 1.6;
+    }
+
+    /* Question card */
+    .question-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin-bottom: 12px;
+      background: var(--surface);
+      transition: border-color 0.2s;
+    }
+    .question-card.has-risk { border-color: #854d0e; }
+    .question-card.has-info { border-color: #1e3a5f; }
+
+    .question-text {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+
+    .radio-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .radio-label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 13px;
+      color: var(--muted-2);
+      cursor: pointer;
+      padding: 6px 14px;
+      border: 1px solid var(--border-2);
+      border-radius: 5px;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+      user-select: none;
+    }
+    .radio-label input { display: none; }
+    .radio-label.selected {
+      border-color: var(--accent);
+      color: var(--text);
+      background: var(--accent-dim);
+    }
+
+    /* Risk / info alert */
+    .alert {
+      margin-top: 14px;
+      padding: 14px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .alert-risk {
+      background: rgba(133, 77, 14, 0.12);
+      border: 1px solid rgba(133, 77, 14, 0.35);
+      color: #fbbf24;
+    }
+    .alert-info {
+      background: rgba(30, 58, 95, 0.25);
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      color: #93c5fd;
+    }
+    .alert p { margin: 0 0 8px; }
+    .alert p:last-child { margin: 0; }
+    .alert ol, .alert ul { margin: 8px 0 0 16px; display: flex; flex-direction: column; gap: 6px; }
+
+    /* Detalle desplegable pasos */
+    .steps-toggle {
+      background: none;
+      border: none;
+      color: #93c5fd;
+      font-size: 13px;
+      cursor: pointer;
+      padding: 0;
+      margin-top: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .steps-detail {
+      margin-top: 10px;
+      padding: 12px 14px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 5px;
+      border: 1px solid rgba(59,130,246,0.2);
+    }
+    .steps-detail ol { margin: 0 0 0 16px; }
+
+    /* Checkbox resolver */
+    .resolve-check {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+      margin-top: 12px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--muted-2);
+    }
+    .resolve-check input[type="checkbox"] {
+      margin-top: 2px;
+      accent-color: var(--accent);
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .resolve-check.checked { color: #86efac; }
+
+    /* Cuidados */
+    .cuidados {
+      margin: 28px 0 24px;
+      padding: 16px 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--muted-2);
+      line-height: 1.65;
+    }
+    .cuidados strong { color: var(--text); }
+    .cuidados ul { margin: 10px 0 0 16px; display: flex; flex-direction: column; gap: 6px; }
+
+    /* Connect button */
+    .btn-connect {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 11px 22px;
+      background: #25D366;
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+      width: 100%;
+      justify-content: center;
+    }
+    .btn-connect:hover:not(:disabled) { background: #1ebe5a; }
+    .btn-connect:disabled { background: #374151; color: #6b7280; cursor: not-allowed; }
+
+    .connect-error {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #ef4444;
+      display: none;
+    }
+    .connect-step {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted-2);
+      display: none;
+    }
+
+    /* Footer links */
+    .footer-links {
+      margin-top: 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .footer-link {
+      font-size: 13px;
+      color: var(--muted-2);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .footer-link:hover { color: var(--text); }
+    .footer-link-accent {
+      font-size: 13px;
+      color: var(--accent);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .footer-link-accent:hover { color: #e06a1f; }
+    .footer-divider { color: var(--muted); margin: 0 6px; }
+  </style>
+</head>
+<body>
+
+<div class="page-wrap">
+
+  <div class="page-header">
+    <a href="/dashboard.html" class="page-logo">
+      <img src="/logodaxosnaranjanofondo.png" alt="">DAXOS
+    </a>
+  </div>
+
+  <h1>Antes de conectar tu WhatsApp</h1>
+  <p class="page-subtitle">Revisá estos 6 puntos antes de empezar. La mayoría de los problemas de conexión vienen de algo de esta lista, y se arreglan en minutos si los ves antes.</p>
+
+  <!-- Pregunta 1 -->
+  <div class="question-card" id="card-1">
+    <p class="question-text">1. ¿Tu número está en la app <strong>WhatsApp Business</strong> actualizada (versión 2.24.17 o más nueva)?</p>
+    <div class="radio-group">
+      <label class="radio-label" id="lbl-1-si"><input type="radio" name="q1" value="si"> Sí</label>
+      <label class="radio-label" id="lbl-1-no"><input type="radio" name="q1" value="no"> No, uso el WhatsApp común</label>
+    </div>
+    <div class="alert alert-risk" id="alert-1" style="display:none">
+      <p>Pasá tu número a la app <strong style="color:#fde68a">WhatsApp Business</strong> y usala unos días. Después conectá.</p>
+      <p>Descargala en la tienda de tu celular si todavía no la tenés.</p>
+      <label class="resolve-check" id="check-1-wrap">
+        <input type="checkbox" id="check-1"> Ya lo hice — tengo WhatsApp Business instalado y actualizado
+      </label>
+    </div>
+  </div>
+
+  <!-- Pregunta 2 -->
+  <div class="question-card" id="card-2">
+    <p class="question-text">2. ¿Alguna vez conectaste este número a otro bot o plataforma (Manychat, Kommo, Tidio u otro)?</p>
+    <div class="radio-group">
+      <label class="radio-label" id="lbl-2-no"><input type="radio" name="q2" value="no"> No</label>
+      <label class="radio-label" id="lbl-2-si"><input type="radio" name="q2" value="si"> Sí</label>
+    </div>
+    <div class="alert alert-risk" id="alert-2" style="display:none">
+      <p>Desconectalo desde la web o app de esa plataforma. Después revisá en WhatsApp Business:</p>
+      <p><strong style="color:#fde68a">Configuración → Cuenta → Plataforma para empresas</strong>, que no quede ninguna conectada.</p>
+      <label class="resolve-check" id="check-2-wrap">
+        <input type="checkbox" id="check-2"> Ya lo hice — desconecté la plataforma anterior
+      </label>
+    </div>
+  </div>
+
+  <!-- Pregunta 3 — informativa -->
+  <div class="question-card" id="card-3">
+    <p class="question-text">3. ¿Hacés anuncios en Facebook o Instagram que llevan a WhatsApp?</p>
+    <div class="radio-group">
+      <label class="radio-label" id="lbl-3-no"><input type="radio" name="q3" value="no"> No</label>
+      <label class="radio-label" id="lbl-3-si"><input type="radio" name="q3" value="si"> Sí</label>
+    </div>
+    <div class="alert alert-info" id="alert-3" style="display:none">
+      <p>Podés conectar igual. Tus anuncios a WhatsApp pueden pausarse un rato durante la conexión.</p>
+      <p>Si al conectar aparece el error de <strong style="color:#bfdbfe">"eventos automáticos"</strong> o de <strong style="color:#bfdbfe">"página de Facebook"</strong>, encontrás los pasos para resolverlo en <a href="/ayuda/conectar-whatsapp" style="color:#93c5fd">la página de ayuda</a>.</p>
+    </div>
+  </div>
+
+  <!-- Pregunta 4 — informativa con pasos -->
+  <div class="question-card" id="card-4">
+    <p class="question-text">4. ¿Tu WhatsApp está vinculado a una página de Facebook?</p>
+    <div class="radio-group">
+      <label class="radio-label" id="lbl-4-no"><input type="radio" name="q4" value="no"> No</label>
+      <label class="radio-label" id="lbl-4-si"><input type="radio" name="q4" value="si"> Sí</label>
+    </div>
+    <div class="alert alert-info" id="alert-4" style="display:none">
+      <p>Podés conectar igual. Si Meta te frena durante la conexión, desvinculá el número de la página primero y volvé a vincularlo cuando termines. Mientras esté desvinculado, los anuncios que llevan a WhatsApp pueden quedar en pausa.</p>
+      <button class="steps-toggle" id="steps-4-toggle" onclick="toggleSteps4()">▶ Ver pasos para desvincular</button>
+      <div class="steps-detail" id="steps-4-detail" style="display:none">
+        <ol>
+          <li>En Facebook, cambiá a tu página.</li>
+          <li>Andá a <strong>Configuración y privacidad → Configuración → Cuentas vinculadas → WhatsApp</strong>.</li>
+          <li>Al lado de tu número, tocá <strong>Eliminar</strong> y confirmá. Esto corta el vínculo entre la página y el número — no es lo mismo que eliminar tu cuenta de WhatsApp.</li>
+          <li>Volvé a intentar la conexión con Daxos.</li>
+          <li>Cuando termines, volvé a vincular el número a la página desde ese mismo lugar.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pregunta 5 -->
+  <div class="question-card" id="card-5">
+    <p class="question-text">5. ¿Tenés acceso de administrador a tu <strong>Meta Business</strong> (portfolio comercial)?</p>
+    <div class="radio-group">
+      <label class="radio-label" id="lbl-5-si"><input type="radio" name="q5" value="si"> Sí</label>
+      <label class="radio-label" id="lbl-5-no"><input type="radio" name="q5" value="no"> No, o no sé</label>
+    </div>
+    <div class="alert alert-risk" id="alert-5" style="display:none">
+      <p>Sin acceso de administrador no vas a poder completar la conexión.</p>
+      <p>Pedile acceso de administrador a quien maneje el Meta Business de tu negocio, o que haga la conexión esa persona.</p>
+      <label class="resolve-check" id="check-5-wrap">
+        <input type="checkbox" id="check-5"> Ya lo tengo — soy administrador del Meta Business
+      </label>
+    </div>
+  </div>
+
+  <!-- Pregunta 6 — informativa -->
+  <div class="question-card" id="card-6">
+    <p class="question-text">6. ¿Usás WhatsApp en la compu con la app <strong>WhatsApp para Windows</strong>?</p>
+    <div class="radio-group">
+      <label class="radio-label" id="lbl-6-no"><input type="radio" name="q6" value="no"> No</label>
+      <label class="radio-label" id="lbl-6-si"><input type="radio" name="q6" value="si"> Sí</label>
+    </div>
+    <div class="alert alert-info" id="alert-6" style="display:none">
+      <p>Después de conectar, <strong style="color:#bfdbfe">WhatsApp para Windows ya no va a funcionar</strong> con este número y no lo vas a poder volver a vincular.</p>
+      <p>WhatsApp Web y otros dispositivos vinculados (como tablets) también se desvinculan, pero los podés volver a vincular sin problema. Para la compu, usá <strong style="color:#bfdbfe">WhatsApp Web</strong> en el navegador.</p>
+      <label class="resolve-check" id="check-6-wrap">
+        <input type="checkbox" id="check-6"> Entendido
+      </label>
+    </div>
+  </div>
+
+  <!-- Cuidados durante la conexión -->
+  <div class="cuidados">
+    <strong>Tres cuidados durante la conexión:</strong>
+    <ul>
+      <li>Conectá desde una computadora si podés. Si lo hacés desde el celular, elegí la opción de <strong>escribir el código que aparece en la pantalla de Meta</strong>.</li>
+      <li>Elegí siempre la opción <strong>"Conectar la app de WhatsApp Business"</strong>. No elijas "Usar un nombre visible con un número virtual": crea un número distinto al tuyo, que deja de funcionar después de unos pocos mensajes.</li>
+      <li>Si Meta te pide elegir un portfolio comercial, elegí <strong>el de tu negocio real</strong>, el que tiene tus datos verdaderos. No crees uno nuevo de prueba.</li>
+    </ul>
+  </div>
+
+  <!-- Botón conectar -->
+  <button class="btn-connect" id="btn-connect" disabled>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex-shrink:0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.855L.057 23.886a.5.5 0 0 0 .608.617l6.224-1.633A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.686-.528-5.208-1.44l-.374-.22-3.894 1.022 1.001-3.804-.242-.392A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+    Conectar WhatsApp Business
+  </button>
+  <p class="connect-error" id="connect-error"></p>
+  <p class="connect-step" id="connect-step"></p>
+
+  <!-- Links de pie -->
+  <div class="footer-links">
+    <a href="/ayuda/conectar-whatsapp" class="footer-link-accent">¿Te apareció un error al conectar? Ver ayuda con errores →</a>
+    <div>
+      <a href="https://wa.me/59892052508?text=Hola%2C%20necesito%20ayuda%20para%20conectar%20mi%20WhatsApp%20a%20Daxos." target="_blank" rel="noopener" class="footer-link">¿Te trabaste? Escribinos por WhatsApp</a>
+    </div>
+    <a href="/dashboard.html" class="footer-link">← Volver al panel</a>
+  </div>
+
+</div>
+
+<script>
+  const answers = { q1: null, q2: null, q3: null, q4: null, q5: null, q6: null };
+  const checks  = { q1: false, q2: false, q5: false };
+
+  function updateCard(q, value) {
+    const si = document.getElementById(`lbl-${q.slice(1)}-si`);
+    const no = document.getElementById(`lbl-${q.slice(1)}-no`);
+    if (si) si.classList.toggle('selected', value === 'si');
+    if (no) no.classList.toggle('selected', value === 'no');
+  }
+
+  // Bloqueantes: q1 si "no", q2 si "si", q5 si "no"
+  function isBlocked() {
+    for (const q of ['q1','q2','q3','q4','q5','q6']) {
+      if (answers[q] === null) return true; // unanswered
+    }
+    if (answers.q1 === 'no'  && !checks.q1) return true;
+    if (answers.q2 === 'si'  && !checks.q2) return true;
+    if (answers.q5 === 'no'  && !checks.q5) return true;
+    return false;
+  }
+
+  function refreshButton() {
+    const btn = document.getElementById('btn-connect');
+    btn.disabled = isBlocked();
+  }
+
+  function handleRadio(q, value) {
+    answers[q] = value;
+    updateCard(q, value);
+
+    const qNum = q.slice(1);
+    const alert = document.getElementById(`alert-${qNum}`);
+    const card  = document.getElementById(`card-${qNum}`);
+
+    // Determine if risk or info
+    const isRisk =
+      (q === 'q1' && value === 'no') ||
+      (q === 'q2' && value === 'si') ||
+      (q === 'q5' && value === 'no');
+    const isInfo =
+      (q === 'q3' && value === 'si') ||
+      (q === 'q4' && value === 'si') ||
+      (q === 'q6' && value === 'si');
+
+    if (alert) {
+      alert.style.display = (isRisk || isInfo) ? '' : 'none';
+    }
+    if (card) {
+      card.classList.toggle('has-risk', isRisk);
+      card.classList.toggle('has-info', isInfo);
+    }
+
+    refreshButton();
+  }
+
+  // Wire up radio buttons
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+      const q = this.name;
+      handleRadio(q, this.value);
+    });
+  });
+
+  // Wire up bloqueante checkboxes
+  ['1','2','5'].forEach(n => {
+    const cb = document.getElementById(`check-${n}`);
+    const wrap = document.getElementById(`check-${n}-wrap`);
+    if (!cb) return;
+    cb.addEventListener('change', function() {
+      checks[`q${n}`] = this.checked;
+      if (wrap) wrap.classList.toggle('checked', this.checked);
+      refreshButton();
+    });
+  });
+
+  // Informative checkboxes (q6) — no effect on button
+  const cb6 = document.getElementById('check-6');
+  const wrap6 = document.getElementById('check-6-wrap');
+  if (cb6) cb6.addEventListener('change', function() {
+    if (wrap6) wrap6.classList.toggle('checked', this.checked);
+  });
+
+  // Steps toggle for Q4
+  function toggleSteps4() {
+    const detail = document.getElementById('steps-4-detail');
+    const toggle = document.getElementById('steps-4-toggle');
+    const visible = detail.style.display !== 'none';
+    detail.style.display = visible ? 'none' : '';
+    toggle.textContent = (visible ? '▶' : '▼') + ' Ver pasos para desvincular';
+  }
+
+  // Connect button
+  document.getElementById('btn-connect').addEventListener('click', async function() {
+    const btn = this;
+    const errEl  = document.getElementById('connect-error');
+    const stepEl = document.getElementById('connect-step');
+
+    btn.disabled = true;
+    errEl.style.display = 'none';
+    stepEl.textContent = 'Generando enlace de conexión…';
+    stepEl.style.display = '';
+
+    try {
+      const r = await fetch('/api/whatsapp/connect', { method: 'POST' });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || data.message || 'Error desconocido');
+      stepEl.textContent = 'Redirigiendo a Kapso…';
+      window.location.href = data.url;
+    } catch (err) {
+      errEl.textContent = `No se pudo iniciar la conexión: ${err.message}`;
+      errEl.style.display = '';
+      stepEl.style.display = 'none';
+      btn.disabled = isBlocked();
+    }
+  });
+</script>
+</body>
+</html>
