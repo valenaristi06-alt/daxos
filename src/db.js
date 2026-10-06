@@ -445,6 +445,13 @@ db.exec(`
     console.log('[migration 008] wa_silence_alerted_at added');
   }
 
+  if (!applied('009_wa_health')) {
+    const bizC9 = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+    if (!bizC9.includes('wa_health_alerted_at')) db.exec('ALTER TABLE businesses ADD COLUMN wa_health_alerted_at INTEGER');
+    db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('009_wa_health');
+    console.log('[migration 009] wa_health_alerted_at added');
+  }
+
 })();
 
 // --- businesses ---
@@ -634,9 +641,9 @@ function getKeywordPausedNeeding24h() {
 }
 
 function autoResumeExpiredConversations() {
-  const cutoff = Math.floor(Date.now() / 1000) - 24 * 60 * 60;
+  const cutoff = Math.floor(Date.now() / 1000) - 12 * 60 * 60;
   const result = db.prepare(
-    "UPDATE conversations SET needs_attention = 0, paused_at = NULL, auto_resumed_at = unixepoch() WHERE needs_attention = 1 AND paused_at IS NOT NULL AND paused_at < ? AND (paused_reason IS NULL OR paused_reason NOT IN ('trial','keyword'))"
+    "UPDATE conversations SET needs_attention = 0, paused_at = NULL, paused_reason = NULL, auto_resumed_at = unixepoch() WHERE needs_attention = 1 AND paused_at IS NOT NULL AND paused_at < ? AND (paused_reason IS NULL OR paused_reason NOT IN ('trial'))"
   ).run(cutoff);
   return result.changes;
 }
@@ -1384,6 +1391,8 @@ module.exports = {
   getConnectedBusinesses,
   setWaSilenceAlertedAt,
   clearWaSilenceAlertedAt,
+  setWaHealthAlertedAt,
+  clearWaHealthAlertedAt,
 };
 
 function setWeeklySummaryEnabled(businessId, enabled) {
@@ -1646,7 +1655,7 @@ function getClaudeUsageByBusiness(days = 30) {
 
 function getConnectedBusinesses() {
   return db.prepare(
-    'SELECT id, name, whatsapp_number, phone_number_id, wa_connected_at, wa_silence_alerted_at FROM businesses WHERE phone_number_id IS NOT NULL'
+    'SELECT id, name, whatsapp_number, phone_number_id, wa_connected_at, wa_silence_alerted_at, wa_health_alerted_at FROM businesses WHERE phone_number_id IS NOT NULL'
   ).all();
 }
 
@@ -1656,4 +1665,12 @@ function setWaSilenceAlertedAt(businessId, epochSec) {
 
 function clearWaSilenceAlertedAt(businessId) {
   db.prepare('UPDATE businesses SET wa_silence_alerted_at = NULL WHERE id = ?').run(businessId);
+}
+
+function setWaHealthAlertedAt(businessId, epochSec) {
+  db.prepare('UPDATE businesses SET wa_health_alerted_at = ? WHERE id = ?').run(epochSec, businessId);
+}
+
+function clearWaHealthAlertedAt(businessId) {
+  db.prepare('UPDATE businesses SET wa_health_alerted_at = NULL WHERE id = ?').run(businessId);
 }

@@ -247,8 +247,8 @@ async function main() {
     assert(!!conv2.pause_followup_sent, 'pause_followup_sent set after job');
   }
 
-  // ── Suite (e): auto-resume does NOT resume paused_reason=keyword ──
-  console.log('\nSuite (e): auto-resume excludes paused_reason=keyword');
+  // ── Suite (e): auto-resume resumes paused_reason=keyword after 12h; never resumes 'trial' ──
+  console.log('\nSuite (e): auto-resume resumes keyword after 12h, excludes trial');
   {
     const { cookie } = await seedUser('kwe@test.com');
     await req('PUT', '/api/business', { name: 'Biz E', pause_keywords: 'test' }, { cookie });
@@ -256,20 +256,28 @@ async function main() {
     const pnid = 'pnid-e';
     dbRun('UPDATE businesses SET phone_number_id = ? WHERE id = ?', pnid, user.business_id);
 
-    // Create a conversation and manually set it to keyword-paused 25h ago
+    // Two conversations: keyword-paused 13h ago (should resume), trial-paused 25h ago (should NOT)
     await req('POST', '/webhook', webhookPayload(pnid, '5491166666666', 'test keyword', 'wamid-e1'));
     await sleep(300);
     const conv = dbGet('SELECT * FROM conversations WHERE business_id = ?', user.business_id);
-    const twentyFiveHoursAgo = Math.floor(Date.now() / 1000) - 25 * 60 * 60;
+    const thirteenHoursAgo = Math.floor(Date.now() / 1000) - 13 * 60 * 60;
     dbRun('UPDATE conversations SET needs_attention = 1, paused_reason = ?, paused_at = ? WHERE id = ?',
-      'keyword', twentyFiveHoursAgo, conv.id);
+      'keyword', thirteenHoursAgo, conv.id);
+
+    // Create a trial-paused conversation manually
+    dbRun('INSERT INTO conversations (business_id, customer_id, needs_attention, paused_reason, paused_at) VALUES (?, ?, 1, ?, ?)',
+      user.business_id, '5499999999', 'trial', thirteenHoursAgo);
+    const trialConv = dbGet("SELECT * FROM conversations WHERE business_id = ? AND paused_reason = 'trial'", user.business_id);
 
     const r = await req('POST', '/admin/api/run-auto-resume', null, { bearer: ADMIN_TOKEN });
     assert(r.status === 200, '/admin/api/run-auto-resume returns 200');
 
     const conv2 = dbGet('SELECT * FROM conversations WHERE id = ?', conv.id);
-    assert(conv2.needs_attention === 1, 'needs_attention still 1 (keyword paused not auto-resumed)');
-    assert(conv2.paused_reason === 'keyword', 'paused_reason still keyword');
+    assert(conv2.needs_attention === 0, 'needs_attention cleared (keyword paused 13h auto-resumed at 12h cutoff)');
+    assert(conv2.paused_reason === null, 'paused_reason cleared after auto-resume');
+
+    const trialConv2 = dbGet('SELECT * FROM conversations WHERE id = ?', trialConv.id);
+    assert(trialConv2.needs_attention === 1, 'trial-paused still needs_attention=1 (trial excluded from auto-resume)');
   }
 
   // ── Suite (f): needs_attention=1 paused_reason=NULL → no pause_reply_count change ──

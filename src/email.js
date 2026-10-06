@@ -374,4 +374,45 @@ async function sendWaSilenceRecoveryEmail({ adminEmail, businessName, phoneNumbe
   if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
 }
 
-module.exports = { sendPauseEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail };
+async function sendWaHealthAlertEmail({ adminEmail, businessName, phoneNumber, status, components }) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) { console.warn('[resend] RESEND_API_KEY not set, skipping WA health alert'); return; }
+  const componentRows = Object.entries(components || {})
+    .map(([k, v]) => `<li><strong>${escapeHtml(k)}</strong>: ${escapeHtml(String(v?.status ?? v ?? ''))}</li>`)
+    .join('');
+  const body = {
+    from: 'Daxos <notificaciones@daxos.lat>',
+    to: [adminEmail],
+    subject: `WhatsApp unhealthy — ${escapeHtml(businessName)}`,
+    html: `
+      <p>Hola,</p>
+      <p>El negocio <strong>${escapeHtml(businessName)}</strong> (número: <strong>${escapeHtml(String(phoneNumber || ''))}</strong>) reporta estado <strong>${escapeHtml(String(status))}</strong> en Kapso.</p>
+      ${componentRows ? `<p><strong>Componentes:</strong></p><ul>${componentRows}</ul>` : ''}
+      <p><strong>Qué revisar:</strong></p>
+      <ul>
+        <li>Kapso &gt; Números de teléfono (cartel "Necesita volver a conectarse")</li>
+        <li>Meta Business &gt; Cuentas de WhatsApp (estado de la cuenta)</li>
+      </ul>
+    `,
+  };
+  const res = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
+}
+
+async function sendWaHealthRecoveryEmail({ adminEmail, businessName, phoneNumber }) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) { console.warn('[resend] RESEND_API_KEY not set, skipping WA health recovery'); return; }
+  const body = {
+    from: 'Daxos <notificaciones@daxos.lat>',
+    to: [adminEmail],
+    subject: `WhatsApp recuperado — ${escapeHtml(businessName)}`,
+    html: `
+      <p>Hola,</p>
+      <p>El negocio <strong>${escapeHtml(businessName)}</strong> (número: <strong>${escapeHtml(String(phoneNumber || ''))}</strong>) volvió a reportar estado healthy en Kapso.</p>
+    `,
+  };
+  const res = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
+}
+
+module.exports = { sendPauseEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail };
