@@ -384,6 +384,13 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         </div>
 
         <div class="field subsection">
+          <label class="field-label" for="pause_reply_text">Mensaje al cliente cuando se pausa <span class="tag-optional">Opcional</span></label>
+          <span class="field-hint">Tu asistente envía este texto una vez cuando detecta una palabra clave. Máximo 300 caracteres.</span>
+          <textarea id="pause_reply_text" maxlength="300" rows="2" placeholder="Te paso con una persona del equipo, te escribe enseguida."></textarea>
+          <p id="err-pause-reply-text" style="display:none; color:#ef4444; font-size:12px; margin-top:4px;"></p>
+        </div>
+
+        <div class="field subsection">
           <label class="field-label">¿Cómo responde?</label>
           <div class="radio-group" id="response-mode-group">
             <label class="radio-option" id="rm-texto-option">
@@ -903,6 +910,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       setRadio('prioridad', s.prioridad);
       setRadio('largo_mensajes', s.largo_mensajes);
       document.getElementById('pause_keywords').value = b.pause_keywords || '';
+      document.getElementById('pause_reply_text').value = b.pause_reply_text || '';
       const bookingEl = document.getElementById('booking_enabled');
       bookingEl.checked = !!b.booking_enabled;
       document.getElementById('booking-label').textContent = b.booking_enabled ? 'Activado' : 'Apagado';
@@ -1108,6 +1116,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           largo_mensajes,
         },
         pause_keywords: document.getElementById('pause_keywords').value.trim() || null,
+        pause_reply_text: document.getElementById('pause_reply_text').value.trim() || null,
         response_delay: parseInt(document.getElementById('response_delay').value, 10),
         response_mode: audioOptionsLocked
           ? (currentBusiness?.response_mode || 'texto')
@@ -1183,6 +1192,10 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         } else {
           const data = await bizRes.json();
           showSaveBanner('err', data.error || 'No se pudo guardar. Intentá de nuevo.');
+          if (data.field === 'pause_reply_text') {
+            const errEl = document.getElementById('err-pause-reply-text');
+            if (errEl) { errEl.textContent = data.error; errEl.style.display = ''; }
+          }
         }
       } catch {
         showSaveBanner('err', 'Sin conexión. Revisá tu internet e intentá de nuevo.');

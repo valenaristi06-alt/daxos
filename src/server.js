@@ -24,7 +24,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness } = require('./db');
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -37,7 +37,7 @@ initAnthropicKey(_apiKey);
 const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = require('./bookings');
 const { sendWeeklySummaries } = require('./weekly');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
-const { sendPauseEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail } = require('./email');
+const { sendPauseEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail } = require('./email');
 const { runBackup, maybeScheduledBackup, maybeSilenceAlert, startupBackupCheck, getLatestBackupMeta, listAllBackups } = require('./backup');
 
 const upload = multer({
@@ -177,7 +177,7 @@ const OWNER_BUSINESS_FIELDS = new Set([
   'website_url', 'website_summary', 'business_context', 'pricing_info',
   'sales_examples', 'survey_answers', 'style_profile',
   'document_name',
-  'response_mode', 'response_delay', 'pause_keywords',
+  'response_mode', 'response_delay', 'pause_keywords', 'pause_reply_text',
   'business_hours_start', 'business_hours_end', 'human_resume_timeout',
   'voice_id', 'voice_consent_at',
   'plan', 'plan_cortesia', 'subscription_status',
@@ -308,8 +308,13 @@ async function fetchAndSummarizeWebsite(url) {
 }
 
 app.put('/api/business', requireAuth, async (req, res) => {
-  const { name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, response_delay, pricing_info } = req.body;
+  const { name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, pause_reply_text, response_delay, pricing_info } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'El nombre del negocio es requerido' });
+
+  const prtClean = pause_reply_text != null ? String(pause_reply_text).trim() : null;
+  if (prtClean && prtClean.length > 300) {
+    return res.status(400).json({ error: 'El mensaje al cliente es muy largo (máx 300 caracteres).', field: 'pause_reply_text' });
+  }
 
   try {
     const user = getUserById(req.session.userId);
@@ -328,6 +333,7 @@ app.put('/api/business', requireAuth, async (req, res) => {
       website_url: newUrl,
       response_mode,
       pause_keywords: pause_keywords ? pause_keywords.trim() : null,
+      pause_reply_text: prtClean || null,
       response_delay: response_delay != null ? Math.min(20, Math.max(0, parseInt(response_delay, 10) || 5)) : 5,
       pricing_info: pricing_info ? pricing_info.trim() : null,
     });
@@ -575,9 +581,8 @@ app.get('/api/conversations', requireAuth, (req, res) => {
 app.get('/api/conversations/:id/messages', requireAuth, (req, res) => {
   const user = getUserById(req.session.userId);
   const conv = getConversationById(Number(req.params.id));
-  if (!conv) return res.status(404).json({ error: 'Not found' });
-  if (!user.business_id || conv.business_id !== user.business_id) {
-    return res.status(403).json({ error: 'Forbidden' });
+  if (!conv || !user.business_id || conv.business_id !== user.business_id) {
+    return res.status(404).json({ error: 'No encontramos esa conversación' });
   }
   const messages = getConversationHistory(conv.id, 200);
   res.json({ conversation: conv, messages });
@@ -1101,31 +1106,31 @@ function isTrialExpired(business) {
   return false;
 }
 
-// Pauses a conversation and notifies the business owner via email.
-// channel: 'whatsapp' | 'instagram' — only 'whatsapp' triggers notification for now.
-// contactId: customer identifier in the given channel (phone for WA, IG user ID for Instagram).
-async function notifyOwnerOfPause({ business, owner, channel, contactId, messageText, conversationId, waCredentials }) {
-  if (channel === 'instagram') return;
+async function notifyOwnerOfPause({ business, owner, contactId, messageText, conversationId, waCredentials }) {
   if (!owner) return;
-
-  const ownerPhone = owner.phone;
-  if (ownerPhone && waCredentials) {
-    try {
-      const waMsg = `⚠️ Conversación pausada — ${business.name}\nContacto: ${contactId}\nMensaje: ${messageText}\nVer conversación #${conversationId} en tu panel de Daxos.`;
-      await sendWhatsAppMessage(ownerPhone, waMsg, waCredentials);
-      return;
-    } catch (waErr) {
-      console.error('[notify-pause] WhatsApp failed, falling back to email:', waErr.message);
-    }
+  const convUrl   = `${process.env.APP_URL || 'https://daxos.lat'}/conversations.html?conv=${conversationId}`;
+  const normPhone    = normalizeUruguayPhone(owner.phone);
+  const normBizPhone = normalizeUruguayPhone(business.whatsapp_number);
+  if (!normPhone) {
+    logError('pause-notify-wa-error', { message: `conv ${conversationId}: skip — owner has no phone`, stack: '' });
+  } else if (!waCredentials) {
+    logError('pause-notify-wa-error', { message: `conv ${conversationId}: skip — no waCredentials`, stack: '' });
+  } else if (normPhone === normBizPhone) {
+    logError('pause-notify-wa-error', { message: `conv ${conversationId}: skip — owner phone ****${normPhone.slice(-4)} same as business WA (self-send prevented)`, stack: '' });
+  } else {
+    const waMsg = `⚠️ Conversación pausada — ${business.name}\nCliente: ${contactId}\nMensaje: ${messageText}\nAbrir la conversación: ${convUrl}`;
+    sendWhatsAppMessage(normPhone, waMsg, waCredentials)
+      .catch(err => logError('pause-notify-wa-error', { message: `conv ${conversationId} dest=****${normPhone.slice(-4)}: ${err.message}`, stack: '' }));
   }
+  await sendPauseEmail({ to: owner.email, businessName: business.name, contactId, messageText, conversationId, convUrl });
+}
 
-  return sendPauseEmail({
-    to: owner.email,
-    businessName: business.name,
-    contactId,
-    messageText,
-    conversationId,
-  });
+function normalizeUruguayPhone(phone) {
+  if (!phone) return null;
+  let digits = String(phone).replace(/\D/g, '');
+  if (digits.startsWith('0')) digits = digits.slice(1);
+  if (!digits.startsWith('598')) digits = '598' + digits;
+  return digits;
 }
 
 async function notifyAdmin(event, data) {
@@ -1159,6 +1164,33 @@ async function maybeSendDisclosure(_business, _conversationId, _history, _recipi
 // Uruguay is UTC-3, no DST.
 function getMvdDate() {
   return new Date(Date.now() - 3 * 60 * 60 * 1000);
+}
+
+function isWithinBusinessHours(business) {
+  if (!business.business_hours_start || !business.business_hours_end) return true;
+  const mvd = getMvdDate();
+  const nowMin = mvd.getUTCHours() * 60 + mvd.getUTCMinutes();
+  const [sh, sm] = business.business_hours_start.split(':').map(Number);
+  const [eh, em] = business.business_hours_end.split(':').map(Number);
+  return !(nowMin < sh * 60 + sm || nowMin >= eh * 60 + em);
+}
+
+function getDefaultPauseReplyText(business) {
+  if (business.pause_reply_text?.trim()) return business.pause_reply_text.trim();
+  return isWithinBusinessHours(business)
+    ? 'Te paso con una persona del equipo, te escribe en cuanto pueda 💗'
+    : 'Te paso con una persona del equipo. Ahora estamos fuera de horario: te escribimos apenas podamos 💗';
+}
+
+// Normalize text for pause-keyword matching: strip accents, punctuation, collapse spaces, lowercase.
+function normalizePauseText(s) {
+  return s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+    .trim();
 }
 
 // Parse a SQLite UTC datetime string (e.g. "2026-10-03 12:43:32") as UTC milliseconds.
@@ -1396,6 +1428,17 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   if (conversation.needs_attention) {
     addMessage(conversation.id, 'user', text);
     markAsRead(msgId, waCredentials).catch(() => {});
+    if (conversation.paused_reason === 'keyword' && conversation.pause_reply_count < 3) {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const lastAt = conversation.pause_last_reply_at || 0;
+      if (nowSec - lastAt >= 15 * 60) {
+        const replyText = getDefaultPauseReplyText(business);
+        recordKeywordPauseReply(conversation.id);
+        sendWhatsAppMessage(customerPhone, replyText, waCredentials)
+          .catch(err => logError('pause-reply-send', { message: err.message, stack: '' }));
+        addMessage(conversation.id, 'assistant', replyText);
+      }
+    }
     return;
   }
 
@@ -1403,18 +1446,28 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   if (business.pause_keywords) {
     const keywords = business.pause_keywords
       .split(',')
-      .map(k => k.trim().toLowerCase())
+      .map(k => normalizePauseText(k))
       .filter(Boolean);
-    const lowerText = text.toLowerCase();
-    const matched = keywords.find(k => lowerText.includes(k));
+    const normText = normalizePauseText(text);
+    const matched = keywords.find(k => normText.includes(k));
     if (matched) {
+      logError('pause-keyword', {
+        message: `business_id=${business.id} conv_id=${conversation.id} keyword="${matched}" text="${text.slice(0, 120)}"`,
+        stack: '',
+      });
       addMessage(conversation.id, 'user', text);
-      markConversationPaused(conversation.id);
+      markConversationPausedByKeyword(conversation.id);
+      const replyText = getDefaultPauseReplyText(business);
+      sendWhatsAppMessage(customerPhone, replyText, waCredentials)
+        .catch(err => logError('pause-reply-send', { message: err.message, stack: '' }));
+      addMessage(conversation.id, 'assistant', replyText);
       const owner = getUserByBusinessId(business.id);
       notifyOwnerOfPause({
-        business, owner, channel: 'whatsapp', contactId: customerPhone,
+        business, owner, contactId: customerPhone,
         messageText: text, conversationId: conversation.id, waCredentials,
-      }).catch(err => console.error('[notify-pause]', err.message));
+      }).then(() => setPauseNotifiedAt(conversation.id))
+        .catch(err => logError('pause-notify-error', { message: err.message, stack: '' }));
+      markAsRead(msgId, waCredentials).catch(() => {});
       return;
     }
   }
@@ -1870,6 +1923,17 @@ app.post('/webhook/kapso', async (req, res) => {
   // Track dedup state so catch block can roll back on unexpected failure
   let _dedupBizId = null, _dedupMsgId = null;
 
+  // Structured per-event disposition log — one line per incoming event.
+  // Captured from parsed body (express.json runs before handler).
+  const _pnid  = String(req.body?.phone_number_id || 'unknown');
+  const _event = String(req.body?.event || (req.body?.message?.type ? `msg.${req.body.message.type}` : 'unknown'));
+  function logKapsoEvent(disposition) {
+    logError('kapso-event', {
+      message: `event=${_event} phone_number_id=${_pnid} disposition=${disposition}`,
+      stack: '',
+    });
+  }
+
   const rawBody = req.rawBody;
   const sig     = req.headers['x-webhook-signature'] || '';
   const secret  = process.env.KAPSO_WEBHOOK_SECRET;
@@ -1881,6 +1945,7 @@ app.post('/webhook/kapso', async (req, res) => {
 
   if (secret) {
     if (!rawBody) {
+      logKapsoEvent('discarded:rawbody_missing');
       logError('kapso-webhook', { message: 'rawBody missing — verify middleware order', stack: '' });
       return;
     }
@@ -1888,6 +1953,7 @@ app.post('/webhook/kapso', async (req, res) => {
     const expBuf   = Buffer.from(expected, 'utf8');
     const sigBuf   = Buffer.from(sig.length === expected.length ? sig : '', 'utf8');
     if (sigBuf.length === 0 || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      logKapsoEvent('discarded:invalid_hmac');
       logError('kapso-webhook', { message: 'invalid HMAC signature — rejected', stack: '' });
       return;
     }
@@ -1898,7 +1964,10 @@ app.post('/webhook/kapso', async (req, res) => {
   try {
     const payload = req.body;
     const msg     = payload?.message;
-    if (!msg) return;
+    if (!msg) {
+      logKapsoEvent(`discarded:no_message_field`);
+      return;
+    }
 
     const phoneNumberId = String(payload.phone_number_id || '');
     const business      = getBusinessByPhoneNumberId(phoneNumberId);
@@ -1908,11 +1977,15 @@ app.post('/webhook/kapso', async (req, res) => {
       stack: '',
     });
 
-    if (!business) return;
+    if (!business) {
+      logKapsoEvent(`discarded:business_not_found`);
+      return;
+    }
 
     // Dedup: before any processing (covers owner reply and customer paths)
     if (msg.id) {
       if (!tryMarkProcessed(business.id, msg.id)) {
+        logKapsoEvent(`discarded:duplicate msg_id=${msg.id} business_id=${business.id}`);
         logError('msg-duplicate', { message: `source=kapso business_id=${business.id} msg_id=${msg.id}`, stack: '' });
         return;
       }
@@ -1946,11 +2019,13 @@ app.post('/webhook/kapso', async (req, res) => {
           message: `business_app saved conv=${conv.id} customer=${customerPhone} text="${ownerText.slice(0, 80)}" silent_skipped=${!!(silentUntilMs && Date.now() < silentUntilMs)}`,
           stack: '',
         });
+        logKapsoEvent(`processed:owner_echo_saved conv=${conv.id} customer=${customerPhone}`);
       } else {
         logError('kapso-webhook-echo', {
           message: `business_app no customer phone payload=${JSON.stringify(payload).slice(0, 500)}`,
           stack: '',
         });
+        logKapsoEvent(`discarded:owner_echo_no_customer_phone`);
       }
       return;
     }
@@ -1959,7 +2034,11 @@ app.post('/webhook/kapso', async (req, res) => {
     const bizPhone = (business.whatsapp_number || '').replace(/\D/g, '');
     const fromPhone = (msg.from || '').replace(/\D/g, '');
     const isFromOwnNumber = bizPhone && fromPhone && (fromPhone === bizPhone || fromPhone.endsWith(bizPhone) || bizPhone.endsWith(fromPhone));
-    if (!msg.from || isFromOwnNumber || payload.event === 'whatsapp.message.sent') return;
+    if (!msg.from || isFromOwnNumber || payload.event === 'whatsapp.message.sent') {
+      const reason = !msg.from ? 'no_from' : isFromOwnNumber ? 'own_number' : 'sent_event';
+      logKapsoEvent(`discarded:outbound reason=${reason}`);
+      return;
+    }
 
     const waCredentials = {
       phoneNumberId: business.phone_number_id,
@@ -1974,7 +2053,10 @@ app.post('/webhook/kapso', async (req, res) => {
       text = msg.kapso.transcript.text;
     }
 
-    if (!text?.trim()) return;
+    if (!text?.trim()) {
+      logKapsoEvent(`discarded:no_text type=${msg.type}`);
+      return;
+    }
 
     // Resolve timestamp — field name unknown until first real payload; log it once/day
     const msgTimestamp = msg.timestamp != null ? Number(msg.timestamp) || null
@@ -1996,6 +2078,7 @@ app.post('/webhook/kapso', async (req, res) => {
       }
     }
 
+    logKapsoEvent(`processing business_id=${business.id} from=${msg.from} type=${msg.type} msg_id=${msg.id}`);
     await processIncomingMessage(business, waCredentials, {
       msgId:            msg.id,
       customerPhone:    msg.from,
@@ -2004,6 +2087,7 @@ app.post('/webhook/kapso', async (req, res) => {
       msgTimestampField,
     });
   } catch (err) {
+    logKapsoEvent(`error:${err.message.slice(0, 100)}`);
     // Rollback dedup mark so the next Kapso retry can reprocess
     if (_dedupBizId && _dedupMsgId) deleteProcessedMessage(_dedupBizId, _dedupMsgId);
     logError('kapso-webhook', err);
@@ -2845,8 +2929,33 @@ async function runDailyTrialCheck(overrideDryRun) {
   }
 }
 
+async function runKeywordPauseFollowupJobs() {
+  const base = process.env.APP_URL || 'https://daxos.lat';
+  for (const conv of getKeywordPausedNeedingFollowup()) {
+    try {
+      const convUrl = `${base}/conversations.html?conv=${conv.id}`;
+      await sendPauseFollowupEmail({ to: conv.owner_email, businessName: conv.business_name, conversationId: conv.id, customerPhone: conv.customer_id, convUrl });
+      setPauseFollowupSent(conv.id);
+    } catch (err) {
+      logError('pause-notify-error', { message: `followup conv ${conv.id}: ${err.message}`, stack: '' });
+    }
+  }
+  for (const conv of getKeywordPausedNeeding24h()) {
+    try {
+      const convUrl = `${base}/conversations.html?conv=${conv.id}`;
+      await sendPause24hReminderEmail({ to: conv.owner_email, businessName: conv.business_name, conversationId: conv.id, customerPhone: conv.customer_id, convUrl });
+      setPause24hSent(conv.id);
+    } catch (err) {
+      logError('pause-notify-error', { message: `24h conv ${conv.id}: ${err.message}`, stack: '' });
+    }
+  }
+}
+
 // Human-pause timeout check — every 5 minutes
 setInterval(resumeHumanTimedOut, 5 * 60 * 1000);
+setInterval(() => {
+  runKeywordPauseFollowupJobs().catch(err => logError('pause-followup-job', { message: err.message, stack: '' }));
+}, 5 * 60 * 1000);
 
 setInterval(() => {
   checkBookingTimeouts({ getCredentialsForBusiness: getBookingCredentials })
@@ -2921,6 +3030,16 @@ app.post('/admin/api/run-trial-check', requireBearerToken, async (req, res) => {
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+app.post('/admin/api/run-pause-jobs', requireBearerToken, async (req, res) => {
+  try { await runKeywordPauseFollowupJobs(); res.json({ ok: true }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/admin/api/run-auto-resume', requireBearerToken, (req, res) => {
+  const n = autoResumeExpiredConversations();
+  res.json({ ok: true, resumed: n });
 });
 
 app.post('/admin/backup-now', requireBearerToken, async (req, res) => {

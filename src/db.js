@@ -411,6 +411,19 @@ db.exec(`
     console.log('[migration 005] trial grace columns added');
   }
 
+  if (!applied('007_pause_keyword')) {
+    const bizC7  = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+    const convC7 = db.prepare('PRAGMA table_info(conversations)').all().map(c => c.name);
+    if (!bizC7.includes('pause_reply_text'))      db.exec('ALTER TABLE businesses ADD COLUMN pause_reply_text TEXT');
+    if (!convC7.includes('pause_reply_count'))    db.exec('ALTER TABLE conversations ADD COLUMN pause_reply_count INTEGER NOT NULL DEFAULT 0');
+    if (!convC7.includes('pause_last_reply_at'))  db.exec('ALTER TABLE conversations ADD COLUMN pause_last_reply_at INTEGER');
+    if (!convC7.includes('pause_notified_at'))    db.exec('ALTER TABLE conversations ADD COLUMN pause_notified_at INTEGER');
+    if (!convC7.includes('pause_followup_sent'))  db.exec('ALTER TABLE conversations ADD COLUMN pause_followup_sent INTEGER');
+    if (!convC7.includes('pause_24h_sent'))       db.exec('ALTER TABLE conversations ADD COLUMN pause_24h_sent INTEGER');
+    db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('007_pause_keyword');
+    console.log('[migration 007] pause_keyword columns added');
+  }
+
   if (!applied('006_billing')) {
     const bizC6 = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
     if (!bizC6.includes('billing_requires_invoice')) db.exec('ALTER TABLE businesses ADD COLUMN billing_requires_invoice INTEGER NOT NULL DEFAULT 0');
@@ -516,8 +529,45 @@ function markConversationPaused(conversationId) {
   db.prepare('UPDATE conversations SET needs_attention = 1, paused_at = unixepoch() WHERE id = ?').run(conversationId);
 }
 
+function markConversationPausedByKeyword(conversationId) {
+  db.prepare(`
+    UPDATE conversations SET
+      needs_attention = 1, paused_at = unixepoch(), paused_reason = 'keyword',
+      pause_reply_count = 1, pause_last_reply_at = unixepoch()
+    WHERE id = ?
+  `).run(conversationId);
+}
+
+function recordKeywordPauseReply(conversationId) {
+  db.prepare(`
+    UPDATE conversations SET
+      pause_reply_count = pause_reply_count + 1,
+      pause_last_reply_at = unixepoch()
+    WHERE id = ?
+  `).run(conversationId);
+}
+
+function setPauseNotifiedAt(conversationId) {
+  db.prepare('UPDATE conversations SET pause_notified_at = unixepoch() WHERE id = ?').run(conversationId);
+}
+
+function setPauseFollowupSent(conversationId) {
+  db.prepare('UPDATE conversations SET pause_followup_sent = unixepoch() WHERE id = ?').run(conversationId);
+}
+
+function setPause24hSent(conversationId) {
+  db.prepare('UPDATE conversations SET pause_24h_sent = unixepoch() WHERE id = ?').run(conversationId);
+}
+
 function markConversationResumed(conversationId) {
-  db.prepare('UPDATE conversations SET needs_attention = 0, paused_at = NULL, needs_human = 0, human_paused_at = NULL WHERE id = ?').run(conversationId);
+  db.prepare(`
+    UPDATE conversations SET
+      needs_attention = 0, paused_at = NULL, needs_human = 0, human_paused_at = NULL,
+      paused_reason = NULL,
+      pause_notified_at = NULL, pause_followup_sent = NULL, pause_24h_sent = NULL,
+      pause_reply_count = 0, pause_last_reply_at = NULL
+    WHERE id = ?
+  `).run(conversationId);
 }
 
 function setNeedsHuman(conversationId, val) {
@@ -544,15 +594,47 @@ function getConversationsNeedingHumanResume() {
   `).all();
 }
 
+function getKeywordPausedNeedingFollowup() {
+  const cutoff = Math.floor(Date.now() / 1000) - 30 * 60;
+  return db.prepare(`
+    SELECT c.id, c.pause_notified_at, c.customer_id,
+           b.name AS business_name, u.email AS owner_email
+    FROM conversations c
+    JOIN businesses b ON b.id = c.business_id
+    JOIN users u ON u.business_id = b.id
+    WHERE c.needs_attention = 1
+      AND c.paused_reason = 'keyword'
+      AND c.pause_notified_at IS NOT NULL
+      AND c.pause_followup_sent IS NULL
+      AND c.pause_notified_at <= ?
+  `).all(cutoff);
+}
+
+function getKeywordPausedNeeding24h() {
+  const cutoff = Math.floor(Date.now() / 1000) - 24 * 60 * 60;
+  return db.prepare(`
+    SELECT c.id, c.pause_notified_at, c.customer_id,
+           b.name AS business_name, u.email AS owner_email
+    FROM conversations c
+    JOIN businesses b ON b.id = c.business_id
+    JOIN users u ON u.business_id = b.id
+    WHERE c.needs_attention = 1
+      AND c.paused_reason = 'keyword'
+      AND c.pause_notified_at IS NOT NULL
+      AND c.pause_24h_sent IS NULL
+      AND c.pause_notified_at <= ?
+  `).all(cutoff);
+}
+
 function autoResumeExpiredConversations() {
   const cutoff = Math.floor(Date.now() / 1000) - 24 * 60 * 60;
   const result = db.prepare(
-    "UPDATE conversations SET needs_attention = 0, paused_at = NULL, auto_resumed_at = unixepoch() WHERE needs_attention = 1 AND paused_at IS NOT NULL AND paused_at < ? AND (paused_reason IS NULL OR paused_reason != 'trial')"
+    "UPDATE conversations SET needs_attention = 0, paused_at = NULL, auto_resumed_at = unixepoch() WHERE needs_attention = 1 AND paused_at IS NOT NULL AND paused_at < ? AND (paused_reason IS NULL OR paused_reason NOT IN ('trial','keyword'))"
   ).run(cutoff);
   return result.changes;
 }
 
-function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = null, survey_answers = null, business_context = null, website_url = null, response_mode = 'texto', pause_keywords = null, response_delay = 5, pricing_info = null }) {
+function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = null, survey_answers = null, business_context = null, website_url = null, response_mode = 'texto', pause_keywords = null, pause_reply_text = null, response_delay = 5, pricing_info = null }) {
   const serialized = {
     name,
     whatsapp_number: whatsapp_number || null,
@@ -562,6 +644,7 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
     website_url: website_url || null,
     response_mode,
     pause_keywords: pause_keywords || null,
+    pause_reply_text: pause_reply_text || null,
     response_delay: Number(response_delay) || 5,
     pricing_info: pricing_info || null,
   };
@@ -572,6 +655,7 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
         sales_examples=@sales_examples, survey_answers=@survey_answers,
         business_context=@business_context, website_url=@website_url,
         response_mode=@response_mode, pause_keywords=@pause_keywords,
+        pause_reply_text=@pause_reply_text,
         response_delay=@response_delay, pricing_info=@pricing_info
       WHERE id=@id
     `).run({ ...serialized, id });
@@ -593,8 +677,8 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
   }
 
   const result = db.prepare(`
-    INSERT INTO businesses (name, sales_examples, survey_answers, business_context, website_url, response_mode, response_delay, pricing_info)
-    VALUES (@name, @sales_examples, @survey_answers, @business_context, @website_url, @response_mode, @response_delay, @pricing_info)
+    INSERT INTO businesses (name, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, pause_reply_text, response_delay, pricing_info)
+    VALUES (@name, @sales_examples, @survey_answers, @business_context, @website_url, @response_mode, @pause_keywords, @pause_reply_text, @response_delay, @pricing_info)
   `).run(serialized);
   ensureDefaultTags(result.lastInsertRowid);
   return getBusinessById(result.lastInsertRowid);
@@ -1283,6 +1367,13 @@ module.exports = {
   setClaudeUsageTtsChars,
   getClaudeUsageDailySummary,
   getClaudeUsageByBusiness,
+  markConversationPausedByKeyword,
+  recordKeywordPauseReply,
+  setPauseNotifiedAt,
+  setPauseFollowupSent,
+  setPause24hSent,
+  getKeywordPausedNeedingFollowup,
+  getKeywordPausedNeeding24h,
 };
 
 function setWeeklySummaryEnabled(businessId, enabled) {

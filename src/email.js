@@ -1,10 +1,13 @@
-async function sendPauseEmail({ to, businessName, contactId, messageText, conversationId }) {
+async function sendPauseEmail({ to, businessName, contactId, messageText, conversationId, convUrl }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     console.warn('[resend] RESEND_API_KEY not set, skipping email');
     return;
   }
 
+  const linkHtml = convUrl
+    ? `<p><a href="${convUrl}" style="background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:8px">Abrir la conversación</a></p>`
+    : '';
   const body = {
     from: 'Daxos <notificaciones@daxos.lat>',
     to: [to],
@@ -13,11 +16,11 @@ async function sendPauseEmail({ to, businessName, contactId, messageText, conver
       <p>Hola,</p>
       <p>Un cliente necesita atención humana en tu asistente de <strong>${escapeHtml(businessName)}</strong>.</p>
       <table style="border-collapse:collapse;margin:16px 0">
-        <tr><td style="padding:4px 12px 4px 0;color:#666">Contacto</td><td>${escapeHtml(contactId)}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;color:#666">Teléfono</td><td>${escapeHtml(contactId)}</td></tr>
         <tr><td style="padding:4px 12px 4px 0;color:#666">Mensaje</td><td style="max-width:400px">${escapeHtml(messageText)}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;color:#666">Conversación</td><td>#${conversationId}</td></tr>
       </table>
-      <p>El asistente pausó la conversación. Revisá tu panel de Daxos y respondé vos directamente si es necesario.</p>
+      <p>El asistente pausó la conversación. Respondé vos directamente.</p>
+      ${linkHtml}
     `,
   };
 
@@ -296,4 +299,36 @@ async function sendBillingDataEmail({ adminEmail, businessName, businessId }) {
   if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
 }
 
-module.exports = { sendPauseEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail };
+async function sendPauseFollowupEmail({ to, businessName, conversationId, customerPhone, convUrl }) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) { console.warn('[resend] RESEND_API_KEY not set, skipping pause followup email'); return; }
+  const linkHtml = convUrl
+    ? `<p><a href="${convUrl}" style="background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:8px">Abrir la conversación</a></p>`
+    : '';
+  const body = {
+    from: 'Daxos <notificaciones@daxos.lat>',
+    to: [to],
+    subject: `Recordatorio — conversación sin respuesta en ${escapeHtml(businessName)}`,
+    html: `<p>Hola,</p><p>Hace más de 30 minutos que la conversación con <strong>${escapeHtml(customerPhone || String(conversationId))}</strong> en <strong>${escapeHtml(businessName)}</strong> sigue sin respuesta.</p>${linkHtml}`,
+  };
+  const res = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
+}
+
+async function sendPause24hReminderEmail({ to, businessName, conversationId, customerPhone, convUrl }) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) { console.warn('[resend] RESEND_API_KEY not set, skipping 24h pause reminder'); return; }
+  const linkHtml = convUrl
+    ? `<p><a href="${convUrl}" style="background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:8px">Abrir la conversación</a></p>`
+    : '';
+  const body = {
+    from: 'Daxos <notificaciones@daxos.lat>',
+    to: [to],
+    subject: `24 horas sin atender — ${escapeHtml(businessName)}`,
+    html: `<p>Hola,</p><p>La conversación con <strong>${escapeHtml(customerPhone || String(conversationId))}</strong> en <strong>${escapeHtml(businessName)}</strong> lleva 24 horas pausada sin atención.</p>${linkHtml}`,
+  };
+  const res = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
+}
+
+module.exports = { sendPauseEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail };

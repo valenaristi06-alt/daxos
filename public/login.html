@@ -31,6 +31,15 @@
   </div>
 
   <script>
+    function safeNextUrl(val) {
+      if (!val) return null;
+      let d;
+      try { d = decodeURIComponent(val); } catch { return null; }
+      if (!/^\/[a-zA-Z]/.test(d) || /[\\:\n\r]|\/\//.test(d)) return null;
+      const p = d.split('?')[0];
+      return ['/conversations.html', '/inicio.html', '/dashboard.html'].includes(p) ? d : null;
+    }
+
     document.getElementById('form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = document.getElementById('btn');
@@ -50,7 +59,8 @@
 
       const data = await res.json();
       if (res.ok) {
-        window.location.href = '/inicio.html';
+        const next = new URLSearchParams(window.location.search).get('next');
+        window.location.href = safeNextUrl(next) || '/inicio.html';
       } else {
         errorEl.textContent = data.error;
         errorEl.classList.add('visible');

@@ -185,9 +185,23 @@
   </div><!-- /app-layout -->
 
   <script>
+    function safeNextUrl(val) {
+      if (!val) return null;
+      let d;
+      try { d = decodeURIComponent(val); } catch { return null; }
+      if (!/^\/[a-zA-Z]/.test(d) || /[\\:\n\r]|\/\//.test(d)) return null;
+      const p = d.split('?')[0];
+      return ['/conversations.html', '/inicio.html', '/dashboard.html'].includes(p) ? d : null;
+    }
+
     (async () => {
       const res = await fetch('/auth/me');
-      if (!res.ok) { window.location.href = '/login.html'; return; }
+      if (!res.ok) {
+        const current = window.location.pathname + window.location.search;
+        const safe = safeNextUrl(current);
+        window.location.href = safe ? '/login.html?next=' + encodeURIComponent(safe) : '/login.html';
+        return;
+      }
       const { email } = await res.json();
       document.getElementById('user-email').textContent = email;
     })();
@@ -295,7 +309,10 @@
 
       const res = await fetch(`/api/conversations/${id}/messages`);
       if (!res.ok) {
-        document.getElementById('thread-messages').innerHTML = '<p class="no-msgs">No se pudieron cargar los mensajes. Recargá la página e intentá de nuevo.</p>';
+        const msg = res.status === 404
+          ? 'No encontramos esa conversación.'
+          : 'No se pudieron cargar los mensajes. Recargá la página e intentá de nuevo.';
+        document.getElementById('thread-messages').innerHTML = `<p class="no-msgs">${msg}</p>`;
         return;
       }
       const { conversation, messages } = await res.json();
@@ -677,7 +694,34 @@
     });
 
     loadTags();
-    loadList();
+    loadList().then(() => {
+      const convParam = new URLSearchParams(window.location.search).get('conv');
+      const convId = convParam && /^\d+$/.test(convParam) ? parseInt(convParam, 10) : 0;
+      if (convId > 0) openConvById(convId);
+    });
+
+    async function openConvById(id) {
+      // Clear tag filter so conv is visible in list even if filtered out
+      activeFilterTagId = null;
+      renderConvList();
+      renderFilterBar();
+      // Find button in rendered list; if conv isn't in allConvs it may not exist
+      let btn = document.querySelector(`.conv-item[data-id="${id}"]`);
+      if (!btn) {
+        // Conv not in list — open thread area directly so error shows there
+        document.getElementById('conv-panels').classList.add('thread-open');
+        document.getElementById('empty-state').style.display = 'none';
+        document.getElementById('thread').style.display = 'flex';
+        document.getElementById('thread-messages').innerHTML = '<div class="thread-loading">Cargando mensajes…</div>';
+        const res = await fetch(`/api/conversations/${id}/messages`);
+        document.getElementById('thread-messages').innerHTML = res.ok
+          ? '<p class="no-msgs">Error inesperado.</p>'
+          : '<p class="no-msgs">No encontramos esa conversación.</p>';
+        return;
+      }
+      btn.scrollIntoView({ block: 'nearest' });
+      openConv(id, btn);
+    }
   </script>
 
   <nav class="mobile-nav" aria-label="Navegación principal">
