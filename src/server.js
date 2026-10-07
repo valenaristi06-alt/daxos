@@ -3054,18 +3054,26 @@ const _waHealthConsecutive  = new Map(); // bizId → consecutive unhealthy coun
 async function runWaHealthCheck({ dryRun = (process.env.WA_HEALTH_ALERTS !== 'on') } = {}) {
   const adminEmail = process.env.ADMIN_EMAIL;
   const apiKey     = process.env.KAPSO_API_KEY;
-  if (!adminEmail || !apiKey) return;
+  if (!adminEmail || !apiKey) return [];
 
   const businesses = getConnectedBusinesses().filter(b => b.id !== 1);
   const nowSec = Math.floor(Date.now() / 1000);
+  const results = [];
 
   for (const biz of businesses) {
     const pnid = biz.phone_number_id;
+    const entry = {
+      id: biz.id, name: biz.name, phone_number_id: pnid,
+      status: null, consecutiveUnhealthy: _waHealthConsecutive.get(biz.id) || 0,
+      wouldAlert: false, skippedReason: null,
+    };
 
     // Respect retry_after from rate-limiting
     const retryAfterSec = _waHealthRetryAfter.get(pnid);
     if (retryAfterSec && nowSec < retryAfterSec) {
       logError('wa-health-check', { message: `skip biz=${biz.id} pnid=${pnid} retry_after=${retryAfterSec - nowSec}s remaining`, stack: '' });
+      entry.skippedReason = 'retry_after';
+      results.push(entry);
       continue;
     }
 
@@ -3073,6 +3081,8 @@ async function runWaHealthCheck({ dryRun = (process.env.WA_HEALTH_ALERTS !== 'on
     const lastCheckedSec = _waHealthLastChecked.get(pnid);
     if (lastCheckedSec && (nowSec - lastCheckedSec) < 180) {
       logError('wa-health-check', { message: `skip biz=${biz.id} pnid=${pnid} kapso-cache age=${nowSec - lastCheckedSec}s`, stack: '' });
+      entry.skippedReason = 'cache';
+      results.push(entry);
       continue;
     }
 
@@ -3089,6 +3099,8 @@ async function runWaHealthCheck({ dryRun = (process.env.WA_HEALTH_ALERTS !== 'on
         const retrySec = retryHeader ? parseInt(retryHeader, 10) : 60;
         _waHealthRetryAfter.set(pnid, nowSec + (isNaN(retrySec) ? 60 : retrySec));
         logError('wa-health-check', { message: `rate-limited biz=${biz.id} pnid=${pnid} retry_after=${retrySec}s`, stack: '' });
+        entry.skippedReason = 'rate_limited';
+        results.push(entry);
         continue;
       }
 
@@ -3097,10 +3109,14 @@ async function runWaHealthCheck({ dryRun = (process.env.WA_HEALTH_ALERTS !== 'on
         data = JSON.parse(raw);
       } catch {
         logError('wa-health-check', { message: `non-JSON biz=${biz.id} pnid=${pnid} http=${res.status} body=${raw.slice(0, 200)}`, stack: '' });
+        entry.skippedReason = 'non_json';
+        results.push(entry);
         continue;
       }
     } catch (err) {
       logError('wa-health-check', { message: `network error biz=${biz.id} pnid=${pnid}: ${err.message}`, stack: '' });
+      entry.skippedReason = 'network_error';
+      results.push(entry);
       continue;
     }
 
@@ -3125,6 +3141,9 @@ async function runWaHealthCheck({ dryRun = (process.env.WA_HEALTH_ALERTS !== 'on
     }
 
     const consecutiveUnhealthy = _waHealthConsecutive.get(biz.id) || 0;
+    entry.status = status ?? null;
+    entry.consecutiveUnhealthy = consecutiveUnhealthy;
+    entry.wouldAlert = isUnhealthy && consecutiveUnhealthy >= 2 && !biz.wa_health_alerted_at;
 
     if (isUnhealthy && consecutiveUnhealthy >= 2 && !biz.wa_health_alerted_at) {
       if (dryRun) {
@@ -3165,9 +3184,12 @@ async function runWaHealthCheck({ dryRun = (process.env.WA_HEALTH_ALERTS !== 'on
         logError('wa-health-check', { message: `recovered biz=${biz.id} name="${biz.name}"`, stack: '' });
       }
     }
+
+    results.push(entry);
   }
 
   logError('wa-health-check', { message: `cycle done businesses=${businesses.length} dryRun=${dryRun}`, stack: '' });
+  return results;
 }
 
 // Human-pause timeout check — every 5 minutes
@@ -3283,16 +3305,8 @@ app.post('/admin/api/run-silence-check', requireBearerToken, async (_req, res) =
 app.post('/admin/api/run-health-check', requireBearerToken, async (req, res) => {
   try {
     const dryRun = req.query.dryRun === '1' || (req.query.dryRun === undefined && process.env.WA_HEALTH_ALERTS !== 'on');
-    const before = getConnectedBusinesses();
-    await runWaHealthCheck({ dryRun });
-    const after = getConnectedBusinesses();
-    const summary = after.map(b => ({
-      id: b.id,
-      name: b.name,
-      phone_number_id: b.phone_number_id,
-      wa_health_alerted_at: b.wa_health_alerted_at,
-    }));
-    res.json({ ok: true, dryRun, checked: before.length, businesses: summary });
+    const results = await runWaHealthCheck({ dryRun });
+    res.json({ ok: true, dryRun, checked: results.length, businesses: results });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
