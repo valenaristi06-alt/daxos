@@ -2083,6 +2083,26 @@ app.post('/webhook/kapso', async (req, res) => {
       text = msg.kapso.transcript.text;
     }
 
+    if (msg.type === 'image') {
+      const mediaUrl = msg.kapso?.media_url;
+      const mediaUrlSafe = mediaUrl
+        ? (() => { try { const u = new URL(mediaUrl); return `${u.protocol}//${u.host}`; } catch { return 'invalid-url'; } })()
+        : null;
+      logError('kapso-image-payload', {
+        message: [
+          `msg_keys=${JSON.stringify(Object.keys(msg))}`,
+          `image_keys=${JSON.stringify(Object.keys(msg.image || {}))}`,
+          `kapso_keys=${JSON.stringify(Object.keys(msg.kapso || {}))}`,
+          `kapso.has_media=${msg.kapso?.has_media}`,
+          `kapso.media_url_host=${mediaUrlSafe}`,
+          `kapso.media_data_present=${msg.kapso?.media_data != null}`,
+        ].join(' '),
+        stack: '',
+      });
+      logKapsoEvent(`discarded:no_text type=image`);
+      return;
+    }
+
     if (!text?.trim()) {
       logKapsoEvent(`discarded:no_text type=${msg.type}`);
       return;
