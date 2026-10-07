@@ -374,15 +374,16 @@ async function sendWaSilenceRecoveryEmail({ adminEmail, businessName, phoneNumbe
   if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
 }
 
-async function sendWaHealthAlertEmail({ adminEmail, businessName, phoneNumber, status, components }) {
+async function sendWaHealthAlertEmail({ adminEmail, ownerEmail, businessName, phoneNumber, status, components }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) { console.warn('[resend] RESEND_API_KEY not set, skipping WA health alert'); return; }
+  const to = [...new Set([adminEmail, ownerEmail].filter(Boolean))];
   const componentRows = Object.entries(components || {})
     .map(([k, v]) => `<li><strong>${escapeHtml(k)}</strong>: ${escapeHtml(String(v?.status ?? v ?? ''))}</li>`)
     .join('');
   const body = {
     from: 'Daxos <notificaciones@daxos.lat>',
-    to: [adminEmail],
+    to,
     subject: `WhatsApp unhealthy — ${escapeHtml(businessName)}`,
     html: `
       <p>Hola,</p>
@@ -399,12 +400,13 @@ async function sendWaHealthAlertEmail({ adminEmail, businessName, phoneNumber, s
   if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
 }
 
-async function sendWaHealthRecoveryEmail({ adminEmail, businessName, phoneNumber }) {
+async function sendWaHealthRecoveryEmail({ adminEmail, ownerEmail, businessName, phoneNumber }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) { console.warn('[resend] RESEND_API_KEY not set, skipping WA health recovery'); return; }
+  const to = [...new Set([adminEmail, ownerEmail].filter(Boolean))];
   const body = {
     from: 'Daxos <notificaciones@daxos.lat>',
-    to: [adminEmail],
+    to,
     subject: `WhatsApp recuperado — ${escapeHtml(businessName)}`,
     html: `
       <p>Hola,</p>

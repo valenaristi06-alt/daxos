@@ -3046,23 +3046,33 @@ async function runWaSilenceCheck() {
   });
 }
 
-// In-memory retry_after tracking per phone_number_id (resets on restart — acceptable)
-const _waHealthRetryAfter = new Map();
+// In-memory state per phone_number_id / business id (resets on restart — acceptable)
+const _waHealthRetryAfter   = new Map(); // pnid → epoch sec when ok to query again
+const _waHealthLastChecked  = new Map(); // pnid → epoch sec of last actual request (3-min Kapso cache)
+const _waHealthConsecutive  = new Map(); // bizId → consecutive unhealthy count
 
-async function runWaHealthCheck() {
+async function runWaHealthCheck({ dryRun = (process.env.WA_HEALTH_ALERTS !== 'on') } = {}) {
   const adminEmail = process.env.ADMIN_EMAIL;
   const apiKey     = process.env.KAPSO_API_KEY;
   if (!adminEmail || !apiKey) return;
 
-  const businesses = getConnectedBusinesses();
+  const businesses = getConnectedBusinesses().filter(b => b.id !== 1);
   const nowSec = Math.floor(Date.now() / 1000);
 
   for (const biz of businesses) {
     const pnid = biz.phone_number_id;
 
+    // Respect retry_after from rate-limiting
     const retryAfterSec = _waHealthRetryAfter.get(pnid);
     if (retryAfterSec && nowSec < retryAfterSec) {
       logError('wa-health-check', { message: `skip biz=${biz.id} pnid=${pnid} retry_after=${retryAfterSec - nowSec}s remaining`, stack: '' });
+      continue;
+    }
+
+    // Respect 3-minute Kapso cache
+    const lastCheckedSec = _waHealthLastChecked.get(pnid);
+    if (lastCheckedSec && (nowSec - lastCheckedSec) < 180) {
+      logError('wa-health-check', { message: `skip biz=${biz.id} pnid=${pnid} kapso-cache age=${nowSec - lastCheckedSec}s`, stack: '' });
       continue;
     }
 
@@ -3072,6 +3082,7 @@ async function runWaHealthCheck() {
         `https://api.kapso.ai/platform/v1/whatsapp/phone_numbers/${pnid}/health`,
         { headers: { 'X-API-Key': apiKey }, signal: AbortSignal.timeout(10000) }
       );
+      _waHealthLastChecked.set(pnid, nowSec);
 
       const retryHeader = res.headers.get('retry-after');
       if (retryHeader || res.status === 429) {
@@ -3093,7 +3104,7 @@ async function runWaHealthCheck() {
       continue;
     }
 
-    // Handle retry_after in body (some APIs embed it)
+    // Respect retry_after embedded in body
     const bodyRetry = data?.retry_after ?? data?.data?.retry_after;
     if (bodyRetry) {
       const retrySec = typeof bodyRetry === 'number' ? bodyRetry : parseInt(bodyRetry, 10);
@@ -3102,24 +3113,61 @@ async function runWaHealthCheck() {
 
     const status     = data?.data?.status     ?? data?.status;
     const components = data?.data?.components ?? data?.components ?? {};
-    logError('wa-health-check', { message: `checked biz=${biz.id} pnid=${pnid} status=${status} components=${JSON.stringify(components)}`, stack: '' });
-
     const isUnhealthy = status === 'unhealthy';
 
-    if (isUnhealthy && !biz.wa_health_alerted_at) {
-      await sendWaHealthAlertEmail({ adminEmail, businessName: biz.name, phoneNumber: biz.whatsapp_number || pnid, status, components })
-        .catch(err => logError('wa-health-alert', { message: `email failed biz=${biz.id}: ${err.message}`, stack: '' }));
-      setWaHealthAlertedAt(biz.id, nowSec);
-      logError('wa-health-check', { message: `alerted biz=${biz.id} name="${biz.name}" status=${status}`, stack: '' });
+    if (isUnhealthy) {
+      const prev = _waHealthConsecutive.get(biz.id) || 0;
+      _waHealthConsecutive.set(biz.id, prev + 1);
+      logError('wa-health-check', { message: `checked biz=${biz.id} pnid=${pnid} status=${status} consecutive=${prev + 1} components=${JSON.stringify(components)}`, stack: '' });
+    } else {
+      _waHealthConsecutive.set(biz.id, 0);
+      logError('wa-health-check', { message: `checked biz=${biz.id} pnid=${pnid} status=${status} components=${JSON.stringify(components)}`, stack: '' });
+    }
+
+    const consecutiveUnhealthy = _waHealthConsecutive.get(biz.id) || 0;
+
+    if (isUnhealthy && consecutiveUnhealthy >= 2 && !biz.wa_health_alerted_at) {
+      if (dryRun) {
+        logError('wa-health-check', { message: `dry-run: would alert biz=${biz.id} name="${biz.name}" consecutive=${consecutiveUnhealthy}`, stack: '' });
+      } else {
+        const owner    = getUserByBusinessId(biz.id);
+        const ownerEmail = owner?.email || null;
+        await sendWaHealthAlertEmail({ adminEmail, ownerEmail, businessName: biz.name, phoneNumber: biz.whatsapp_number || pnid, status, components })
+          .catch(err => logError('wa-health-alert', { message: `email failed biz=${biz.id}: ${err.message}`, stack: '' }));
+
+        // WA notification to owner best-effort (24h rule: only if owner !== biz phone)
+        if (owner?.phone) {
+          const bizFull    = getBusinessById(biz.id);
+          const waCredentials = bizFull?.wa_access_token
+            ? { phoneNumberId: pnid, accessToken: bizFull.wa_access_token, wabaId: bizFull.waba_id, provider: bizFull.wa_provider || 'kapso' }
+            : null;
+          const normOwner  = normalizeUruguayPhone(owner.phone);
+          const normBiz    = normalizeUruguayPhone(biz.whatsapp_number);
+          if (normOwner && waCredentials && normOwner !== normBiz) {
+            const waMsg = `⚠️ Tu WhatsApp de ${biz.name} está desconectado. Entrá a Kapso y reconectá el número para que el bot vuelva a funcionar.`;
+            sendWhatsAppMessage(normOwner, waMsg, waCredentials)
+              .catch(err => logError('wa-health-alert', { message: `wa notify failed biz=${biz.id}: ${err.message}`, stack: '' }));
+          }
+        }
+
+        setWaHealthAlertedAt(biz.id, nowSec);
+        logError('wa-health-check', { message: `alerted biz=${biz.id} name="${biz.name}" consecutive=${consecutiveUnhealthy}`, stack: '' });
+      }
     } else if (!isUnhealthy && biz.wa_health_alerted_at) {
-      await sendWaHealthRecoveryEmail({ adminEmail, businessName: biz.name, phoneNumber: biz.whatsapp_number || pnid })
-        .catch(err => logError('wa-health-alert', { message: `recovery email failed biz=${biz.id}: ${err.message}`, stack: '' }));
-      clearWaHealthAlertedAt(biz.id);
-      logError('wa-health-check', { message: `recovered biz=${biz.id} name="${biz.name}" status=${status}`, stack: '' });
+      if (dryRun) {
+        logError('wa-health-check', { message: `dry-run: would send recovery biz=${biz.id} name="${biz.name}"`, stack: '' });
+      } else {
+        const owner      = getUserByBusinessId(biz.id);
+        const ownerEmail = owner?.email || null;
+        await sendWaHealthRecoveryEmail({ adminEmail, ownerEmail, businessName: biz.name, phoneNumber: biz.whatsapp_number || pnid })
+          .catch(err => logError('wa-health-alert', { message: `recovery email failed biz=${biz.id}: ${err.message}`, stack: '' }));
+        clearWaHealthAlertedAt(biz.id);
+        logError('wa-health-check', { message: `recovered biz=${biz.id} name="${biz.name}"`, stack: '' });
+      }
     }
   }
 
-  logError('wa-health-check', { message: `cycle done businesses=${businesses.length}`, stack: '' });
+  logError('wa-health-check', { message: `cycle done businesses=${businesses.length} dryRun=${dryRun}`, stack: '' });
 }
 
 // Human-pause timeout check — every 5 minutes
@@ -3132,7 +3180,7 @@ setInterval(() => {
 }, 30 * 60 * 1000);
 setInterval(() => {
   runWaHealthCheck().catch(err => logError('wa-health-check', { message: `job error: ${err.message}`, stack: '' }));
-}, 15 * 60 * 1000);
+}, 10 * 60 * 1000);
 
 setInterval(() => {
   checkBookingTimeouts({ getCredentialsForBusiness: getBookingCredentials })
@@ -3232,10 +3280,11 @@ app.post('/admin/api/run-silence-check', requireBearerToken, async (_req, res) =
   }
 });
 
-app.post('/admin/api/run-health-check', requireBearerToken, async (_req, res) => {
+app.post('/admin/api/run-health-check', requireBearerToken, async (req, res) => {
   try {
+    const dryRun = req.query.dryRun === '1' || (req.query.dryRun === undefined && process.env.WA_HEALTH_ALERTS !== 'on');
     const before = getConnectedBusinesses();
-    await runWaHealthCheck();
+    await runWaHealthCheck({ dryRun });
     const after = getConnectedBusinesses();
     const summary = after.map(b => ({
       id: b.id,
@@ -3243,7 +3292,7 @@ app.post('/admin/api/run-health-check', requireBearerToken, async (_req, res) =>
       phone_number_id: b.phone_number_id,
       wa_health_alerted_at: b.wa_health_alerted_at,
     }));
-    res.json({ ok: true, checked: before.length, businesses: summary });
+    res.json({ ok: true, dryRun, checked: before.length, businesses: summary });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
