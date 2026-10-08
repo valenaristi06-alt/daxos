@@ -274,7 +274,7 @@
       list.innerHTML = filtered.map(c => `
         <button class="conv-item" data-id="${c.id}" onclick="openConv(${c.id}, this)">
           ${c.needs_attention ? '<span class="conv-attention-dot" title="Requiere atención"></span>' : ''}
-          <span class="conv-number">${formatPhone(c.customer_id)}</span>
+          <span class="conv-number">${escapeHtml(formatPhone(c.customer_id))}</span>
           <span class="conv-date">${formatLastMsgDate(c.last_msg_at || c.created_at)}</span>
           ${tagChips(c.tags)}
           ${labelBadge(c.label)}
@@ -323,7 +323,7 @@
       const convTags = conversation.tags || [];
       document.getElementById('thread-header').innerHTML = `
         <div class="thread-header-top">
-          <span class="thread-phone">${formatPhone(conversation.customer_id)}</span>
+          <span class="thread-phone">${escapeHtml(formatPhone(conversation.customer_id))}</span>
           <span class="thread-meta">${messages.length} mensaje${messages.length !== 1 ? 's' : ''} · iniciado ${formatDate(conversation.created_at)}</span>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <div style="position:relative;display:inline-block;">

@@ -156,6 +156,11 @@ app.use(express.json({
     if (req.path === '/webhook/kapso' || req.path === '/webhook/kapso-platform') req.rawBody = buf;
   },
 }));
+if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
+  console.error('[startup] FATAL: SESSION_SECRET not set in production. Set this env var and restart.');
+  process.exit(1);
+}
+
 const sessionsDb = new Database(path.join(__dirname, '../data/sessions.db'));
 
 app.use(session({
@@ -190,7 +195,12 @@ app.use(express.static(path.join(__dirname, '../public')));
 app.get('/ayuda/conectar-whatsapp', (_req, res) => {
   res.sendFile(path.join(__dirname, '../public/ayuda/conectar-whatsapp.html'));
 });
-app.use('/uploads', express.static(path.join(__dirname, '../data/uploads')));
+// Block direct access to document PDFs — served only via authenticated endpoint.
+// Product images remain accessible (they have unpredictable names and are not sensitive).
+app.use('/uploads', (req, res, next) => {
+  if (/^\/doc-\d+\.pdf$/i.test(req.path)) return res.status(403).send('Forbidden');
+  next();
+}, express.static(path.join(__dirname, '../data/uploads'), { index: false }));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
@@ -641,19 +651,6 @@ app.get('/api/stats/messages-daily', requireAuth, (req, res) => {
   res.json(getDailyMessageStats(user.business_id));
 });
 
-app.post('/businesses', (req, res) => {
-  const { name, whatsapp_number, sales_examples, survey_answers, response_mode } = req.body;
-  if (!name || !whatsapp_number) {
-    return res.status(400).json({ error: 'name and whatsapp_number are required' });
-  }
-  try {
-    const business = upsertBusiness({ name, whatsapp_number, sales_examples, survey_answers, response_mode });
-    res.json(ownerView(business));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 app.patch('/api/conversations/:id/label', requireAuth, (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
@@ -708,7 +705,10 @@ app.put('/api/conversations/:id/tags', requireAuth, (req, res) => {
   const conv = getConversationById(parseInt(req.params.id));
   if (!conv || conv.business_id !== user.business_id) return res.status(404).json({ error: 'Conversación no encontrada.' });
   const tagIds = Array.isArray(req.body.tagIds) ? req.body.tagIds.map(Number) : [];
-  setConversationTags(conv.id, tagIds);
+  const ownedTags = getTagsByBusiness(user.business_id);
+  const ownedTagIds = new Set(ownedTags.map(t => t.id));
+  const safeTagIds = tagIds.filter(id => ownedTagIds.has(id));
+  setConversationTags(conv.id, safeTagIds);
   res.json({ ok: true, tags: getConversationTags(conv.id) });
 });
 
@@ -794,6 +794,16 @@ app.delete('/api/business/document', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+app.get('/api/business/document/download', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+  const business = getBusinessById(user.business_id);
+  if (!business?.document_path || !fs.existsSync(business.document_path)) {
+    return res.status(404).json({ error: 'No hay documento guardado.' });
+  }
+  res.download(business.document_path, business.document_name || 'documento.pdf');
+});
+
 // --- Business images ---
 
 const IMAGE_LIMIT = 20;
@@ -818,7 +828,7 @@ app.post('/api/business/images', requireAuth, imageUpload.single('image'), async
   }
 
   const ext      = req.file.mimetype === 'image/png' ? 'png' : 'jpg';
-  const filename = `img-${user.business_id}-${Date.now()}.${ext}`;
+  const filename = `img-${user.business_id}-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
   const filePath = path.join(__dirname, '../data/uploads', filename);
   fs.writeFileSync(filePath, req.file.buffer);
 
@@ -885,26 +895,7 @@ app.delete('/api/business/documents/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/business/preview-chat', (req, res, next) => {
-  console.log('[preview-chat] HIT — sessionId:', req.session?.id, '| userId:', req.session?.userId ?? 'NONE');
-
-  // Diagnostic requested by Railway support: log env var names (never values) on each request.
-  const MY_VARS = ['META_APP_ID','META_APP_SECRET','META_REDIRECT_URI','ENCRYPTION_KEY','WHATSAPP_CONFIG_ID','ADMIN_EMAIL','ANTHROPIC_API_KEY','SESSION_SECRET','RESEND_API_KEY','ELEVENLABS_API_KEY','MERCADOPAGO_ACCESS_TOKEN','MERCADOPAGO_WEBHOOK_SECRET'];
-  const allKeys = Object.keys(process.env);
-  const railwayKeys = allKeys.filter(k => k.startsWith('RAILWAY_'));
-  const myVarsPresent = MY_VARS.filter(k => k in process.env);
-  const myVarsMissing = MY_VARS.filter(k => !(k in process.env));
-  const report = [
-    `total env vars: ${allKeys.length}`,
-    `RAILWAY_ vars (${railwayKeys.length}): ${railwayKeys.join(', ') || 'none'}`,
-    `my vars present (${myVarsPresent.length}): ${myVarsPresent.join(', ') || 'none'}`,
-    `my vars MISSING (${myVarsMissing.length}): ${myVarsMissing.join(', ') || 'none'}`,
-    `all keys: ${allKeys.sort().join(', ')}`,
-  ].join('\n');
-  logError('env-diagnostic', { message: report, stack: '' });
-
-  next();
-}, requireAuth, async (req, res) => {
+app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
 
@@ -1081,32 +1072,6 @@ app.get('/admin/api/costos', requireAdmin, (req, res) => {
     rows,
     totals,
   });
-});
-
-app.post('/test/simulate', async (req, res) => {
-  const { business_id, customer_id, message } = req.body;
-  if (!business_id || !customer_id || !message) {
-    return res.status(400).json({ error: 'business_id, customer_id and message are required' });
-  }
-
-  const business = getBusinessById(business_id);
-  if (!business) return res.status(404).json({ error: 'Business not found' });
-
-  try {
-    const conversation = getOrCreateConversation(business_id, customer_id);
-    const history = getConversationHistory(conversation.id, 60, { excludeSilent: true });
-
-    await maybeSendDisclosure(business, conversation.id, history, null);
-
-    const reply = await generateReply(business, history, message);
-
-    addMessage(conversation.id, 'user', message);
-    addMessage(conversation.id, 'assistant', reply);
-
-    res.json({ reply, conversation_id: conversation.id, first_contact: history.length === 0 });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
 });
 
 function isTrialExpired(business) {
@@ -2015,7 +1980,12 @@ app.post('/webhook/kapso', async (req, res) => {
       return;
     }
   } else {
-    logError('kapso-webhook', { message: 'KAPSO_WEBHOOK_SECRET not set — skipping signature check', stack: '' });
+    if (process.env.NODE_ENV === 'production') {
+      logKapsoEvent('discarded:no_secret_configured');
+      logError('kapso-webhook', { message: 'KAPSO_WEBHOOK_SECRET not set in production — rejecting request', stack: '' });
+      return;
+    }
+    logError('kapso-webhook', { message: 'KAPSO_WEBHOOK_SECRET not set — skipping signature check (non-production)', stack: '' });
   }
 
   try {
@@ -2374,7 +2344,8 @@ app.post('/webhook/mercadopago', async (req, res) => {
     const manifest = `id:${paymentId};request-id:${xRequestId};ts:${ts};`;
     const expected = crypto.createHmac('sha256', webhookSecret).update(manifest).digest('hex');
 
-    if (!crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected))) {
+    if (received.length !== expected.length ||
+        !crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected))) {
       console.warn('[mp-webhook] Invalid HMAC signature — rejected');
       return res.status(200).send('OK');
     }

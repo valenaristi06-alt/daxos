@@ -193,6 +193,65 @@ async function run() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  console.log('\nTest (B-1): POST /test/simulate removed — returns 404');
+  {
+    const r = await req('POST', '/test/simulate', { business_id: 1, customer_id: '123', message: 'hi' }, ownerCookie);
+    assert('returns 404', r.status === 404, r.status);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  console.log('\nTest (B-3): POST /businesses removed — returns 404');
+  {
+    const r = await req('POST', '/businesses', { name: 'X', whatsapp_number: '123' });
+    assert('returns 404', r.status === 404, r.status);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  console.log('\nTest (B-2): GET /uploads/doc-X.pdf blocked — returns 403');
+  {
+    const r = await req('GET', '/uploads/doc-1.pdf');
+    assert('returns 403', r.status === 403, r.status);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  console.log('\nTest (I-3): cross-tenant tag assignment blocked');
+  {
+    // Register second user and business
+    const reg2 = await req('POST', '/auth/register', { email: 'owner2@ownerview.test', password: 'ownerpassword123' });
+    assert('biz2 register ok', reg2.status === 200, reg2.status);
+    const owner2Cookie = reg2.setCookie?.map(c => c.split(';')[0]).join('; ');
+    const put2 = await req('PUT', '/api/business', { name: 'Negocio 2', whatsapp_number: '59899000002' }, owner2Cookie);
+    assert('biz2 setup ok', put2.status === 200, put2.status);
+
+    // Create one tag per business
+    const tag1R = await req('POST', '/api/tags', { name: 'TagBiz1', color: '#3b82f6' }, ownerCookie);
+    assert('tag for biz1 created', tag1R.status === 200, tag1R.status);
+    const tag1Id = tag1R.body.id;
+
+    const tag2R = await req('POST', '/api/tags', { name: 'TagBiz2', color: '#ef4444' }, owner2Cookie);
+    assert('tag for biz2 created', tag2R.status === 200, tag2R.status);
+    const tag2Id = tag2R.body.id;
+
+    // Insert a conversation for biz1 directly in DB
+    const convId = db.prepare(
+      `INSERT INTO conversations (business_id, customer_id, created_at) VALUES (?, '54911000001', datetime('now'))`
+    ).run(bizId).lastInsertRowid;
+
+    // Attempt to assign biz2's tag to biz1's conversation using biz1 cookie — must be filtered
+    const tagR = await req('PUT', `/api/conversations/${convId}/tags`, { tagIds: [tag2Id] }, ownerCookie);
+    assert('PUT tags returns 200', tagR.status === 200, tagR.status);
+    const assignedIds = (tagR.body.tags || []).map(t => t.id);
+    assert('biz2 tag NOT assigned to biz1 conv', !assignedIds.includes(tag2Id), assignedIds);
+
+    // Verify biz1's own tag IS assignable, biz2's still filtered when mixed
+    const tagR2 = await req('PUT', `/api/conversations/${convId}/tags`, { tagIds: [tag1Id, tag2Id] }, ownerCookie);
+    assert('PUT mixed tags returns 200', tagR2.status === 200, tagR2.status);
+    const assignedIds2 = (tagR2.body.tags || []).map(t => t.id);
+    assert('biz1 tag IS assigned', assignedIds2.includes(tag1Id), assignedIds2);
+    assert('biz2 tag NOT in mixed assign', !assignedIds2.includes(tag2Id), assignedIds2);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   console.log(`\n──────────────────────────────────────────`);
   console.log(`Results: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
