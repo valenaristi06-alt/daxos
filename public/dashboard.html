@@ -659,6 +659,10 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
     let currentBusiness = null;
     let audioOptionsLocked = false;
 
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
     // ── Redirect if not logged in ──
     (async () => {
       const res = await fetch('/auth/me');
@@ -793,11 +797,11 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       document.getElementById('style-card').style.display = 'block';
       const grid = document.getElementById('style-grid');
       grid.innerHTML = `
-        <div class="style-chip">${TONO_LABELS[profile.tono] || profile.tono}</div>
-        <div class="style-chip">${EMOJI_LABELS[profile.uso_emojis] || profile.uso_emojis}</div>
-        <div class="style-chip">${LARGO_LABELS[profile.largo_mensajes] || profile.largo_mensajes}</div>
-        <div class="style-chip">${CIERRE_LABELS[profile.forma_de_cerrar] || profile.forma_de_cerrar}</div>
-        ${(profile.caracteristicas || []).map(c => `<div class="style-chip style-chip-muted">${c}</div>`).join('')}
+        <div class="style-chip">${escapeHtml(TONO_LABELS[profile.tono] || profile.tono)}</div>
+        <div class="style-chip">${escapeHtml(EMOJI_LABELS[profile.uso_emojis] || profile.uso_emojis)}</div>
+        <div class="style-chip">${escapeHtml(LARGO_LABELS[profile.largo_mensajes] || profile.largo_mensajes)}</div>
+        <div class="style-chip">${escapeHtml(CIERRE_LABELS[profile.forma_de_cerrar] || profile.forma_de_cerrar)}</div>
+        ${(profile.caracteristicas || []).map(c => `<div class="style-chip style-chip-muted">${escapeHtml(c)}</div>`).join('')}
       `;
     }
 
@@ -1625,8 +1629,8 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:6px 8px;background:#111;border:1px solid #222;border-radius:4px;';
         row.innerHTML = `
-          <img src="/uploads/${filename}" alt="${img.label}" style="width:44px;height:44px;object-fit:cover;border-radius:3px;flex-shrink:0;background:#1a1a1a;">
-          <span style="flex:1;font-size:13px;color:#d4cfc8;">${img.label}</span>
+          <img src="/uploads/${escapeHtml(filename)}" alt="${escapeHtml(img.label)}" style="width:44px;height:44px;object-fit:cover;border-radius:3px;flex-shrink:0;background:#1a1a1a;">
+          <span style="flex:1;font-size:13px;color:#d4cfc8;">${escapeHtml(img.label)}</span>
           <button data-id="${img.id}" style="font-size:11px;padding:3px 8px;border:1px solid #3a3a3a;border-radius:3px;background:transparent;color:#888;cursor:pointer;" class="img-delete-btn">Eliminar</button>
         `;
         list.appendChild(row);
@@ -1724,7 +1728,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           const row = document.createElement('div');
           row.style.cssText = 'display:flex; align-items:center; gap:8px; padding:7px 10px; background:#111; border:1px solid #1e1e1e; border-radius:5px;';
           row.innerHTML = `
-            <span style="flex:1; font-size:13px; color:#e5e0d8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${doc.name}</span>
+            <span style="flex:1; font-size:13px; color:#e5e0d8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(doc.name)}</span>
             <span style="font-size:11px; color:#666; white-space:nowrap;">~${pages} pág</span>
             <button data-id="${doc.id}" style="font-size:11px; color:#ef4444; background:none; border:none; cursor:pointer; padding:2px 4px; flex-shrink:0;">Eliminar</button>
           `;
