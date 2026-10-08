@@ -343,7 +343,7 @@
               </div>
             </div>
             <select class="conv-label-select" id="label-select" onchange="setLabel(${id}, this.value)">
-              <option value="">Sin etiqueta</option>
+              <option value="">Tipo de contacto</option>
               <option value="cliente"       ${conversation.label === 'cliente'       ? 'selected' : ''}>Cliente</option>
               <option value="prospecto"     ${conversation.label === 'prospecto'     ? 'selected' : ''}>Prospecto</option>
               <option value="no_interesado" ${conversation.label === 'no_interesado' ? 'selected' : ''}>No interesado</option>
@@ -403,20 +403,10 @@
     async function resumeConv(id) {
       const res = await fetch(`/api/conversations/${id}/resume`, { method: 'PATCH' });
       if (!res.ok) return;
-      document.getElementById('pause-banner')?.remove();
-      document.getElementById('panel-reply-box')?.remove();
-      document.getElementById('needs-human-banner')?.remove();
       const dot = document.querySelector(`.conv-item[data-id="${id}"] .conv-attention-dot`);
       if (dot) dot.remove();
-      // Re-add pause button
-      const topRow = document.querySelector('.thread-header-top div');
-      if (topRow && !topRow.querySelector('.btn-pause-toggle')) {
-        const btn = document.createElement('button');
-        btn.className = 'btn-pause-toggle';
-        btn.textContent = 'Pausar bot';
-        btn.onclick = () => pauseConv(id);
-        topRow.appendChild(btn);
-      }
+      const convItem = document.querySelector(`.conv-item[data-id="${id}"]`);
+      if (convItem) openConv(id, convItem);
     }
 
     // ── Pause conversation (manual) ──
