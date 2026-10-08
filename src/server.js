@@ -14,6 +14,8 @@ const TRIAL_GRACE_CONVS = 25;
 const TRIAL_WARN_DAYS   = 11;
 const TRIAL_GRACE_HOURS = 72;
 const AUDIO_MAX_CHARS   = 600;
+// Matches the same rule as src/whatsapp.js: Railway always sets RAILWAY_ENVIRONMENT even when NODE_ENV is absent.
+const IS_PROD = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT;
 
 const crypto = require('crypto');
 const express = require('express');
@@ -156,7 +158,7 @@ app.use(express.json({
     if (req.path === '/webhook/kapso' || req.path === '/webhook/kapso-platform') req.rawBody = buf;
   },
 }));
-if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
+if (IS_PROD && !process.env.SESSION_SECRET) {
   console.error('[startup] FATAL: SESSION_SECRET not set in production. Set this env var and restart.');
   process.exit(1);
 }
@@ -1980,7 +1982,7 @@ app.post('/webhook/kapso', async (req, res) => {
       return;
     }
   } else {
-    if (process.env.NODE_ENV === 'production') {
+    if (IS_PROD) {
       logKapsoEvent('discarded:no_secret_configured');
       logError('kapso-webhook', { message: 'KAPSO_WEBHOOK_SECRET not set in production — rejecting request', stack: '' });
       return;
