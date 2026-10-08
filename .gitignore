@@ -11,3 +11,4 @@ dist/
 build/
 *.log
 src/config.local.js
+/daxos.db

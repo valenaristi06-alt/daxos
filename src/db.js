@@ -1393,6 +1393,7 @@ module.exports = {
   clearWaSilenceAlertedAt,
   setWaHealthAlertedAt,
   clearWaHealthAlertedAt,
+  purgeOldErrorLog,
 };
 
 function setWeeklySummaryEnabled(businessId, enabled) {
@@ -1673,4 +1674,8 @@ function setWaHealthAlertedAt(businessId, epochSec) {
 
 function clearWaHealthAlertedAt(businessId) {
   db.prepare('UPDATE businesses SET wa_health_alerted_at = NULL WHERE id = ?').run(businessId);
+}
+
+function purgeOldErrorLog() {
+  return db.prepare(`DELETE FROM error_log WHERE created_at < datetime('now', '-30 days')`).run();
 }

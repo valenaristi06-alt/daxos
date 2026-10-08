@@ -24,7 +24,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt } = require('./db');
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -111,7 +111,7 @@ async function extractTextFromFile(buffer, mimetype, originalname) {
 }
 
 const fs = require('fs');
-const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator } = require('./whatsapp');
+const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, downloadKapsoMedia } = require('./whatsapp');
 const { generateAudioBuffer } = require('./elevenlabs');
 const { convertToOgg } = require('./audio');
 
@@ -126,6 +126,30 @@ let _staleMsgCount = 0;
 let _staleMsgDate  = null;
 // Per-business-id date string (UY) of last msg-timestamp-field log — avoid log spam
 const _timestampFieldLogDate = {};
+// Image rate-limit counters: key = `${convId}:${hourKey}` → count
+const _imgHourCount   = new Map();
+// Fallback-send throttle: key = `${convId}:${hourKey}` → true (1 fallback/h/conv)
+const _imgFallbackSent = new Map();
+
+function pruneImgMaps(currentHourKey) {
+  for (const k of _imgHourCount.keys()) {
+    if (Number(k.slice(k.lastIndexOf(':') + 1)) < currentHourKey) _imgHourCount.delete(k);
+  }
+  for (const k of _imgFallbackSent.keys()) {
+    if (Number(k.slice(k.lastIndexOf(':') + 1)) < currentHourKey) _imgFallbackSent.delete(k);
+  }
+}
+
+function detectMimeFromBytes(buf) {
+  if (buf.length >= 3 && buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return 'image/jpeg';
+  if (buf.length >= 8 &&
+      buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47 &&
+      buf[4] === 0x0D && buf[5] === 0x0A && buf[6] === 0x1A && buf[7] === 0x0A) return 'image/png';
+  if (buf.length >= 12 &&
+      buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+      buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return 'image/webp';
+  return null;
+}
 
 app.use(express.json({
   verify: (req, _res, buf) => {
@@ -1236,7 +1260,17 @@ function toUYDateStr(ms) {
   return new Date(ms - 3 * 3_600_000).toISOString().slice(0, 10);
 }
 
-async function processIncomingMessage(business, waCredentials, { msgId, customerPhone, text, msgTimestamp, msgTimestampField }) {
+function isMsgStale(business, msgTimestamp) {
+  if (msgTimestamp == null) return null;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const connectedAtMs  = parseSqliteUtc(business.wa_connected_at);
+  const connectedAtSec = connectedAtMs ? Math.floor(connectedAtMs / 1000) : null;
+  if (connectedAtSec != null && msgTimestamp < connectedAtSec - 60) return 'before_connect';
+  if (nowSec - msgTimestamp > MSG_MAX_AGE_MINUTES * 60) return 'too_old';
+  return null;
+}
+
+async function processIncomingMessage(business, waCredentials, { msgId, customerPhone, text, msgTimestamp, msgTimestampField, imageData = null }) {
   if (!customerPhone) {
     logError('process-incoming', { message: `customerPhone missing — skipping outbound or malformed message msgId=${msgId} business=${business.id}`, stack: '' });
     return;
@@ -1256,19 +1290,10 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
       });
     }
 
-    const nowSec    = Math.floor(Date.now() / 1000);
-    const ageSeconds = nowSec - msgTimestamp;
-
-    // Stale if message predates WA connection (with 60s grace) or exceeds max age
-    const connectedAtMs  = parseSqliteUtc(business.wa_connected_at);
-    const connectedAtSec = connectedAtMs ? Math.floor(connectedAtMs / 1000) : null;
-    const staleByConnect = connectedAtSec != null && msgTimestamp < connectedAtSec - 60;
-    const staleByAge     = ageSeconds > MSG_MAX_AGE_MINUTES * 60;
-
-    if (staleByConnect || staleByAge) {
-      const reason = staleByConnect ? 'before_connect' : 'too_old';
+    const staleReason = isMsgStale(business, msgTimestamp);
+    if (staleReason) {
       logError('msg-stale', {
-        message: `msgId=${msgId} business_id=${business.id} age=${ageSeconds}s field=${msgTimestampField || 'unknown'} reason=${reason}`,
+        message: `msgId=${msgId} business_id=${business.id} age=${Math.floor(Date.now() / 1000) - msgTimestamp}s field=${msgTimestampField || 'unknown'} reason=${staleReason}`,
         stack: '',
       });
       _staleMsgCount++;
@@ -1460,14 +1485,14 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
         sendWhatsAppMessage(customerPhone, replyText, waCredentials)
           .catch(err => logError('pause-reply-send', { message: err.message, stack: '' }));
         addMessage(conversation.id, 'assistant', replyText);
-        logKapsoEvent(`silenced:paused reason=keyword count=${conversation.pause_reply_count + 1} auto_reply_sent`);
+        logError('kapso-event', { message: `silenced:paused reason=keyword count=${conversation.pause_reply_count + 1} auto_reply_sent`, stack: '' });
       } else {
-        logKapsoEvent(`silenced:paused reason=keyword count=${conversation.pause_reply_count} throttled last_reply_ago=${Math.floor((nowSec - lastAt) / 60)}m`);
+        logError('kapso-event', { message: `silenced:paused reason=keyword count=${conversation.pause_reply_count} throttled last_reply_ago=${Math.floor((nowSec - lastAt) / 60)}m`, stack: '' });
       }
     } else if (conversation.paused_reason === 'keyword') {
-      logKapsoEvent(`silenced:paused reason=keyword count=${conversation.pause_reply_count} limit_reached`);
+      logError('kapso-event', { message: `silenced:paused reason=keyword count=${conversation.pause_reply_count} limit_reached`, stack: '' });
     } else {
-      logKapsoEvent(`silenced:paused reason=${conversation.paused_reason || 'human'}`);
+      logError('kapso-event', { message: `silenced:paused reason=${conversation.paused_reason || 'human'}`, stack: '' });
     }
     return;
   }
@@ -1525,7 +1550,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
       generateReply(business, history, text, conversation.label || null, {
         enabled: !!business.booking_enabled,
         state: currentBookingState,
-      }, runtimeCtx, conversation.id),
+      }, runtimeCtx, conversation.id, imageData),
       sleep(delayMs),
     ]);
     logError('webhook-claude-ok', { message: `business_id=${business.id} reply_length=${rawReply.length}`, stack: '' });
@@ -1968,8 +1993,10 @@ app.post('/webhook/kapso', async (req, res) => {
   const sig     = req.headers['x-webhook-signature'] || '';
   const secret  = process.env.KAPSO_WEBHOOK_SECRET;
 
+  const _isImageMsg = req.body?.message?.type === 'image';
   logError('kapso-webhook', {
-    message: `sig_present=${!!sig} secret_set=${!!secret} raw_len=${rawBody?.length ?? 0} preview=${rawBody?.toString().slice(0, 200) ?? ''}`,
+    message: `sig_present=${!!sig} secret_set=${!!secret} raw_len=${rawBody?.length ?? 0}` +
+      (_isImageMsg ? ' preview=[image_suppressed]' : ` preview=${rawBody?.toString().slice(0, 200) ?? ''}`),
     stack: '',
   });
 
@@ -2001,7 +2028,6 @@ app.post('/webhook/kapso', async (req, res) => {
 
     const phoneNumberId = String(payload.phone_number_id || '');
     const business      = getBusinessByPhoneNumberId(phoneNumberId);
-
     logError('kapso-webhook', {
       message: `phone_number_id=${phoneNumberId} found=${!!business} business_id=${business?.id ?? 'null'}`,
       stack: '',
@@ -2084,22 +2110,106 @@ app.post('/webhook/kapso', async (req, res) => {
     }
 
     if (msg.type === 'image') {
-      const mediaUrl = msg.kapso?.media_url;
-      const mediaUrlSafe = mediaUrl
-        ? (() => { try { const u = new URL(mediaUrl); return `${u.protocol}//${u.host}`; } catch { return 'invalid-url'; } })()
+      const IMG_FALLBACK    = 'No pude ver la imagen. ¿Me lo contás por texto?';
+      const ALLOWED_MIMES   = new Set(['image/jpeg', 'image/png', 'image/webp']);
+      const imgHourKey      = Math.floor(Date.now() / 3_600_000);
+      pruneImgMaps(imgHourKey);
+      const imgConv         = getOrCreateConversation(business.id, msg.from);
+      const imgCntKey       = `${imgConv.id}:${imgHourKey}`;
+      const imgFbKey        = `${imgConv.id}:${imgHourKey}`;
+      const imgCaption      = msg.image?.caption || '';
+      const imgStoredText   = imgCaption
+        ? `[el cliente envió una imagen] "${imgCaption}"`
+        : '[el cliente envió una imagen]';
+
+      async function sendImgFallback(reason) {
+        const staleReason = isMsgStale(business, imgTimestamp);
+        if (staleReason) {
+          logKapsoEvent(`image_fallback_skipped reason=stale:${staleReason}`);
+          return;
+        }
+        if (_imgFallbackSent.get(imgFbKey)) {
+          logKapsoEvent(`discarded:image_fallback_throttled reason=${reason}`);
+          return;
+        }
+        _imgFallbackSent.set(imgFbKey, true);
+        logKapsoEvent(`image_fallback_sent reason=${reason}`);
+        if (business.silent_until) {
+          const silentUntilMs = parseSqliteUtc(business.silent_until);
+          if (silentUntilMs && Date.now() < silentUntilMs) {
+            addMessage(imgConv.id, 'user', imgStoredText, 1);
+            logKapsoEvent(`image_fallback_suppressed reason=silent_until`);
+            return;
+          }
+        }
+        addMessage(imgConv.id, 'user', imgStoredText);
+        if (imgConv.needs_attention || isTrialExpired(business)) {
+          logKapsoEvent(`image_fallback_suppressed reason=${imgConv.needs_attention ? 'paused' : 'trial_expired'}`);
+          return;
+        }
+        addMessage(imgConv.id, 'assistant', IMG_FALLBACK);
+        sendWhatsAppMessage(msg.from, IMG_FALLBACK, waCredentials)
+          .catch(fbErr => logError('image-fallback-send', { message: fbErr.message, stack: '' }));
+      }
+
+      // Resolve timestamp (same logic as text path)
+      const imgTimestamp = msg.timestamp != null ? Number(msg.timestamp) || null
+        : msg.created_at != null ? Math.floor(new Date(msg.created_at).getTime() / 1000) || null
         : null;
-      logError('kapso-image-payload', {
-        message: [
-          `msg_keys=${JSON.stringify(Object.keys(msg))}`,
-          `image_keys=${JSON.stringify(Object.keys(msg.image || {}))}`,
-          `kapso_keys=${JSON.stringify(Object.keys(msg.kapso || {}))}`,
-          `kapso.has_media=${msg.kapso?.has_media}`,
-          `kapso.media_url_host=${mediaUrlSafe}`,
-          `kapso.media_data_present=${msg.kapso?.media_data != null}`,
-        ].join(' '),
-        stack: '',
+      const imgTimestampField = msg.timestamp != null ? 'msg.timestamp'
+        : msg.created_at != null ? 'msg.created_at'
+        : null;
+
+      // Rate limit: 10 images/hour per conversation
+      const imgCount = _imgHourCount.get(imgCntKey) || 0;
+      if (imgCount >= 10) {
+        await sendImgFallback('rate_limit');
+        return;
+      }
+
+      // Pre-download: reject only definitively wrong image types (sticker, gif, etc.).
+      // Unknown types (application/octet-stream, empty) proceed to magic-byte check.
+      const declaredMime = (msg.image?.mime_type || '').split(';')[0].trim();
+      if (declaredMime && declaredMime.startsWith('image/') && !ALLOWED_MIMES.has(declaredMime)) {
+        await sendImgFallback(`unsupported_mime:${declaredMime}`);
+        return;
+      }
+
+      // Download image in memory
+      const mediaUrl = msg.kapso?.media_url || null;
+      const mediaId  = msg.image?.id || null;
+      let imgBuffer, contentType;
+      try {
+        ({ buffer: imgBuffer, contentType } = await downloadKapsoMedia(mediaUrl, mediaId, waCredentials.phoneNumberId));
+      } catch (dlErr) {
+        logError('image-download-error', { message: dlErr.message, stack: '' });
+        await sendImgFallback('download_error');
+        return;
+      }
+
+      // Validate format via magic bytes — bytes win over declared Content-Type
+      const detectedMime = detectMimeFromBytes(imgBuffer);
+      if (!detectedMime) {
+        await sendImgFallback(`unsupported_content_type:bytes_invalid`);
+        return;
+      }
+      const actualMime = detectedMime;
+
+      // Increment counter only once the image is validated
+      _imgHourCount.set(imgCntKey, imgCount + 1);
+
+      const imageData = { base64: imgBuffer.toString('base64'), mimeType: actualMime, caption: imgCaption };
+
+      logKapsoEvent(`processing:image business_id=${business.id} from=${msg.from} mime=${actualMime} bytes=${imgBuffer.length}`);
+
+      await processIncomingMessage(business, waCredentials, {
+        msgId:             msg.id,
+        customerPhone:     msg.from,
+        text:              imgStoredText,
+        msgTimestamp:      imgTimestamp,
+        msgTimestampField: imgTimestampField,
+        imageData,
       });
-      logKapsoEvent(`discarded:no_text type=image`);
       return;
     }
 
@@ -3278,6 +3388,8 @@ app.listen(PORT, () => {
   const ckResult = checkpoint();
   console.log('WAL checkpoint on startup:', JSON.stringify(ckResult));
   setTimeout(() => startupBackupCheck().catch(err => logError('backup-startup', err)), 15_000);
+  purgeOldErrorLog();
+  setInterval(() => purgeOldErrorLog(), 24 * 60 * 60 * 1000);
 });
 
 // ─── Backup endpoints ─────────────────────────────────────────────────────────
