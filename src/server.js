@@ -18,7 +18,11 @@ const AUDIO_MAX_CHARS   = 600;
 const IS_PROD = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT;
 
 const crypto = require('crypto');
+const dns    = require('dns').promises;
+const net    = require('net');
 const express = require('express');
+const helmet  = require('helmet');
+const cors    = require('cors');
 const path = require('path');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
@@ -153,6 +157,21 @@ function detectMimeFromBytes(buf) {
   return null;
 }
 
+// Railway sits behind a single reverse proxy — trust only that hop so req.ip is the real client IP.
+app.set('trust proxy', 1);
+
+app.use(helmet({
+  // CSP desactivado: el dashboard tiene <script> inline y carga SDK de Facebook.
+  // Activar CSP con nonces requiere refactor del frontend; se deja como mejora futura.
+  contentSecurityPolicy: false,
+}));
+
+// CORS: esta app sirve su propio frontend desde la misma origin.
+// No se exponen headers CORS por defecto; si se necesita un origen externo en el futuro
+// configurar CORS_ALLOWED_ORIGIN en las env vars.
+const _corsAllowedOrigin = process.env.CORS_ALLOWED_ORIGIN || false;
+app.use(cors({ origin: _corsAllowedOrigin, credentials: !!_corsAllowedOrigin }));
+
 app.use(express.json({
   verify: (req, _res, buf) => {
     if (req.path === '/webhook/kapso' || req.path === '/webhook/kapso-platform') req.rawBody = buf;
@@ -173,10 +192,43 @@ app.use(session({
   rolling: true,
   cookie: {
     httpOnly: true,
+    secure: IS_PROD,
     sameSite: 'lax',
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 días, se renueva en cada request
   },
 }));
+
+// --- Rate limiter in-memory (5 intentos / 15 min por IP; y por email en login) ---
+// Active when IS_PROD=true OR ENABLE_RATE_LIMIT=true.
+// ENABLE_RATE_LIMIT allows integration tests to test the rate limiter without setting IS_PROD.
+const RATE_LIMIT_ENABLED = IS_PROD || process.env.ENABLE_RATE_LIMIT === 'true';
+const _rlStore = new Map();
+const RL_MAX = 5;
+const RL_WINDOW_MS = 15 * 60 * 1000;
+
+function _rlCheck(key) {
+  const now = Date.now();
+  let entry = _rlStore.get(key);
+  if (!entry || now - entry.windowStart >= RL_WINDOW_MS) {
+    entry = { count: 0, windowStart: now };
+    _rlStore.set(key, entry);
+  }
+  entry.count++;
+  return entry.count > RL_MAX;
+}
+
+function rateLimit(...keyFns) {
+  return (req, res, next) => {
+    if (!RATE_LIMIT_ENABLED) return next();
+    const keys = keyFns.map(fn => fn(req)).filter(Boolean);
+    for (const key of keys) {
+      if (_rlCheck(key)) {
+        return res.status(429).json({ error: 'Demasiados intentos. Esperá 15 minutos e intentá de nuevo.' });
+      }
+    }
+    next();
+  };
+}
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/landing.html'));
 });
@@ -246,41 +298,45 @@ function requireAuth(req, res, next) {
   res.status(401).json({ error: 'No autenticado' });
 }
 
-app.post('/auth/register', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' });
-  if (password.length < 8) return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+app.post('/auth/register',
+  rateLimit(req => `reg:ip:${req.ip}`),
+  async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' });
+    if (password.length < 8) return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
 
-  const existing = getUserByEmail(email);
-  if (existing) return res.status(409).json({ error: 'Este email ya está registrado' });
+    const existing = getUserByEmail(email);
+    if (existing) return res.status(409).json({ error: 'Este email ya está registrado' });
 
-  try {
-    const hash = await bcrypt.hash(password, 12);
-    const user = createUser(email, hash);
-    req.session.userId = user.id;
-    res.json({ ok: true, email: user.email });
-    notifyAdmin('registration', { email }).catch(() => {});
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+    try {
+      const hash = await bcrypt.hash(password, 12);
+      const user = createUser(email, hash);
+      req.session.userId = user.id;
+      res.json({ ok: true, email: user.email });
+      notifyAdmin('registration', { email }).catch(() => {});
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
-app.post('/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' });
+app.post('/auth/login',
+  rateLimit(req => `login:ip:${req.ip}`, req => `login:email:${(req.body?.email || '').toLowerCase().trim()}`),
+  async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' });
 
-  const user = getUserByEmail(email);
-  if (!user) return res.status(401).json({ error: 'Credenciales incorrectas' });
+    const user = getUserByEmail(email);
+    if (!user) return res.status(401).json({ error: 'Credenciales incorrectas' });
 
-  try {
-    const match = await bcrypt.compare(password, user.password_hash);
-    if (!match) return res.status(401).json({ error: 'Credenciales incorrectas' });
-    req.session.userId = user.id;
-    res.json({ ok: true, email: user.email });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+    try {
+      const match = await bcrypt.compare(password, user.password_hash);
+      if (!match) return res.status(401).json({ error: 'Credenciales incorrectas' });
+      req.session.userId = user.id;
+      res.json({ ok: true, email: user.email });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
 app.post('/auth/logout', (req, res) => {
   req.session.destroy(() => {
@@ -328,22 +384,99 @@ app.patch('/api/business/wa-payment-confirmed', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-async function fetchAndSummarizeWebsite(url) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5000);
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    const html = await res.text();
-    const text = html
-      .replace(/<script[\s\S]*?<\/script>/gi, '')
-      .replace(/<style[\s\S]*?<\/style>/gi, '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    return await summarizeWebsite(text);
-  } finally {
-    clearTimeout(timer);
+// SSRF guard: returns the string error reason if the IP is blocked, null if OK.
+function _ssrfBlockedReason(ip) {
+  if (net.isIPv4(ip)) {
+    const parts = ip.split('.').map(Number);
+    const [a, b] = parts;
+    if (a === 127) return 'loopback';
+    if (a === 10) return 'private';
+    if (a === 172 && b >= 16 && b <= 31) return 'private';
+    if (a === 192 && b === 168) return 'private';
+    if (a === 169 && b === 254) return 'link-local';
+    if (a === 0) return 'reserved';
+    if (a === 100 && b >= 64 && b <= 127) return 'cgnat';
+    return null;
   }
+  if (net.isIPv6(ip)) {
+    const normalized = ip.toLowerCase();
+    // loopback, link-local, unique-local, site-local
+    if (normalized === '::1') return 'loopback';
+    if (normalized.startsWith('fe80:')) return 'link-local';
+    if (normalized.startsWith('fc') || normalized.startsWith('fd')) return 'private';
+    // IPv4-mapped: ::ffff:x.x.x.x
+    if (normalized.startsWith('::ffff:')) {
+      const v4 = normalized.slice(7);
+      if (net.isIPv4(v4)) return _ssrfBlockedReason(v4);
+    }
+    return null;
+  }
+  return 'unknown-family';
+}
+
+const SSRF_MAX_RESPONSE_BYTES = 2 * 1024 * 1024; // 2 MB
+const SSRF_MAX_REDIRECTS = 5;
+const SSRF_TIMEOUT_MS = 10_000;
+
+async function _validateSsrfUrl(rawUrl) {
+  let parsed;
+  try { parsed = new URL(rawUrl); } catch { throw new Error('URL inválida'); }
+  if (parsed.protocol !== 'https:') throw new Error('Solo se permiten URLs con HTTPS');
+  const hostname = parsed.hostname;
+  // Reject bare IPs
+  if (net.isIP(hostname)) {
+    const reason = _ssrfBlockedReason(hostname);
+    if (reason) throw new Error(`URL no permitida (${reason})`);
+  } else {
+    // DNS resolution to catch IP-based tricks
+    let address;
+    try { ({ address } = await dns.lookup(hostname, { family: 0 })); } catch { throw new Error('No se pudo resolver el host'); }
+    const reason = _ssrfBlockedReason(address);
+    if (reason) throw new Error(`URL no permitida (${reason})`);
+  }
+}
+
+async function fetchAndSummarizeWebsite(rawUrl) {
+  let currentUrl = rawUrl;
+  for (let redirect = 0; redirect <= SSRF_MAX_REDIRECTS; redirect++) {
+    await _validateSsrfUrl(currentUrl);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), SSRF_TIMEOUT_MS);
+    try {
+      const res = await fetch(currentUrl, {
+        signal: controller.signal,
+        redirect: 'manual',
+        headers: { 'User-Agent': 'DaxosBot/1.0' },
+      });
+      // Follow redirect manually so we can re-validate the new URL
+      if (res.status >= 300 && res.status < 400) {
+        const location = res.headers.get('location');
+        if (!location) throw new Error('Redirect sin destino');
+        currentUrl = new URL(location, currentUrl).href;
+        continue;
+      }
+      // Enforce response size limit
+      if (!res.body) throw new Error('Respuesta vacía');
+      const chunks = [];
+      let total = 0;
+      for await (const chunk of res.body) {
+        total += chunk.length;
+        if (total > SSRF_MAX_RESPONSE_BYTES) throw new Error('Respuesta demasiado grande');
+        chunks.push(chunk);
+      }
+      const html = Buffer.concat(chunks).toString('utf8');
+      const text = html
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[\s\S]*?<\/style>/gi, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return await summarizeWebsite(text);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw new Error('Demasiados redirects');
 }
 
 app.put('/api/business', requireAuth, async (req, res) => {
@@ -570,7 +703,7 @@ app.post('/api/business/voice/preview', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/debug/seed-conversations', requireAuth, (req, res) => {
+app.get('/api/debug/seed-conversations', requireAdmin, (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user?.business_id) return res.status(400).json({ error: 'No business_id' });
   const biz = user.business_id;
@@ -602,7 +735,7 @@ app.get('/api/debug/seed-conversations', requireAuth, (req, res) => {
   res.json({ ok: true, businessId: biz, conversationIds: created });
 });
 
-app.get('/api/debug/me', requireAuth, (req, res) => {
+app.get('/api/debug/me', requireAdmin, (req, res) => {
   const user = getUserById(req.session.userId);
   const convCount = user?.business_id
     ? getConversationsByBusinessId(user.business_id).length
@@ -2493,7 +2626,9 @@ app.get('/admin/negocio/:id', (req, res) => {
   res.sendFile(path.join(__dirname, 'views/admin/negocio.html'));
 });
 
-app.post('/admin/auth/login', async (req, res) => {
+app.post('/admin/auth/login',
+  rateLimit(req => `admin-login:ip:${req.ip}`),
+  async (req, res) => {
   const rawAdminEmail = process.env.ADMIN_EMAIL;
   if (!rawAdminEmail) return res.status(500).json({ error: 'ADMIN_EMAIL no configurado' });
   // Strip surrounding quotes and whitespace that Raw Editor in Railway may inject
@@ -2517,7 +2652,7 @@ app.post('/admin/auth/login', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
+  });
 
 app.post('/admin/auth/logout', (req, res) => {
   req.session.destroy(() => res.json({ ok: true }));

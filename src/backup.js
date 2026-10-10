@@ -1,5 +1,17 @@
 'use strict';
 
+// Wrap a promise with a hard timeout; rejects with a clear message if exceeded.
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`S3 upload timeout after ${ms}ms (${label})`)), ms)
+    ),
+  ]);
+}
+
+const S3_UPLOAD_TIMEOUT_MS = 2 * 60 * 1000; // 2 min per upload
+
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -127,13 +139,17 @@ async function runUploadsBackup(s3) {
     const tooSmall = !!(prevU && prevU.Size > 0 && tarSize < prevU.Size / 2);
 
     const key = uploadsKey();
-    await s3.send(new PutObjectCommand({
-      Bucket:        process.env.R2_BUCKET,
-      Key:           key,
-      Body:          fs.createReadStream(tmpTar),
-      ContentLength: tarSize,
-      ContentType:   'application/gzip',
-    }));
+    await withTimeout(
+      s3.send(new PutObjectCommand({
+        Bucket:        process.env.R2_BUCKET,
+        Key:           key,
+        Body:          fs.createReadStream(tmpTar),
+        ContentLength: tarSize,
+        ContentType:   'application/gzip',
+      })),
+      S3_UPLOAD_TIMEOUT_MS,
+      `uploads:${key}`
+    );
 
     console.log(`[backup-uploads-ok] key=${key} size=${tarSize}`);
 
@@ -215,13 +231,17 @@ async function runBackup() {
 
     // 5. Upload DB backup with ContentLength (R2 requires it for reliable streaming)
     const key = backupKey();
-    await s3.send(new PutObjectCommand({
-      Bucket:        process.env.R2_BUCKET,
-      Key:           key,
-      Body:          fs.createReadStream(tmpGz),
-      ContentLength: gzSize,
-      ContentType:   'application/gzip',
-    }));
+    await withTimeout(
+      s3.send(new PutObjectCommand({
+        Bucket:        process.env.R2_BUCKET,
+        Key:           key,
+        Body:          fs.createReadStream(tmpGz),
+        ContentLength: gzSize,
+        ContentType:   'application/gzip',
+      })),
+      S3_UPLOAD_TIMEOUT_MS,
+      `db:${key}`
+    );
 
     console.log(`[backup-ok] key=${key} size=${gzSize}`);
 
