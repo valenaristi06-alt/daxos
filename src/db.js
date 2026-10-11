@@ -34,6 +34,7 @@ const db = new Database(path.join(DB_DIR, 'daxos.db'));
 
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
+db.pragma('busy_timeout = 5000');
 
 // Non-businesses tables (no migration needed)
 db.exec(`
@@ -193,6 +194,9 @@ if (!bizCols.includes('wa_connected_at'))             db.exec('ALTER TABLE busin
 if (!bizCols.includes('silent_until'))               db.exec('ALTER TABLE businesses ADD COLUMN silent_until TEXT');
 
 db.exec('CREATE INDEX IF NOT EXISTS idx_messages_conv_time ON messages (conversation_id, created_at)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_conv_business ON conversations (business_id)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_conv_biz_cust  ON conversations (business_id, customer_id)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_biz_phone_id   ON businesses    (phone_number_id)');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS business_images (
@@ -452,7 +456,96 @@ db.exec(`
     console.log('[migration 009] wa_health_alerted_at added');
   }
 
+  if (!applied('010_lote3')) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS spending_counters (
+        business_id      INTEGER NOT NULL,
+        date             TEXT    NOT NULL,
+        anthropic_calls  INTEGER NOT NULL DEFAULT 0,
+        elevenlabs_chars INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (business_id, date)
+      )
+    `);
+    const convC10 = db.prepare('PRAGMA table_info(conversations)').all().map(c => c.name);
+    if (!convC10.includes('spending_cap_notified_at'))
+      db.exec('ALTER TABLE conversations ADD COLUMN spending_cap_notified_at INTEGER');
+    db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('010_lote3');
+    console.log('[migration 010] spending_counters + spending_cap_notified_at');
+  }
+
+  if (!applied('011_lote3_password_reset')) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash TEXT    NOT NULL UNIQUE,
+        expires_at TEXT    NOT NULL,
+        used       INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+    db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('011_lote3_password_reset');
+    console.log('[migration 011] password_reset_tokens');
+  }
+
 })();
+
+// --- spending caps ---
+
+function incrementAnthropicCall(businessId) {
+  const date = new Date().toISOString().slice(0, 10);
+  db.prepare(`
+    INSERT INTO spending_counters (business_id, date, anthropic_calls) VALUES (?, ?, 1)
+    ON CONFLICT(business_id, date) DO UPDATE SET anthropic_calls = anthropic_calls + 1
+  `).run(businessId, date);
+}
+
+function incrementElevenLabsChars(businessId, chars) {
+  const date = new Date().toISOString().slice(0, 10);
+  db.prepare(`
+    INSERT INTO spending_counters (business_id, date, elevenlabs_chars) VALUES (?, ?, ?)
+    ON CONFLICT(business_id, date) DO UPDATE SET elevenlabs_chars = elevenlabs_chars + ?
+  `).run(businessId, date, chars, chars);
+}
+
+function getSpendingToday(businessId) {
+  const date = new Date().toISOString().slice(0, 10);
+  return db.prepare(
+    'SELECT anthropic_calls, elevenlabs_chars FROM spending_counters WHERE business_id = ? AND date = ?'
+  ).get(businessId, date) || { anthropic_calls: 0, elevenlabs_chars: 0 };
+}
+
+function getConvAssistantCountLastHour(convId) {
+  const since = new Date(Date.now() - 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+  return (db.prepare(
+    `SELECT COUNT(*) as cnt FROM messages WHERE conversation_id = ? AND role = 'assistant' AND created_at >= ?`
+  ).get(convId, since) || { cnt: 0 }).cnt;
+}
+
+function setSpendingCapNotified(convId) {
+  db.prepare('UPDATE conversations SET spending_cap_notified_at = unixepoch() WHERE id = ?').run(convId);
+}
+
+// --- password reset ---
+
+function createPasswordResetToken(userId, tokenHash, expiresAt) {
+  db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ? AND used = 0').run(userId);
+  db.prepare(
+    'INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)'
+  ).run(userId, tokenHash, expiresAt);
+}
+
+function getPasswordResetToken(tokenHash) {
+  return db.prepare('SELECT * FROM password_reset_tokens WHERE token_hash = ?').get(tokenHash) || null;
+}
+
+function markPasswordResetTokenUsed(id) {
+  db.prepare('UPDATE password_reset_tokens SET used = 1 WHERE id = ?').run(id);
+}
+
+function changeUserPassword(userId, passwordHash) {
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, userId);
+}
 
 // --- businesses ---
 
@@ -748,7 +841,19 @@ const stmtGetTagsForConversation = db.prepare(`
 
 function getConversationsByBusinessId(businessId) {
   const convs = stmtGetConversationsByBusiness.all(businessId);
-  return convs.map(c => ({ ...c, tags: stmtGetTagsForConversation.all(c.id) }));
+  if (convs.length === 0) return [];
+  const placeholders = convs.map(() => '?').join(',');
+  const allTags = db.prepare(
+    `SELECT ct.conversation_id, t.id, t.name, t.color
+     FROM conversation_tags ct JOIN tags t ON t.id = ct.tag_id
+     WHERE ct.conversation_id IN (${placeholders})`
+  ).all(...convs.map(c => c.id));
+  const byConv = new Map();
+  for (const r of allTags) {
+    if (!byConv.has(r.conversation_id)) byConv.set(r.conversation_id, []);
+    byConv.get(r.conversation_id).push({ id: r.id, name: r.name, color: r.color });
+  }
+  return convs.map(c => ({ ...c, tags: byConv.get(c.id) || [] }));
 }
 
 function getTagsByBusiness(businessId) {
@@ -1394,6 +1499,15 @@ module.exports = {
   setWaHealthAlertedAt,
   clearWaHealthAlertedAt,
   purgeOldErrorLog,
+  incrementAnthropicCall,
+  incrementElevenLabsChars,
+  getSpendingToday,
+  getConvAssistantCountLastHour,
+  setSpendingCapNotified,
+  createPasswordResetToken,
+  getPasswordResetToken,
+  markPasswordResetTokenUsed,
+  changeUserPassword,
 };
 
 function setWeeklySummaryEnabled(businessId, enabled) {

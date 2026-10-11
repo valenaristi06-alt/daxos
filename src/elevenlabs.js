@@ -2,6 +2,18 @@ require('dotenv').config({ path: '.env.local' });
 
 const { convertToMp3 } = require('./audio');
 
+const EL_TIMEOUT_MS = 15_000;
+
+async function fetchWithTimeout(url, opts) {
+  const ac = new AbortController();
+  const tid = setTimeout(() => ac.abort(), EL_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...opts, signal: ac.signal });
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
 const API_KEY = process.env.ELEVENLABS_API_KEY;
 const TTS_MODEL = process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2';
 const BASE = 'https://api.elevenlabs.io/v1';
@@ -21,7 +33,7 @@ async function cloneVoice(name, fileBuffer) {
   form.append('description', `Voz clonada para negocio: ${name}`);
   form.append('files', new Blob([mp3Buffer], { type: 'audio/mpeg' }), 'voice-sample.mp3');
 
-  const res = await fetch(`${BASE}/voices/add`, {
+  const res = await fetchWithTimeout(`${BASE}/voices/add`, {
     method: 'POST',
     headers: { 'xi-api-key': API_KEY },
     body: form,
@@ -59,7 +71,7 @@ function ttsBody(text) {
 async function generatePreview(voiceId) {
   requireKey();
 
-  const res = await fetch(`${BASE}/text-to-speech/${voiceId}`, {
+  const res = await fetchWithTimeout(`${BASE}/text-to-speech/${voiceId}`, {
     method: 'POST',
     headers: { 'xi-api-key': API_KEY, 'Accept': 'audio/mpeg', 'Content-Type': 'application/json' },
     body: ttsBody('Hola, así sonará tu asistente de ventas. ¿En qué te puedo ayudar hoy?'),
@@ -84,7 +96,7 @@ async function generateAudioBuffer(voiceId, text) {
     return _audioCache.get(cacheKey);
   }
 
-  const res = await fetch(`${BASE}/text-to-speech/${voiceId}`, {
+  const res = await fetchWithTimeout(`${BASE}/text-to-speech/${voiceId}`, {
     method: 'POST',
     headers: { 'xi-api-key': API_KEY, 'Accept': 'audio/mpeg', 'Content-Type': 'application/json' },
     body: ttsBody(text),
@@ -105,7 +117,7 @@ async function generateAudioBuffer(voiceId, text) {
 
 async function deleteVoice(voiceId) {
   requireKey();
-  const res = await fetch(`${BASE}/voices/${voiceId}`, {
+  const res = await fetchWithTimeout(`${BASE}/voices/${voiceId}`, {
     method: 'DELETE',
     headers: { 'xi-api-key': API_KEY },
   });

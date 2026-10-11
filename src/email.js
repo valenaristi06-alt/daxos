@@ -417,4 +417,31 @@ async function sendWaHealthRecoveryEmail({ adminEmail, ownerEmail, businessName,
   if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
 }
 
-module.exports = { sendPauseEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail };
+async function sendPasswordResetEmail({ to, resetUrl }) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) { console.warn('[resend] RESEND_API_KEY not set, skipping password reset email'); return; }
+  const body = {
+    from: 'Daxos <notificaciones@daxos.lat>',
+    to: [to],
+    subject: 'Restablecer contraseña — Daxos',
+    html: `
+      <p>Hola,</p>
+      <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta en Daxos.</p>
+      <p>Si no fuiste vos, ignorá este email — tu contraseña no va a cambiar.</p>
+      <p>
+        <a href="${escapeHtml(resetUrl)}" style="background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:8px">
+          Restablecer contraseña
+        </a>
+      </p>
+      <p style="color:#666;font-size:12px">El enlace vence en 1 hora.</p>
+    `,
+  };
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
+}
+
+module.exports = { sendPauseEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail };

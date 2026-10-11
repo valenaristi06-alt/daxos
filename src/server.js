@@ -14,6 +14,24 @@ const TRIAL_GRACE_CONVS = 25;
 const TRIAL_WARN_DAYS   = 11;
 const TRIAL_GRACE_HOURS = 72;
 const AUDIO_MAX_CHARS   = 600;
+
+// Spending cap defaults per plan (overridable via runtime_config)
+const _CAP_ANTHROPIC = { arranque: 300, crecimiento: 2000, a_medida: 10000 };
+const _CAP_TTS_CHARS = { arranque: 20000, crecimiento: 100000, a_medida: 500000 };
+const _CAP_CONV_HOURLY = 8;
+
+function _getAnthropicDailyCap(plan) {
+  const override = getRuntimeConfig ? (() => { try { return getRuntimeConfig(`cap_daily_anthropic_${plan}`); } catch { return null; } })() : null;
+  return override ? parseInt(override, 10) : (_CAP_ANTHROPIC[plan] ?? 300);
+}
+function _getTtsDailyCap(plan) {
+  const override = getRuntimeConfig ? (() => { try { return getRuntimeConfig(`cap_daily_tts_${plan}`); } catch { return null; } })() : null;
+  return override ? parseInt(override, 10) : (_CAP_TTS_CHARS[plan] ?? 20000);
+}
+function _getConvHourlyCap() {
+  const override = getRuntimeConfig ? (() => { try { return getRuntimeConfig('cap_conv_hourly'); } catch { return null; } })() : null;
+  return override ? parseInt(override, 10) : _CAP_CONV_HOURLY;
+}
 // Matches the same rule as src/whatsapp.js: Railway always sets RAILWAY_ENVIRONMENT even when NODE_ENV is absent.
 const IS_PROD = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT;
 
@@ -30,7 +48,10 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog } = require('./db');
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
+  incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
+  getConvAssistantCountLastHour, setSpendingCapNotified,
+  createPasswordResetToken, getPasswordResetToken, markPasswordResetTokenUsed, changeUserPassword } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -43,7 +64,7 @@ initAnthropicKey(_apiKey);
 const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = require('./bookings');
 const { sendWeeklySummaries } = require('./weekly');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
-const { sendPauseEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail } = require('./email');
+const { sendPauseEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail } = require('./email');
 const { runBackup, maybeScheduledBackup, maybeSilenceAlert, startupBackupCheck, getLatestBackupMeta, listAllBackups } = require('./backup');
 
 const upload = multer({
@@ -147,13 +168,38 @@ function pruneImgMaps(currentHourKey) {
 }
 
 function detectMimeFromBytes(buf) {
-  if (buf.length >= 3 && buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return 'image/jpeg';
-  if (buf.length >= 8 &&
-      buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47 &&
-      buf[4] === 0x0D && buf[5] === 0x0A && buf[6] === 0x1A && buf[7] === 0x0A) return 'image/png';
-  if (buf.length >= 12 &&
-      buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
-      buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return 'image/webp';
+  if (!buf || buf.length < 4) return null;
+  // Images
+  if (buf[0]===0xFF && buf[1]===0xD8 && buf[2]===0xFF) return 'image/jpeg';
+  if (buf.length>=8 && buf[0]===0x89 && buf[1]===0x50 && buf[2]===0x4E && buf[3]===0x47 &&
+      buf[4]===0x0D && buf[5]===0x0A && buf[6]===0x1A && buf[7]===0x0A) return 'image/png';
+  if (buf.length>=12 && buf[0]===0x52 && buf[1]===0x49 && buf[2]===0x46 && buf[3]===0x46 &&
+      buf[8]===0x57 && buf[9]===0x45 && buf[10]===0x42 && buf[11]===0x50) return 'image/webp';
+  // PDF
+  if (buf[0]===0x25 && buf[1]===0x50 && buf[2]===0x44 && buf[3]===0x46) return 'application/pdf';
+  // Audio: OGG
+  if (buf[0]===0x4F && buf[1]===0x67 && buf[2]===0x67 && buf[3]===0x53) return 'audio/ogg';
+  // Audio: RIFF/WAVE
+  if (buf.length>=12 && buf[0]===0x52 && buf[1]===0x49 && buf[2]===0x46 && buf[3]===0x46 &&
+      buf[8]===0x57 && buf[9]===0x41 && buf[10]===0x56 && buf[11]===0x45) return 'audio/wav';
+  // Audio: MP3 — ID3 tag
+  if (buf[0]===0x49 && buf[1]===0x44 && buf[2]===0x33) return 'audio/mpeg';
+  // Audio: MP3 — sync word
+  if (buf[0]===0xFF && (buf[1]===0xFB || buf[1]===0xF3 || buf[1]===0xF2 || buf[1]===0xFA)) return 'audio/mpeg';
+  // Audio: M4A/MP4 — ftyp at offset 4
+  if (buf.length>=12 && buf[4]===0x66 && buf[5]===0x74 && buf[6]===0x79 && buf[7]===0x70) return 'audio/mp4';
+  // ZIP-based (DOCX, XLSX, PPTX)
+  if (buf[0]===0x50 && buf[1]===0x4B && buf[2]===0x03 && buf[3]===0x04) return 'application/zip';
+  return null;
+}
+
+// Returns error string if magic bytes don't match expected prefixes; null if ok.
+function validateUploadBytes(buffer, allowedPrefixes) {
+  const detected = detectMimeFromBytes(buffer);
+  if (!detected) return null; // unknown type — allow (text files, etc.)
+  if (!allowedPrefixes.some(p => detected.startsWith(p))) {
+    return `Tipo de archivo detectado como "${detected}", se esperaba ${allowedPrefixes.join(' o ')}.`;
+  }
   return null;
 }
 
@@ -306,7 +352,10 @@ app.post('/auth/register',
     if (password.length < 8) return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
 
     const existing = getUserByEmail(email);
-    if (existing) return res.status(409).json({ error: 'Este email ya está registrado' });
+    if (existing) {
+      // No enumeration: return 200 without creating session — user must log in
+      return res.json({ ok: true, email });
+    }
 
     try {
       const hash = await bcrypt.hash(password, 12);
@@ -315,7 +364,8 @@ app.post('/auth/register',
       res.json({ ok: true, email: user.email });
       notifyAdmin('registration', { email }).catch(() => {});
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      logError('register-error', { message: err.message, stack: err.stack || '' });
+      res.status(500).json({ error: 'Error al crear la cuenta. Intentá de nuevo.' });
     }
   });
 
@@ -342,6 +392,59 @@ app.post('/auth/logout', (req, res) => {
   req.session.destroy(() => {
     res.json({ ok: true });
   });
+});
+
+const FORGOT_GENERIC = { ok: true, message: 'Si ese email está registrado, vas a recibir un enlace para restablecer tu contraseña.' };
+
+app.post('/auth/forgot-password',
+  rateLimit(req => `forgot:ip:${req.ip}`, req => `forgot:email:${(req.body?.email || '').toLowerCase().trim()}`),
+  async (req, res) => {
+    const { email } = req.body || {};
+    if (!email) return res.json(FORGOT_GENERIC);
+    const user = getUserByEmail(email.toLowerCase().trim());
+    if (user) {
+      try {
+        const token = crypto.randomBytes(32).toString('hex');
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+        createPasswordResetToken(user.id, tokenHash, expiresAt);
+        const appUrl = process.env.APP_URL || 'https://daxos.lat';
+        const resetUrl = `${appUrl}/reset-password.html?token=${token}`;
+        await sendPasswordResetEmail({ to: user.email, resetUrl })
+          .catch(err => logError('forgot-password-email', { message: err.message, stack: '' }));
+      } catch (err) {
+        logError('forgot-password', { message: err.message, stack: err.stack || '' });
+      }
+    }
+    res.json(FORGOT_GENERIC);
+  }
+);
+
+app.post('/auth/reset-password',
+  rateLimit(req => `reset:ip:${req.ip}`),
+  async (req, res) => {
+    const { token, password } = req.body || {};
+    if (!token || !password) return res.status(400).json({ error: 'Token y contraseña requeridos.' });
+    if (password.length < 8) return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const tokenRow = getPasswordResetToken(tokenHash);
+    if (!tokenRow || tokenRow.used || new Date(tokenRow.expires_at) < new Date()) {
+      return res.status(400).json({ error: 'El enlace es inválido o ya expiró.' });
+    }
+    try {
+      const hash = await bcrypt.hash(password, 12);
+      changeUserPassword(tokenRow.user_id, hash);
+      markPasswordResetTokenUsed(tokenRow.id);
+      res.json({ ok: true });
+    } catch (err) {
+      logError('reset-password', { message: err.message, stack: err.stack || '' });
+      res.status(500).json({ error: 'Error al actualizar la contraseña.' });
+    }
+  }
+);
+
+app.get('/reset-password', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/reset-password.html'));
 });
 
 app.get('/auth/me', requireAuth, (req, res) => {
@@ -648,6 +751,9 @@ app.post('/api/business/voice', requireAuth, upload.single('audio'), async (req,
   if (!req.file) {
     return res.status(400).json({ error: 'Archivo de audio requerido.' });
   }
+  // Reject files that are clearly not audio (images, PDF, etc.)
+  const audioMagicErr = validateUploadBytes(req.file.buffer, ['audio/']);
+  if (audioMagicErr) return res.status(400).json({ error: 'El archivo no parece ser de audio.' });
 
   const user = getUserById(req.session.userId);
   if (!user.business_id) {
@@ -904,6 +1010,8 @@ app.post('/api/business/document', requireAuth, documentUpload.single('document'
   const user = getUserById(req.session.userId);
   if (!user.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
   if (!req.file) return res.status(400).json({ error: 'No se recibió ningún archivo.' });
+  const magicErr = validateUploadBytes(req.file.buffer, ['application/pdf']);
+  if (magicErr) return res.status(400).json({ error: magicErr });
 
   const destPath = path.join(__dirname, '../data/uploads', `doc-${user.business_id}.pdf`);
 
@@ -953,6 +1061,10 @@ app.post('/api/business/images', requireAuth, imageUpload.single('image'), async
   const user = getUserById(req.session.userId);
   if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   if (!req.file) return res.status(400).json({ error: 'Archivo requerido.' });
+  const detectedImg = detectMimeFromBytes(req.file.buffer);
+  if (!['image/jpeg', 'image/png'].includes(detectedImg)) {
+    return res.status(400).json({ error: 'Tipo de imagen inválido. Solo se aceptan JPG o PNG.' });
+  }
 
   const label = (req.body.label || '').trim();
   if (!label) return res.status(400).json({ error: 'El label es requerido.' });
@@ -994,6 +1106,10 @@ app.post('/api/business/documents', requireAuth, scriptUpload.single('doc'), asy
   const user = getUserById(req.session.userId);
   if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   if (!req.file) return res.status(400).json({ error: 'Sin archivo.' });
+  // Reject files that are clearly not document types (images, audio, etc.)
+  const scriptMagicErr = validateUploadBytes(req.file.buffer,
+    ['application/pdf', 'application/zip', 'text/']);
+  if (scriptMagicErr) return res.status(400).json({ error: scriptMagicErr });
 
   const docName = (req.body.name || '').trim();
   if (!docName) return res.status(400).json({ error: 'El nombre del documento es requerido.' });
@@ -1041,6 +1157,13 @@ app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
   if (!message || !message.trim()) return res.status(400).json({ error: 'Mensaje vacío.' });
 
   try {
+    // Daily Anthropic cap check for preview
+    if (!business.plan_cortesia) {
+      const sp = getSpendingToday(business.id);
+      if (sp.anthropic_calls >= _getAnthropicDailyCap(business.plan)) {
+        return res.status(429).json({ error: 'Límite diario de llamadas alcanzado. El bot pausó automáticamente.' });
+      }
+    }
     const previewCtx = {
       now:       getMvdDate(),
       needsHuman: false,
@@ -1048,6 +1171,7 @@ app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
       documents: getBusinessDocumentTexts(user.business_id),
     };
     const rawReply = await generateReply(business, history, message.trim(), null, null, previewCtx);
+    incrementAnthropicCall(business.id);
     let sent_doc = false;
     let needs_human = false;
     let reply = rawReply;
@@ -1607,7 +1731,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     const matched = keywords.find(k => normText.includes(k));
     if (matched) {
       logError('pause-keyword', {
-        message: `business_id=${business.id} conv_id=${conversation.id} keyword="${matched}" text="${text.slice(0, 120)}"`,
+        message: `business_id=${business.id} conv_id=${conversation.id} keyword="${matched}"`,
         stack: '',
       });
       addMessage(conversation.id, 'user', text);
@@ -1633,6 +1757,43 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   markAsRead(msgId, waCredentials).catch(() => {});
   sendTypingIndicator(customerPhone, waCredentials).catch(() => {});
 
+  // Spending cap check (skip for plan_cortesia)
+  if (!business.plan_cortesia) {
+    const spending    = getSpendingToday(business.id);
+    const dailyCap    = _getAnthropicDailyCap(business.plan);
+    const hourlyCap   = _getConvHourlyCap();
+    const hourlyCount = getConvAssistantCountLastHour(conversation.id);
+    const hitDaily    = spending.anthropic_calls >= dailyCap;
+    const hitHourly   = hourlyCount >= hourlyCap;
+    if (hitDaily || hitHourly) {
+      const reason = hitDaily ? 'daily_cap' : 'conv_hourly_cap';
+      logError('spending-cap', {
+        message: `biz=${business.id} plan=${business.plan} reason=${reason} calls=${spending.anthropic_calls}/${dailyCap} hourly=${hourlyCount}/${hourlyCap}`,
+        stack: '',
+      });
+      const nowSec = Math.floor(Date.now() / 1000);
+      const lastNotified = conversation.spending_cap_notified_at || 0;
+      if (nowSec - lastNotified > 12 * 3600) {
+        const capMsg = 'Nuestro asistente alcanzó el límite de respuestas de hoy. Alguien te va a contestar pronto.';
+        sendWhatsAppMessage(customerPhone, capMsg, waCredentials).catch(() => {});
+        addMessage(conversation.id, 'user', text);
+        addMessage(conversation.id, 'assistant', capMsg);
+        setSpendingCapNotified(conversation.id);
+        const adminEmail = process.env.ADMIN_EMAIL;
+        if (adminEmail) {
+          sendAdminNotificationEmail({ adminEmail, event: 'spending-cap', data: {
+            business_id: business.id, business_name: business.name, reason,
+            calls_today: spending.anthropic_calls, daily_cap: dailyCap,
+          }}).catch(() => {});
+        }
+      } else {
+        addMessage(conversation.id, 'user', text);
+      }
+      markAsRead(msgId, waCredentials).catch(() => {});
+      return;
+    }
+  }
+
   // Generate reply and enforce minimum delay in parallel
   const delayMs = (business.response_delay ?? 5) * 1000;
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -1641,7 +1802,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   const businessDocs   = getBusinessDocumentTexts(business.id);
   const runtimeCtx = { now: getMvdDate(), needsHuman: !!conversation.needs_human, images: businessImages, documents: businessDocs };
   logError('webhook-claude-call', {
-    message: `business_id=${business.id} customer=${customerPhone} text=${text.slice(0, 100)}`,
+    message: `business_id=${business.id} customer=****${customerPhone.slice(-4)}`,
     stack: '',
   });
   let rawReply;
@@ -1654,8 +1815,20 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
       sleep(delayMs),
     ]);
     logError('webhook-claude-ok', { message: `business_id=${business.id} reply_length=${rawReply.length}`, stack: '' });
+    incrementAnthropicCall(business.id);
   } catch (claudeErr) {
     logError('webhook-claude-error', claudeErr);
+    // Send fallback message once (not if already needs_attention to avoid looping)
+    if (!conversation.needs_attention) {
+      const fallbackMsg = 'Dame un momento y te respondemos enseguida.';
+      sendWhatsAppMessage(customerPhone, fallbackMsg, waCredentials).catch(() => {});
+      addMessage(conversation.id, 'user', text);
+      addMessage(conversation.id, 'assistant', fallbackMsg);
+      markConversationPaused(conversation.id);
+    } else {
+      addMessage(conversation.id, 'user', text);
+    }
+    markAsRead(msgId, waCredentials).catch(() => {});
     return;
   }
 
@@ -1813,18 +1986,23 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   const isFirstMessage = history.length === 0;
   const wantsAudio = business.response_mode === 'audio' ||
                      (business.response_mode === 'audio_key' && isFirstMessage);
+  // TTS daily chars cap check
+  const ttsDailyCap = !business.plan_cortesia ? _getTtsDailyCap(business.plan) : Infinity;
+  const ttsSpending = getSpendingToday(business.id);
+  const ttsCapHit   = ttsDailyCap !== Infinity && (ttsSpending.elevenlabs_chars + reply.length > ttsDailyCap);
   try {
-    if (wantsAudio && business.voice_id && planAllowsAudio && replyFitsAudio) {
+    if (wantsAudio && business.voice_id && planAllowsAudio && replyFitsAudio && !ttsCapHit) {
       try {
-        logError('tts-text', { message: `business_id=${business.id} text=${JSON.stringify(reply)}`, stack: '' });
+        logError('tts-text', { message: `business_id=${business.id} chars=${reply.length}`, stack: '' });
         const mp3 = await generateAudioBuffer(business.voice_id, reply);
         try { setClaudeUsageTtsChars(getLastClaudeUsageId(conversation.id), reply.length); } catch (_) {}
+        try { incrementElevenLabsChars(business.id, reply.length); } catch (_) {}
         logError('tts-buffers', { message: `mp3=${mp3.length}b`, stack: '' });
         const ogg = await convertToOgg(mp3);
         logError('tts-buffers', { message: `ogg=${ogg.length}b mime=audio/ogg; codecs=opus`, stack: '' });
         const mediaId = await uploadMedia(ogg, 'reply.ogg', 'audio/ogg; codecs=opus', waCredentials);
         await sendWhatsAppAudio(customerPhone, mediaId, waCredentials);
-        logError(sendCtxOk, { message: `mode=audio business_id=${business.id} to=${customerPhone}`, stack: '' });
+        logError(sendCtxOk, { message: `mode=audio business_id=${business.id} to=****${customerPhone.slice(-4)}`, stack: '' });
       } catch (audioErr) {
         logError('webhook-audio-fallback', { message: audioErr.message, stack: audioErr.stack || '' });
         const sendResult = await sendWhatsAppMessage(customerPhone, reply, waCredentials);
