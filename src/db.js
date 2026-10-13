@@ -593,11 +593,13 @@ function saveWabaCredentials(businessId, { wabaId, phoneNumberId, accessToken = 
 }
 
 function clearWabaCredentials(businessId) {
-  const prev = db.prepare('SELECT phone_number_id, waba_id, wa_provider, wa_connected_at FROM businesses WHERE id = ?').get(businessId);
+  const prev = db.prepare('SELECT phone_number_id, waba_id, wa_provider, wa_connected_at, kapso_customer_id, kapso_setup_link_id FROM businesses WHERE id = ?').get(businessId);
   db.prepare(`
     UPDATE businesses
     SET phone_number_id = NULL, waba_id = NULL, wa_access_token = NULL, wa_provider = 'meta',
-        wa_connected_at = NULL
+        wa_connected_at = NULL,
+        kapso_customer_id = NULL, kapso_setup_link_id = NULL,
+        kapso_connect_started_at = NULL, kapso_incomplete_alerted_at = NULL
     WHERE id = ?
   `).run(businessId);
   return prev || null;
