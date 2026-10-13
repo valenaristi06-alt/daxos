@@ -744,7 +744,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         </li>`;
 
       const metaUrl = 'https://business.facebook.com/latest/settings/whatsapp_account' +
-        (b.waba_id ? '?selected_asset_id=' + b.waba_id + '&selected_asset_type=whatsapp-business-account' : '');
+        (b?.waba_id ? '?selected_asset_id=' + b.waba_id + '&selected_asset_type=whatsapp-business-account' : '');
 
       const paymentCard = `
         <li class="activation-step">

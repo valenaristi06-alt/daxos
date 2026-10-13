@@ -16,13 +16,13 @@ const TRIAL_GRACE_HOURS = 72;
 const AUDIO_MAX_CHARS   = 600;
 
 // Spending cap defaults per plan (overridable via runtime_config)
-const _CAP_ANTHROPIC = { arranque: 300, crecimiento: 2000, a_medida: 10000 };
+const _CAP_ANTHROPIC = { arranque: 200, crecimiento: 600, a_medida: 1500 };
 const _CAP_TTS_CHARS = { arranque: 20000, crecimiento: 100000, a_medida: 500000 };
 const _CAP_CONV_HOURLY = 8;
 
 function _getAnthropicDailyCap(plan) {
   const override = getRuntimeConfig ? (() => { try { return getRuntimeConfig(`cap_daily_anthropic_${plan}`); } catch { return null; } })() : null;
-  return override ? parseInt(override, 10) : (_CAP_ANTHROPIC[plan] ?? 300);
+  return override ? parseInt(override, 10) : (_CAP_ANTHROPIC[plan] ?? 200);
 }
 function _getTtsDailyCap(plan) {
   const override = getRuntimeConfig ? (() => { try { return getRuntimeConfig(`cap_daily_tts_${plan}`); } catch { return null; } })() : null;
