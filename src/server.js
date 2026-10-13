@@ -471,6 +471,7 @@ app.get('/api/config', (req, res) => {
     metaAppId: process.env.META_APP_ID || null,
     // TODO: reemplazar cuando se apruebe la Verificación de acceso en Meta Business Manager
     whatsappConfigId: process.env.WHATSAPP_CONFIG_ID || null,
+    metaEsConfigId: process.env.META_ES_CONFIG_ID || null,
   });
 });
 
@@ -2995,6 +2996,10 @@ app.post('/auth/whatsapp/callback', requireAuth, async (req, res) => {
 
     if (!subRes.ok) {
       console.error('[whatsapp-callback] subscribed_apps failed:', subData);
+      logError('whatsapp-sub-failed', {
+        message: `business_id=${business_id} waba_id=${waba_id} status=${subRes.status} detail=${JSON.stringify(subData).slice(0, 200)}`,
+        stack: '',
+      });
     }
 
     // 3. Persist credentials (access token encrypted at rest)

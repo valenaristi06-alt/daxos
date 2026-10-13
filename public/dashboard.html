@@ -1834,6 +1834,42 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
     }
 
     let pendingEsCode = null;
+    let pendingEsData = null; // { waba_id, phone_number_id }
+
+    async function trySubmitEsConnection() {
+      if (!pendingEsCode || !pendingEsData) return;
+      const { waba_id, phone_number_id } = pendingEsData;
+      const code = pendingEsCode;
+      const errEl = document.getElementById('wa-connect-error');
+      const btn   = document.getElementById('btn-wa-connect');
+      try {
+        const r = await fetch('/auth/whatsapp/callback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, waba_id, phone_number_id, business_id: currentBusiness?.id }),
+        });
+        const result = await r.json();
+        if (!r.ok) throw new Error(result.error || 'Error desconocido');
+        if (!result.subscribed) {
+          toast('WhatsApp guardado ✓', 'ok');
+          errEl.textContent = 'Tu WhatsApp se guardó pero la activación del bot no se completó. Esperá unos minutos y si sigue sin funcionar, escribinos al 092 052 508.';
+          errEl.style.display = 'block';
+        } else {
+          toast('WhatsApp conectado correctamente ✓', 'ok');
+          errEl.style.display = 'none';
+        }
+        currentBusiness = { ...currentBusiness, phone_number_id, waba_id };
+        renderWaConnectionStatus(currentBusiness);
+      } catch (err) {
+        errEl.textContent = `Error al guardar la conexión: ${err.message}`;
+        errEl.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        pendingEsCode = null;
+        pendingEsData = null;
+      }
+    }
+
     window.addEventListener('message', async function (event) {
       if (!event.origin.endsWith('.facebook.com') && !event.origin.endsWith('.meta.com')) return;
       let data;
@@ -1849,47 +1885,22 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
 
       if (data.event === 'FINISH') {
         const { phone_number_id, waba_id } = data.data;
-        if (!pendingEsCode || !waba_id || !phone_number_id) {
+        if (!waba_id || !phone_number_id) {
           errEl.textContent = 'No pudimos completar la conexión con WhatsApp. Cerrá la ventana e intentá de nuevo.';
           errEl.style.display = 'block';
           btn.disabled = false;
           return;
         }
-        try {
-          const r = await fetch('/auth/whatsapp/callback', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              code: pendingEsCode,
-              waba_id,
-              phone_number_id,
-              business_id: currentBusiness?.id,
-            }),
-          });
-          const result = await r.json();
-          if (!r.ok) throw new Error(result.error || 'Error desconocido');
-          toast('WhatsApp conectado correctamente ✓', 'ok');
-          errEl.style.display = 'none';
-          // Actualiza estado sin recargar la página
-          currentBusiness = { ...currentBusiness, phone_number_id, waba_id: waba_id };
-          renderWaConnectionStatus(currentBusiness);
-        } catch (err) {
-          errEl.textContent = `Error al guardar la conexión: ${err.message}`;
-          errEl.style.display = 'block';
-        } finally {
-          btn.disabled = false;
-          pendingEsCode = null;
-        }
+        pendingEsData = { waba_id, phone_number_id };
+        trySubmitEsConnection();
       } else if (data.event === 'CANCEL') {
         errEl.textContent = 'Conectaste el WhatsApp pero cancelaste antes de terminar. Volvé a intentarlo para completar la conexión.';
         errEl.style.display = 'block';
         btn.disabled = false;
-        pendingEsCode = null;
       } else if (data.event === 'ERROR') {
         errEl.textContent = 'Hubo un error al conectar tu WhatsApp. Cerrá la ventana e intentá de nuevo.';
         errEl.style.display = 'block';
         btn.disabled = false;
-        pendingEsCode = null;
       }
     });
 
@@ -1904,7 +1915,37 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         document.getElementById('wa-connect-error').style.display = 'block';
         return;
       }
-      window.location.href = '/antes-de-conectar.html';
+      if (currentBusiness.wa_provider === 'kapso') {
+        window.location.href = '/antes-de-conectar.html';
+        return;
+      }
+      const configId = metaConfig.metaEsConfigId;
+      if (!configId) {
+        document.getElementById('wa-connect-error').textContent = 'Configuración de Meta no disponible. Intentá más tarde o escribinos al 092 052 508.';
+        document.getElementById('wa-connect-error').style.display = 'block';
+        return;
+      }
+      pendingEsCode = null;
+      pendingEsData = null;
+      document.getElementById('wa-connect-error').style.display = 'none';
+      this.disabled = true;
+      FB.login(function (response) {
+        if (response.authResponse?.code) {
+          pendingEsCode = response.authResponse.code;
+          trySubmitEsConnection();
+        } else {
+          document.getElementById('btn-wa-connect').disabled = false;
+        }
+      }, {
+        config_id: configId,
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: {
+          setup: {},
+          featureType: 'whatsapp_business_app_onboarding',
+          sessionInfoVersion: '3',
+        },
+      });
     });
 
     // Resultado de redirección Kapso (?wa=ok / ?wa=error)
