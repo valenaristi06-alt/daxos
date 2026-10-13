@@ -305,8 +305,10 @@ async function main() {
   // ── Summary ──
   console.log(`\n${'─'.repeat(50)}`);
   console.log(`Results: ${passed} passed, ${failed} failed`);
-  if (failed > 0) { console.error('SOME TESTS FAILED'); process.exitCode = 1; }
+  if (failed > 0) { console.error('SOME TESTS FAILED'); }
   else             { console.log('ALL TESTS PASSED'); }
+  cleanup();
+  process.exit(failed > 0 ? 1 : 0);
 }
 
-main().catch(err => { console.error('Fatal:', err); process.exitCode = 1; });
+main().catch(err => { console.error('Fatal:', err); cleanup(); process.exit(1); });

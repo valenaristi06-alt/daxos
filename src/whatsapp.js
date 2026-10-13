@@ -5,6 +5,27 @@ const IS_PROD = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_E
 // KAPSO_API_BASE_URL and KAPSO_TEST_ALLOW_LOCALHOST are only honoured outside production.
 const KAPSO_BASE = (!IS_PROD && process.env.KAPSO_API_BASE_URL) || 'https://api.kapso.ai/meta/whatsapp/v24.0';
 
+// For Meta calls: try bizToken (or systemToken if absent); on token error, retry once with META_SYSTEM_TOKEN.
+// optionsOrFactory: plain options object (JSON body), or () => options (for FormData — stream can't be reused).
+// Token errors: HTTP 401, or HTTP 400 with error.code 190 (expired token).
+async function metaFetch(url, optionsOrFactory, bizToken, logTag) {
+  const systemToken = process.env.META_SYSTEM_TOKEN;
+  const token = bizToken || systemToken;
+  if (!token) throw new Error('meta: no access token available');
+  const makeOpts = typeof optionsOrFactory === 'function' ? optionsOrFactory : () => optionsOrFactory;
+  const inject = (t) => { const o = makeOpts(); return { ...o, headers: { ...o.headers, 'Authorization': `Bearer ${t}` } }; };
+  const res = await fetch(url, inject(token));
+  let isTokenError = res.status === 401;
+  if (!isTokenError && res.status === 400) {
+    try { isTokenError = (await res.clone().json())?.error?.code === 190; } catch {}
+  }
+  if (isTokenError && bizToken && systemToken && bizToken !== systemToken) {
+    console.error(`[meta-token-fallback] ${logTag}: token error (status=${res.status}), retrying with META_SYSTEM_TOKEN`);
+    return fetch(url, inject(systemToken));
+  }
+  return res;
+}
+
 function getApiConfig({ provider, accessToken }) {
   if (provider === 'kapso') {
     const key = process.env.KAPSO_API_KEY || '';
@@ -13,19 +34,21 @@ function getApiConfig({ provider, accessToken }) {
       mediaUrl:    (phoneNumberId) => `${KAPSO_BASE}/${phoneNumberId}/media`,
       jsonHeaders: { 'X-API-Key': key, 'Content-Type': 'application/json' },
       formHeaders: { 'X-API-Key': key },
+      doFetch: (url, optionsOrFactory) => fetch(url, typeof optionsOrFactory === 'function' ? optionsOrFactory() : optionsOrFactory),
     };
   }
   return {
     messagesUrl: (phoneNumberId) => `${GRAPH_BASE}/${phoneNumberId}/messages`,
     mediaUrl:    (phoneNumberId) => `${GRAPH_BASE}/${phoneNumberId}/media`,
-    jsonHeaders: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    formHeaders: { 'Authorization': `Bearer ${accessToken}` },
+    jsonHeaders: { 'Content-Type': 'application/json' },
+    formHeaders: {},
+    doFetch: (url, optionsOrFactory, logTag) => metaFetch(url, optionsOrFactory, accessToken, logTag),
   };
 }
 
 async function sendWhatsAppMessage(to, text, creds) {
-  const { messagesUrl, jsonHeaders } = getApiConfig(creds);
-  const res = await fetch(messagesUrl(creds.phoneNumberId), {
+  const { messagesUrl, jsonHeaders, doFetch } = getApiConfig(creds);
+  const res = await doFetch(messagesUrl(creds.phoneNumberId), {
     method: 'POST',
     headers: jsonHeaders,
     body: JSON.stringify({
@@ -35,23 +58,22 @@ async function sendWhatsAppMessage(to, text, creds) {
       type: 'text',
       text: { body: text },
     }),
-  });
+  }, 'sendWhatsAppMessage');
   const data = await res.json();
   if (!res.ok) throw new Error(`WhatsApp API error ${res.status}: ${JSON.stringify(data)}`);
   return data;
 }
 
 async function uploadMedia(buffer, filename, mimeType, creds) {
-  const { mediaUrl, formHeaders } = getApiConfig(creds);
-  const form = new FormData();
-  form.append('messaging_product', 'whatsapp');
-  form.append('type', mimeType);
-  form.append('file', new Blob([buffer], { type: mimeType }), filename);
-  const res = await fetch(mediaUrl(creds.phoneNumberId), {
-    method: 'POST',
-    headers: formHeaders,
-    body: form,
-  });
+  const { mediaUrl, formHeaders, doFetch } = getApiConfig(creds);
+  const makeForm = () => {
+    const form = new FormData();
+    form.append('messaging_product', 'whatsapp');
+    form.append('type', mimeType);
+    form.append('file', new Blob([buffer], { type: mimeType }), filename);
+    return { method: 'POST', headers: formHeaders, body: form };
+  };
+  const res = await doFetch(mediaUrl(creds.phoneNumberId), makeForm, 'uploadMedia');
   const data = await res.json();
   if (!res.ok) throw new Error(`WhatsApp media upload error ${res.status}: ${JSON.stringify(data)}`);
   if (!data.id) throw new Error('WhatsApp media upload did not return an id');
@@ -59,8 +81,8 @@ async function uploadMedia(buffer, filename, mimeType, creds) {
 }
 
 async function sendWhatsAppAudio(to, mediaId, creds) {
-  const { messagesUrl, jsonHeaders } = getApiConfig(creds);
-  const res = await fetch(messagesUrl(creds.phoneNumberId), {
+  const { messagesUrl, jsonHeaders, doFetch } = getApiConfig(creds);
+  const res = await doFetch(messagesUrl(creds.phoneNumberId), {
     method: 'POST',
     headers: jsonHeaders,
     body: JSON.stringify({
@@ -70,15 +92,15 @@ async function sendWhatsAppAudio(to, mediaId, creds) {
       type: 'audio',
       audio: { id: mediaId, voice: true },
     }),
-  });
+  }, 'sendWhatsAppAudio');
   const data = await res.json();
   if (!res.ok) throw new Error(`WhatsApp API error ${res.status}: ${JSON.stringify(data)}`);
   return data;
 }
 
 async function sendWhatsAppDocument(to, mediaId, filename, creds) {
-  const { messagesUrl, jsonHeaders } = getApiConfig(creds);
-  const res = await fetch(messagesUrl(creds.phoneNumberId), {
+  const { messagesUrl, jsonHeaders, doFetch } = getApiConfig(creds);
+  const res = await doFetch(messagesUrl(creds.phoneNumberId), {
     method: 'POST',
     headers: jsonHeaders,
     body: JSON.stringify({
@@ -88,15 +110,15 @@ async function sendWhatsAppDocument(to, mediaId, filename, creds) {
       type: 'document',
       document: { id: mediaId, filename },
     }),
-  });
+  }, 'sendWhatsAppDocument');
   const data = await res.json();
   if (!res.ok) throw new Error(`WhatsApp API error ${res.status}: ${JSON.stringify(data)}`);
   return data;
 }
 
 async function sendWhatsAppImage(to, mediaId, caption, creds) {
-  const { messagesUrl, jsonHeaders } = getApiConfig(creds);
-  const res = await fetch(messagesUrl(creds.phoneNumberId), {
+  const { messagesUrl, jsonHeaders, doFetch } = getApiConfig(creds);
+  const res = await doFetch(messagesUrl(creds.phoneNumberId), {
     method: 'POST',
     headers: jsonHeaders,
     body: JSON.stringify({
@@ -106,15 +128,15 @@ async function sendWhatsAppImage(to, mediaId, caption, creds) {
       type: 'image',
       image: { id: mediaId, ...(caption ? { caption } : {}) },
     }),
-  });
+  }, 'sendWhatsAppImage');
   const data = await res.json();
   if (!res.ok) throw new Error(`WhatsApp API error ${res.status}: ${JSON.stringify(data)}`);
   return data;
 }
 
 async function markAsRead(messageId, creds) {
-  const { messagesUrl, jsonHeaders } = getApiConfig(creds);
-  await fetch(messagesUrl(creds.phoneNumberId), {
+  const { messagesUrl, jsonHeaders, doFetch } = getApiConfig(creds);
+  await doFetch(messagesUrl(creds.phoneNumberId), {
     method: 'POST',
     headers: jsonHeaders,
     body: JSON.stringify({
@@ -122,12 +144,12 @@ async function markAsRead(messageId, creds) {
       status: 'read',
       message_id: messageId,
     }),
-  }).catch(() => {});
+  }, 'markAsRead').catch(() => {});
 }
 
 async function sendTypingIndicator(to, creds) {
-  const { messagesUrl, jsonHeaders } = getApiConfig(creds);
-  await fetch(messagesUrl(creds.phoneNumberId), {
+  const { messagesUrl, jsonHeaders, doFetch } = getApiConfig(creds);
+  await doFetch(messagesUrl(creds.phoneNumberId), {
     method: 'POST',
     headers: jsonHeaders,
     body: JSON.stringify({
@@ -137,7 +159,7 @@ async function sendTypingIndicator(to, creds) {
       type: 'action',
       action: { action_type: 'SHOW_TYPING' },
     }),
-  }).catch(() => {});
+  }, 'sendTypingIndicator').catch(() => {});
 }
 
 // Host allowlist for incoming Kapso media URLs.

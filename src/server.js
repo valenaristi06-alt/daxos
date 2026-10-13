@@ -2998,7 +2998,7 @@ app.post('/auth/whatsapp/callback', requireAuth, async (req, res) => {
     }
 
     // 3. Persist credentials (access token encrypted at rest)
-    saveWabaCredentials(Number(business_id), { wabaId: waba_id, phoneNumberId: phone_number_id, accessToken });
+    saveWabaCredentials(Number(business_id), { wabaId: waba_id, phoneNumberId: phone_number_id, accessToken, provider: 'meta' });
 
     const savedBusiness = getBusinessById(Number(business_id));
     if (savedBusiness) notifyAdmin('wa_connected', { businessName: savedBusiness.name, phoneNumber: phone_number_id, provider: 'meta', source: 'callback' }).catch(() => {});
@@ -3601,12 +3601,14 @@ async function runWaHealthCheck({ dryRun = (process.env.WA_HEALTH_ALERTS !== 'on
         if (owner?.phone) {
           const bizFull    = getBusinessById(biz.id);
           const waCredentials = bizFull?.wa_access_token
-            ? { phoneNumberId: pnid, accessToken: bizFull.wa_access_token, wabaId: bizFull.waba_id, provider: bizFull.wa_provider || 'kapso' }
+            ? { phoneNumberId: pnid, accessToken: bizFull.wa_access_token, wabaId: bizFull.waba_id, provider: bizFull.wa_provider || 'meta' }
             : null;
           const normOwner  = normalizeUruguayPhone(owner.phone);
           const normBiz    = normalizeUruguayPhone(biz.whatsapp_number);
           if (normOwner && waCredentials && normOwner !== normBiz) {
-            const waMsg = `⚠️ Tu WhatsApp de ${biz.name} está desconectado. Entrá a Kapso y reconectá el número para que el bot vuelva a funcionar.`;
+            const waMsg = bizFull?.wa_provider === 'kapso'
+              ? `⚠️ Tu WhatsApp de ${biz.name} está desconectado. Entrá a Kapso y reconectá el número para que el bot vuelva a funcionar.`
+              : `⚠️ Tu WhatsApp de ${biz.name} está desconectado. Entrá al panel de Daxos y reconectá el número para que el bot vuelva a funcionar.`;
             sendWhatsAppMessage(normOwner, waMsg, waCredentials)
               .catch(err => logError('wa-health-alert', { message: `wa notify failed biz=${biz.id}: ${err.message}`, stack: '' }));
           }
