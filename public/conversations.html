@@ -315,7 +315,7 @@
         document.getElementById('thread-messages').innerHTML = `<p class="no-msgs">${msg}</p>`;
         return;
       }
-      const { conversation, messages } = await res.json();
+      const { conversation, messages, wa_connected } = await res.json();
 
       const isPaused   = !!conversation.needs_attention;
       const needsHuman = !!conversation.needs_human;
@@ -361,10 +361,15 @@
           <span class="pause-banner-text">⚠️ Asistente pausado — respondé al cliente desde acá</span>
           <button class="btn-resume" onclick="resumeConv(${id})">Reanudar bot</button>
         </div>
+        <div id="panel-reply-error" style="display:none;padding:6px 16px;font-size:12px;color:#ef4444;background:rgba(239,68,68,.08);border-top:1px solid rgba(239,68,68,.15)"></div>
+        ${wa_connected ? `
         <div class="panel-reply-box" id="panel-reply-box">
-          <textarea class="panel-reply-textarea" id="panel-reply-text" rows="3" placeholder="Escribí tu respuesta al cliente…"></textarea>
-          <button class="btn-panel-send" onclick="sendFromPanel(${id})">Enviar</button>
-        </div>` : ''}
+          <textarea class="panel-reply-textarea" id="panel-reply-text" rows="3" maxlength="4096" placeholder="Escribí tu respuesta al cliente…"></textarea>
+          <button class="btn-panel-send" id="btn-panel-send" onclick="sendFromPanel(${id})">Enviar</button>
+        </div>` : `
+        <div class="panel-reply-box" id="panel-reply-box">
+          <p style="font-size:12px;color:#888;margin:0;">WhatsApp no conectado — configurá la conexión en el panel para poder responder desde acá.</p>
+        </div>`}` : ''}
       `;
 
       if (!messages.length) {
@@ -424,7 +429,9 @@
       const text = ta?.value?.trim();
       if (!text) return;
 
-      const sendBtn = document.querySelector('.btn-panel-send');
+      const sendBtn = document.getElementById('btn-panel-send');
+      const errDiv  = document.getElementById('panel-reply-error');
+      if (errDiv) errDiv.style.display = 'none';
       if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Enviando…'; }
 
       const res = await fetch(`/api/conversations/${id}/send`, {
@@ -436,7 +443,11 @@
       if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Enviar'; }
 
       if (!res.ok) {
-        alert('No se pudo enviar el mensaje. Revisá la conexión de WhatsApp.');
+        const data = await res.json().catch(() => ({}));
+        const msg = data.error_code === 'window_expired'
+          ? 'No se puede enviar: el cliente no escribió en las últimas 24 horas. Meta bloquea los mensajes de texto libre pasado ese tiempo. Esperá a que el cliente escriba primero.'
+          : (data.error || 'No se pudo enviar el mensaje. Revisá la conexión de WhatsApp.');
+        if (errDiv) { errDiv.textContent = msg; errDiv.style.display = 'block'; }
         return;
       }
 

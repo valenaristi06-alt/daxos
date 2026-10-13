@@ -933,6 +933,13 @@ function addMessage(conversation_id, role, content, silent = 0) {
   return result.lastInsertRowid;
 }
 
+const stmtLastUserMsgAt = db.prepare(
+  `SELECT created_at FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY created_at DESC LIMIT 1`
+);
+function getLastUserMessageAt(conversationId) {
+  return stmtLastUserMsgAt.get(conversationId)?.created_at ?? null;
+}
+
 const stmtGetHistory = db.prepare(`
   SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC LIMIT ?
 `);
@@ -1397,6 +1404,7 @@ module.exports = {
   getConversationById,
   getOrCreateConversation,
   addMessage,
+  getLastUserMessageAt,
   getConversationHistory,
   markConversationPaused,
   markConversationResumed,

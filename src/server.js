@@ -48,7 +48,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
   incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
   getConvAssistantCountLastHour, setSpendingCapNotified,
   createPasswordResetToken, getPasswordResetToken, markPasswordResetTokenUsed, changeUserPassword } = require('./db');
@@ -256,15 +256,15 @@ const _rlStore = new Map();
 const RL_MAX = 5;
 const RL_WINDOW_MS = 15 * 60 * 1000;
 
-function _rlCheck(key) {
+function _rlCheck(key, max = RL_MAX, windowMs = RL_WINDOW_MS) {
   const now = Date.now();
   let entry = _rlStore.get(key);
-  if (!entry || now - entry.windowStart >= RL_WINDOW_MS) {
+  if (!entry || now - entry.windowStart >= windowMs) {
     entry = { count: 0, windowStart: now };
     _rlStore.set(key, entry);
   }
   entry.count++;
-  return entry.count > RL_MAX;
+  return entry.count > max;
 }
 
 function rateLimit(...keyFns) {
@@ -279,6 +279,20 @@ function rateLimit(...keyFns) {
     next();
   };
 }
+
+function rateLimitWith(max, windowMs, ...keyFns) {
+  return (req, res, next) => {
+    if (!RATE_LIMIT_ENABLED) return next();
+    const keys = keyFns.map(fn => fn(req)).filter(Boolean);
+    for (const key of keys) {
+      if (_rlCheck(key, max, windowMs)) {
+        return res.status(429).json({ error: 'Demasiados intentos. Esperá unos minutos e intentá de nuevo.' });
+      }
+    }
+    next();
+  };
+}
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/landing.html'));
 });
@@ -868,7 +882,8 @@ app.get('/api/conversations/:id/messages', requireAuth, (req, res) => {
     return res.status(404).json({ error: 'No encontramos esa conversación' });
   }
   const messages = getConversationHistory(conv.id, 200);
-  res.json({ conversation: conv, messages });
+  const business = getBusinessById(user.business_id);
+  res.json({ conversation: conv, messages, wa_connected: !!business?.phone_number_id });
 });
 
 app.get('/api/stats', requireAuth, (req, res) => {
@@ -980,7 +995,7 @@ app.patch('/api/conversations/:id/pause', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/conversations/:id/send', requireAuth, async (req, res) => {
+app.post('/api/conversations/:id/send', requireAuth, rateLimitWith(30, 15 * 60 * 1000, req => `panel-send:user:${req.session.userId}`), async (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
 
@@ -989,9 +1004,21 @@ app.post('/api/conversations/:id/send', requireAuth, async (req, res) => {
 
   const { text } = req.body;
   if (!text?.trim()) return res.status(400).json({ error: 'text requerido.' });
+  if (text.length > 4096) return res.status(400).json({ error: 'El mensaje no puede superar los 4096 caracteres.' });
 
   const business = getBusinessById(user.business_id);
   if (!business?.phone_number_id) return res.status(400).json({ error: 'WhatsApp no conectado.' });
+
+  // Ventana de 23.5h — 30 min de margen antes del límite real de Meta (24h)
+  const WINDOW_MS = 23.5 * 3600 * 1000;
+  const lastUserMsgAt = getLastUserMessageAt(conv.id);
+  const lastUserMs = lastUserMsgAt ? parseSqliteUtc(lastUserMsgAt) : null;
+  if (!lastUserMs || Date.now() - lastUserMs > WINDOW_MS) {
+    return res.status(403).json({
+      error: 'Para enviar un mensaje libre, el cliente tiene que haber escrito en las últimas 24 horas. Esta conversación superó ese límite — esperá a que el cliente escriba primero.',
+      error_code: 'window_expired',
+    });
+  }
 
   const waCredentials = {
     phoneNumberId: business.phone_number_id,
@@ -1003,11 +1030,21 @@ app.post('/api/conversations/:id/send', requireAuth, async (req, res) => {
     await sendWhatsAppMessage(conv.customer_id, text.trim(), waCredentials);
   } catch (err) {
     logError('panel-send-error', err);
+    if (err.message?.includes('131047')) {
+      return res.status(403).json({
+        error: 'Meta rechazó el mensaje porque el cliente no escribió en las últimas 24 horas. Esperá a que escriba primero.',
+        error_code: 'window_expired',
+      });
+    }
     return res.status(502).json({ error: 'No se pudo enviar el mensaje por WhatsApp.' });
   }
 
   addMessage(conv.id, 'assistant', text.trim());
-  setHumanPaused(conv.id); // pausa el bot, inicia el reloj de 2h
+  // Respetar ventana silenciosa — guardar el mensaje pero no pausar el bot
+  const silentUntilMs = parseSqliteUtc(business.silent_until);
+  if (!silentUntilMs || Date.now() >= silentUntilMs) {
+    setHumanPaused(conv.id);
+  }
   res.json({ ok: true });
 });
 
