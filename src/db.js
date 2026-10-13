@@ -1463,7 +1463,7 @@ module.exports = {
   setRuntimeConfig,
   getRuntimeConfig,
   logError,
-  getRecentErrors,
+  getRecentErrors, getErrorsFiltered,
   checkpoint,
   backupToFile,
   closeDb,
@@ -1678,6 +1678,14 @@ function logError(context, err) {
 
 function getRecentErrors(limit = 20) {
   return db.prepare('SELECT * FROM error_log ORDER BY id DESC LIMIT ?').all(limit);
+}
+
+const stmtErrorsAll     = db.prepare('SELECT id, context, message, created_at FROM error_log ORDER BY id DESC LIMIT ?');
+const stmtErrorsByCtx   = db.prepare('SELECT id, context, message, created_at FROM error_log WHERE context = ? ORDER BY id DESC LIMIT ?');
+function getErrorsFiltered(context, limit) {
+  return context
+    ? stmtErrorsByCtx.all(context, limit)
+    : stmtErrorsAll.all(limit);
 }
 
 function checkpoint() {
