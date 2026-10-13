@@ -3930,6 +3930,153 @@ app.all('/admin/api/kapso-rescue', requireAdmin, async (req, res) => {
   }
 });
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Meta WABA rescue — lista WABAs accesibles via META_SYSTEM_TOKEN (solo lectura)
+// GET /admin/api/meta-wabas
+app.get('/admin/api/meta-wabas', requireAdmin, async (req, res) => {
+  const systemToken  = process.env.META_SYSTEM_TOKEN;
+  const appId        = process.env.META_APP_ID;
+  const portfolioId  = process.env.META_BUSINESS_PORTFOLIO_ID;
+  if (!systemToken) return res.status(500).json({ error: 'META_SYSTEM_TOKEN no configurado' });
+
+  const authHdr = { 'Authorization': `Bearer ${systemToken}` };
+
+  async function fetchWabas(url) {
+    const r = await fetch(url, { headers: authHdr });
+    const d = await r.json();
+    return { ok: r.ok, data: d?.data || [], raw: d };
+  }
+
+  async function phoneNumbersForWaba(wabaId) {
+    try {
+      const r = await fetch(
+        `https://graph.facebook.com/v21.0/${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,status`,
+        { headers: authHdr },
+      );
+      const d = await r.json();
+      return r.ok ? (d.data || []).map(p => ({
+        id: p.id, display_phone_number: p.display_phone_number,
+        verified_name: p.verified_name, status: p.status,
+      })) : [];
+    } catch { return []; }
+  }
+
+  async function buildResult(wabas, source) {
+    const rows = await Promise.all(wabas.map(async w => ({
+      waba_id: w.id, waba_name: w.name,
+      phone_numbers: await phoneNumbersForWaba(w.id),
+    })));
+    return { source, total: rows.length, wabas: rows };
+  }
+
+  try {
+    // Plan A: app subscribed_businesses
+    if (appId) {
+      const a = await fetchWabas(`https://graph.facebook.com/v21.0/${appId}/subscribed_businesses?fields=id,name`);
+      if (a.ok && a.data.length > 0) {
+        return res.json(await buildResult(a.data, 'subscribed_businesses'));
+      }
+    }
+
+    // Plan B: client + owned WABAs via Business Portfolio ID
+    if (!portfolioId) {
+      return res.status(500).json({
+        error: 'subscribed_businesses devolvió vacío y META_BUSINESS_PORTFOLIO_ID no configurado — sin plan B',
+        hint: 'Configurá META_BUSINESS_PORTFOLIO_ID en las variables de entorno.',
+      });
+    }
+
+    const [clientRes, ownedRes] = await Promise.all([
+      fetchWabas(`https://graph.facebook.com/v21.0/${portfolioId}/client_whatsapp_business_accounts?fields=id,name`),
+      fetchWabas(`https://graph.facebook.com/v21.0/${portfolioId}/owned_whatsapp_business_accounts?fields=id,name`),
+    ]);
+
+    const combined = [
+      ...clientRes.data.map(w => ({ ...w, _src: 'client' })),
+      ...ownedRes.data.map(w => ({ ...w, _src: 'owned' })),
+    ];
+
+    if (combined.length > 0) {
+      const rows = await Promise.all(combined.map(async w => ({
+        waba_id: w.id, waba_name: w.name, waba_source: w._src,
+        phone_numbers: await phoneNumbersForWaba(w.id),
+      })));
+      return res.json({
+        source:       'portfolio_fallback',
+        client_ok:    clientRes.ok,
+        owned_ok:     ownedRes.ok,
+        total:        rows.length,
+        wabas:        rows,
+      });
+    }
+
+    // Ninguno devolvió datos — reportar todo
+    res.status(502).json({
+      error:       'Ninguna fuente devolvió WABAs',
+      subscribed_businesses: appId ? 'vacío o error' : 'META_APP_ID no configurado',
+      client_accounts: { ok: clientRes.ok, raw: clientRes.raw },
+      owned_accounts:  { ok: ownedRes.ok,  raw: ownedRes.raw  },
+    });
+  } catch (err) {
+    logError('meta-wabas', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Meta WABA rescue — guarda credenciales y suscribe app para un negocio
+// POST /admin/api/meta-waba-connect
+// Body: { business_id, waba_id, phone_number_id }
+app.post('/admin/api/meta-waba-connect', requireAdmin, async (req, res) => {
+  const systemToken = process.env.META_SYSTEM_TOKEN;
+  if (!systemToken) return res.status(500).json({ error: 'META_SYSTEM_TOKEN no configurado' });
+
+  const { business_id, waba_id, phone_number_id } = req.body;
+  if (!business_id || !waba_id || !phone_number_id) {
+    return res.status(400).json({ error: 'business_id, waba_id y phone_number_id requeridos' });
+  }
+  const id = parseInt(business_id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'business_id inválido' });
+
+  const business = getBusinessById(id);
+  if (!business) return res.status(404).json({ error: `Negocio ${id} no encontrado` });
+  if (business.phone_number_id) {
+    return res.status(409).json({
+      error: `El negocio ${id} ya tiene phone_number_id guardado. Desconectalo primero con POST /admin/api/wa-disconnect/${id}.`,
+    });
+  }
+
+  // Suscribir la app a la WABA para recibir webhooks
+  const subRes  = await fetch(`https://graph.facebook.com/v21.0/${waba_id}/subscribed_apps`, {
+    method:  'POST',
+    headers: { 'Authorization': `Bearer ${systemToken}` },
+  });
+  const subData = await subRes.json();
+
+  if (!subRes.ok) {
+    logError('meta-waba-connect', {
+      message: `sub_failed business_id=${id} waba_id=${waba_id} status=${subRes.status} detail=${JSON.stringify(subData).slice(0, 200)}`,
+      stack: '',
+    });
+  }
+
+  // accessToken null → metaFetch cae en META_SYSTEM_TOKEN automáticamente
+  saveWabaCredentials(id, {
+    wabaId:        String(waba_id),
+    phoneNumberId: String(phone_number_id),
+    accessToken:   null,
+    provider:      'meta',
+  });
+
+  const last4 = String(phone_number_id).slice(-4);
+  logError('meta-waba-connect', {
+    message: `saved business_id=${id} waba_id=${waba_id} phone_number_id_last4=${last4} sub_ok=${subRes.ok}`,
+    stack: '',
+  });
+
+  res.json({ ok: true, business_id: id, waba_id, phone_number_id, subscribed: subRes.ok, subscription_detail: subData });
+});
+
 app.get('/admin/test-embedded-signup', requireAdmin, (_req, res) => {
   res.sendFile(path.join(__dirname, 'views/admin/test-embedded-signup.html'));
 });
