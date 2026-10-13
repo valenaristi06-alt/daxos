@@ -2250,6 +2250,29 @@ async function confirmKapsoPhoneNumber(kapsoCustomerId) {
   }
 }
 
+// --- Meta Cloud API webhook ---
+
+app.get('/webhook/meta', (req, res) => {
+  const mode      = req.query['hub.mode'];
+  const token     = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+  if (mode === 'subscribe' && token === process.env.META_WEBHOOK_VERIFY_TOKEN) {
+    return res.status(200).send(challenge);
+  }
+  res.status(403).send('Forbidden');
+});
+
+app.post('/webhook/meta', (req, res) => {
+  res.status(200).send('OK');
+  const b    = req.body;
+  const wabaId  = b?.entry?.[0]?.id ?? null;
+  const pnid    = b?.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id ?? null;
+  logError('meta-event', {
+    message: `object=${b?.object} entries=${b?.entry?.length ?? 0} waba_id=${wabaId} phone_number_id=${pnid}`,
+    stack: '',
+  });
+});
+
 // --- Kapso webhook ---
 
 app.get('/webhook/kapso', (_req, res) => res.status(200).send('OK'));
