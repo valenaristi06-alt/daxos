@@ -1833,6 +1833,14 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       el.style.display = msg ? 'block' : 'none';
     }
 
+    function esLog(msg) {
+      fetch('/api/debug/es-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ msg: String(msg).slice(0, 200) }),
+      }).catch(() => {});
+    }
+
     let pendingEsCode = null;
     let pendingEsData = null; // { waba_id, phone_number_id }
 
@@ -1863,6 +1871,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       } catch (err) {
         errEl.textContent = `Error al guardar la conexión: ${err.message}`;
         errEl.style.display = 'block';
+        esLog(`callback-POST-falló: ${String(err.message).slice(0, 150)}`);
       } finally {
         btn.disabled = false;
         pendingEsCode = null;
@@ -1876,6 +1885,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       try { data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; } catch { return; }
       if (data.type !== 'WA_EMBEDDED_SIGNUP') {
         waStep(`Mensaje de Meta recibido (tipo: ${data.type || 'desconocido'}) — esperando WA_EMBEDDED_SIGNUP…`);
+        esLog(`postMessage-tipo-inesperado: type=${data.type || 'null'} event=${data.event || 'null'}`);
         return;
       }
       waStep(`Evento recibido: ${data.event}`);
@@ -1889,6 +1899,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           errEl.textContent = 'No pudimos completar la conexión con WhatsApp. Cerrá la ventana e intentá de nuevo.';
           errEl.style.display = 'block';
           btn.disabled = false;
+          esLog(`FINISH-sin-datos: waba_id=${waba_id ? 'ok' : 'null'} phone_number_id=${phone_number_id ? 'ok' : 'null'}`);
           return;
         }
         pendingEsData = { waba_id, phone_number_id };
@@ -1935,6 +1946,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
           trySubmitEsConnection();
         } else {
           document.getElementById('btn-wa-connect').disabled = false;
+          esLog(`FB.login-sin-code: authResponse=${response.authResponse ? 'presente-sin-code' : 'null'} status=${response.status || 'null'}`);
         }
       }, {
         config_id: configId,

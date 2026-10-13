@@ -868,6 +868,17 @@ app.get('/api/debug/me', requireAdmin, (req, res) => {
   res.json({ sessionUserId: req.session.userId, userId: user?.id, email: user?.email, businessId: user?.business_id ?? null, convCount });
 });
 
+app.post('/api/debug/es-log', requireAuth, rateLimitWith(5, 15 * 60 * 1000, req => `es-log:user:${req.session.userId}`), (req, res) => {
+  const { msg } = req.body;
+  if (!msg || typeof msg !== 'string') return res.status(400).json({ error: 'msg requerido' });
+  const user = getUserById(req.session.userId);
+  logError('es-debug', {
+    message: `business_id=${user?.business_id ?? 'null'} user_id=${user?.id ?? 'null'} ${String(msg).slice(0, 200)}`,
+    stack: '',
+  });
+  res.json({ ok: true });
+});
+
 app.get('/api/conversations', requireAuth, (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user.business_id) return res.json([]);
