@@ -4223,6 +4223,61 @@ app.get('/admin/api/meta-phone-status/:business_id', requireAdmin, async (req, r
   }
 });
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Registrar número en WhatsApp Cloud API
+// POST /admin/api/meta-phone-register
+// Body: { business_id, pin }
+app.post('/admin/api/meta-phone-register', requireAdmin, async (req, res) => {
+  const systemToken = process.env.META_SYSTEM_TOKEN;
+  if (!systemToken) return res.status(500).json({ error: 'META_SYSTEM_TOKEN no configurado' });
+
+  const { business_id, pin } = req.body;
+  const id = parseInt(business_id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'business_id inválido' });
+  if (typeof pin !== 'string' || !/^\d{6}$/.test(pin)) {
+    return res.status(400).json({ error: 'pin debe ser exactamente 6 dígitos numéricos' });
+  }
+
+  const business = getBusinessById(id);
+  if (!business?.phone_number_id) {
+    return res.status(404).json({ error: `Negocio ${id} no encontrado o sin phone_number_id` });
+  }
+
+  const pnid = business.phone_number_id;
+
+  try {
+    const metaRes  = await fetch(`https://graph.facebook.com/v21.0/${pnid}/register`, {
+      method:  'POST',
+      headers: { 'Authorization': `Bearer ${systemToken}`, 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ messaging_product: 'whatsapp', pin }),
+    });
+    const metaData = await metaRes.json();
+
+    if (!metaRes.ok) {
+      const errCode    = metaData?.error?.code             ?? null;
+      const errSubcode = metaData?.error?.error_subcode    ?? null;
+      const errMsg     = metaData?.error?.message          ?? 'Error desconocido de Meta';
+      logError('meta-phone-register', {
+        message: `failed business_id=${id} phone_number_id_last4=${String(pnid).slice(-4)} http=${metaRes.status} code=${errCode} subcode=${errSubcode}`,
+        stack: '',
+      });
+      return res.status(502).json({
+        error:              errMsg,
+        meta_code:          errCode,
+        meta_error_subcode: errSubcode,
+      });
+    }
+
+    logError('meta-phone-register', {
+      message: `ok business_id=${id} phone_number_id_last4=${String(pnid).slice(-4)}`,
+      stack: '',
+    });
+    res.json({ ok: true, phone_number_id: pnid, meta: metaData });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/admin/test-embedded-signup', requireAdmin, (_req, res) => {
   res.sendFile(path.join(__dirname, 'views/admin/test-embedded-signup.html'));
 });
