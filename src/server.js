@@ -4055,14 +4055,15 @@ app.get('/admin/api/meta-wabas', requireAdmin, async (req, res) => {
 // ──────────────────────────────────────────────────────────────────────────────
 // Meta WABA rescue — guarda credenciales y suscribe app para un negocio
 // POST /admin/api/meta-waba-connect
-// Body: { business_id, waba_id, phone_number_id }
+// Body: { business_id, waba_id, phone_number_id? }
+// Si phone_number_id no viene, lo resuelve consultando la WABA en Meta.
 app.post('/admin/api/meta-waba-connect', requireAdmin, async (req, res) => {
   const systemToken = process.env.META_SYSTEM_TOKEN;
   if (!systemToken) return res.status(500).json({ error: 'META_SYSTEM_TOKEN no configurado' });
 
-  const { business_id, waba_id, phone_number_id } = req.body;
-  if (!business_id || !waba_id || !phone_number_id) {
-    return res.status(400).json({ error: 'business_id, waba_id y phone_number_id requeridos' });
+  const { business_id, waba_id, phone_number_id: phoneNumberIdParam } = req.body;
+  if (!business_id || !waba_id) {
+    return res.status(400).json({ error: 'business_id y waba_id requeridos' });
   }
   const id = parseInt(business_id, 10);
   if (isNaN(id)) return res.status(400).json({ error: 'business_id inválido' });
@@ -4073,6 +4074,50 @@ app.post('/admin/api/meta-waba-connect', requireAdmin, async (req, res) => {
     return res.status(409).json({
       error: `El negocio ${id} ya tiene phone_number_id guardado. Desconectalo primero con POST /admin/api/wa-disconnect/${id}.`,
     });
+  }
+
+  // Resolver phone_number_id si no vino en el body
+  let phone_number_id      = phoneNumberIdParam ? String(phoneNumberIdParam) : null;
+  let display_phone_number = null;
+  let verified_name        = null;
+
+  if (!phone_number_id) {
+    const pnRes  = await fetch(
+      `https://graph.facebook.com/v21.0/${waba_id}/phone_numbers?fields=id,display_phone_number,verified_name,status`,
+      { headers: { 'Authorization': `Bearer ${systemToken}` } },
+    );
+    const pnData = await pnRes.json();
+
+    if (!pnRes.ok) {
+      logError('meta-waba-connect', {
+        message: `phone_numbers_failed waba_id=${waba_id} status=${pnRes.status} error=${pnData?.error?.message ?? JSON.stringify(pnData).slice(0, 150)}`,
+        stack: '',
+      });
+      return res.status(400).json({
+        error: 'Meta no devolvió los números de la WABA',
+        detail: pnData?.error ?? pnData,
+      });
+    }
+
+    const numbers = pnData.data || [];
+    if (numbers.length === 0) {
+      logError('meta-waba-connect', { message: `phone_numbers_empty waba_id=${waba_id}`, stack: '' });
+      return res.status(400).json({ error: 'La WABA no tiene números asociados en Meta.' });
+    }
+    if (numbers.length > 1) {
+      return res.status(400).json({
+        error: 'La WABA tiene más de un número. Enviá phone_number_id explícitamente.',
+        phone_numbers: numbers.map(p => ({
+          id:                   p.id,
+          display_phone_number: p.display_phone_number,
+          verified_name:        p.verified_name,
+        })),
+      });
+    }
+
+    phone_number_id      = String(numbers[0].id);
+    display_phone_number = numbers[0].display_phone_number ?? null;
+    verified_name        = numbers[0].verified_name        ?? null;
   }
 
   // Suscribir la app a la WABA para recibir webhooks
@@ -4092,18 +4137,27 @@ app.post('/admin/api/meta-waba-connect', requireAdmin, async (req, res) => {
   // accessToken null → metaFetch cae en META_SYSTEM_TOKEN automáticamente
   saveWabaCredentials(id, {
     wabaId:        String(waba_id),
-    phoneNumberId: String(phone_number_id),
+    phoneNumberId: phone_number_id,
     accessToken:   null,
     provider:      'meta',
   });
 
-  const last4 = String(phone_number_id).slice(-4);
+  const last4 = phone_number_id.slice(-4);
   logError('meta-waba-connect', {
-    message: `saved business_id=${id} waba_id=${waba_id} phone_number_id_last4=${last4} sub_ok=${subRes.ok}`,
+    message: `saved business_id=${id} waba_id=${waba_id} phone_number_id_last4=${last4} display=${display_phone_number ?? 'provided'} sub_ok=${subRes.ok}`,
     stack: '',
   });
 
-  res.json({ ok: true, business_id: id, waba_id, phone_number_id, subscribed: subRes.ok, subscription_detail: subData });
+  res.json({
+    ok: true,
+    business_id:          id,
+    waba_id,
+    phone_number_id,
+    display_phone_number,
+    verified_name,
+    subscribed:           subRes.ok,
+    subscription_detail:  subData,
+  });
 });
 
 app.get('/admin/test-embedded-signup', requireAdmin, (_req, res) => {
