@@ -4254,17 +4254,27 @@ app.post('/admin/api/meta-phone-register', requireAdmin, async (req, res) => {
     const metaData = await metaRes.json();
 
     if (!metaRes.ok) {
-      const errCode    = metaData?.error?.code             ?? null;
-      const errSubcode = metaData?.error?.error_subcode    ?? null;
-      const errMsg     = metaData?.error?.message          ?? 'Error desconocido de Meta';
+      const errCode      = metaData?.error?.code             ?? null;
+      const errSubcode   = metaData?.error?.error_subcode    ?? null;
+      const errMsg       = metaData?.error?.message          ?? 'Error desconocido de Meta';
+      const errData      = metaData?.error?.error_data       ?? null;
+      const errUserTitle = metaData?.error?.error_user_title ?? null;
+      const errUserMsg   = metaData?.error?.error_user_msg   ?? null;
+      const errType      = metaData?.error?.type             ?? null;
+      const errTrace     = metaData?.error?.fbtrace_id       ?? null;
       logError('meta-phone-register', {
-        message: `failed business_id=${id} phone_number_id_last4=${String(pnid).slice(-4)} http=${metaRes.status} code=${errCode} subcode=${errSubcode}`,
+        message: `failed business_id=${id} phone_number_id_last4=${String(pnid).slice(-4)} http=${metaRes.status} code=${errCode} subcode=${errSubcode} type=${errType} trace=${errTrace} user_title=${errUserTitle} user_msg=${String(errUserMsg ?? '').slice(0, 120)} error_data=${JSON.stringify(errData).slice(0, 150)}`,
         stack: '',
       });
       return res.status(502).json({
-        error:              errMsg,
-        meta_code:          errCode,
-        meta_error_subcode: errSubcode,
+        error:                 errMsg,
+        meta_code:             errCode,
+        meta_error_subcode:    errSubcode,
+        meta_error_data:       errData,
+        meta_error_user_title: errUserTitle,
+        meta_error_user_msg:   errUserMsg,
+        meta_type:             errType,
+        meta_fbtrace_id:       errTrace,
       });
     }
 
