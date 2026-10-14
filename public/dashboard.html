@@ -1844,11 +1844,14 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
 
     let pendingEsCode = null;
     let pendingEsData = null; // { waba_id, phone_number_id }
+    let esSubmitted   = false;
 
     async function trySubmitEsConnection() {
-      if (!pendingEsCode || !pendingEsData) return;
+      if (!pendingEsData) return;
+      if (esSubmitted) return;
+      esSubmitted = true;
       const { waba_id, phone_number_id } = pendingEsData;
-      const code = pendingEsCode;
+      const code = pendingEsCode; // puede ser null — el backend lo acepta sin code
       const errEl = document.getElementById('wa-connect-error');
       const btn   = document.getElementById('btn-wa-connect');
       try {
@@ -1877,6 +1880,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         btn.disabled = false;
         pendingEsCode = null;
         pendingEsData = null;
+        esSubmitted   = false;
       }
     }
 
@@ -1896,6 +1900,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
 
       if (data.event === 'FINISH') {
         const { phone_number_id, waba_id } = data.data;
+        esLog(`FINISH-recibido: waba_id=${waba_id ? 'presente' : 'null'} phone_number_id=${phone_number_id ? 'presente' : 'null'}`);
         if (!waba_id || !phone_number_id) {
           errEl.textContent = 'No pudimos completar la conexión con WhatsApp. Cerrá la ventana e intentá de nuevo.';
           errEl.style.display = 'block';

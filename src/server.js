@@ -48,7 +48,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
   incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
   getConvAssistantCountLastHour, setSpendingCapNotified,
   createPasswordResetToken, getPasswordResetToken, markPasswordResetTokenUsed, changeUserPassword } = require('./db');
@@ -3024,13 +3024,13 @@ app.get('/admin/api/errors', requireAdmin, (req, res) => {
 // ──────────────────────────────────────────────────────────────────────────────
 // Embedded Signup — OAuth callback
 // POST /auth/whatsapp/callback
-// Body: { code, waba_id, phone_number_id, business_id }
-// The frontend sends these after the Meta JS SDK Embedded Signup flow completes.
+// Body: { code?, waba_id, phone_number_id, business_id }
+// code es opcional: si no viene, se verifica PARTNER_APP_INSTALLED en error_log.
 app.post('/auth/whatsapp/callback', requireAuth, async (req, res) => {
   const { code, waba_id, phone_number_id, business_id } = req.body;
 
-  if (!code || !waba_id || !phone_number_id || !business_id) {
-    return res.status(400).json({ error: 'code, waba_id, phone_number_id, business_id requeridos' });
+  if (!waba_id || !phone_number_id || !business_id) {
+    return res.status(400).json({ error: 'waba_id, phone_number_id, business_id requeridos' });
   }
 
   const userBusiness = getBusinessByUserId(req.session.userId);
@@ -3038,56 +3038,147 @@ app.post('/auth/whatsapp/callback', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'No autorizado' });
   }
 
-  const appId = process.env.META_APP_ID;
-  const appSecret = process.env.META_APP_SECRET;
-  const redirectUri = process.env.META_REDIRECT_URI;
-
-  if (!appId || !appSecret) {
-    return res.status(500).json({ error: 'META_APP_ID y META_APP_SECRET no configurados en el servidor' });
+  // Verificar que la WABA no esté ya asignada a otro negocio
+  const existingBiz = getBusinessByWabaId(waba_id);
+  if (existingBiz && existingBiz.id !== Number(business_id)) {
+    logError('es-connect', {
+      message: `blocked waba_id=${waba_id} already assigned to business_id=${existingBiz.id}`,
+      stack: '',
+    });
+    return res.status(403).json({ error: 'Esta WABA ya está asociada a otro negocio.' });
   }
 
   try {
-    // 1. Exchange code for user access token
-    const tokenUrl = new URL('https://graph.facebook.com/v21.0/oauth/access_token');
-    tokenUrl.searchParams.set('client_id', appId);
-    tokenUrl.searchParams.set('client_secret', appSecret);
-    tokenUrl.searchParams.set('code', code);
-    if (redirectUri) tokenUrl.searchParams.set('redirect_uri', redirectUri);
+    let accessToken = null;
 
-    const tokenRes = await fetch(tokenUrl.toString());
-    const tokenData = await tokenRes.json();
+    if (code) {
+      // Flujo con code: intercambiar por access token del usuario
+      const appId     = process.env.META_APP_ID;
+      const appSecret = process.env.META_APP_SECRET;
+      if (!appId || !appSecret) {
+        return res.status(500).json({ error: 'META_APP_ID y META_APP_SECRET no configurados en el servidor' });
+      }
+      const tokenUrl = new URL('https://graph.facebook.com/v21.0/oauth/access_token');
+      tokenUrl.searchParams.set('client_id', appId);
+      tokenUrl.searchParams.set('client_secret', appSecret);
+      tokenUrl.searchParams.set('code', code);
+      const redirectUri = process.env.META_REDIRECT_URI;
+      if (redirectUri) tokenUrl.searchParams.set('redirect_uri', redirectUri);
 
-    if (!tokenRes.ok || !tokenData.access_token) {
-      console.error('[whatsapp-callback] token exchange failed:', tokenData);
-      return res.status(400).json({ error: 'Token exchange falló', detail: tokenData });
+      const tokenRes  = await fetch(tokenUrl.toString());
+      const tokenData = await tokenRes.json();
+      if (!tokenRes.ok || !tokenData.access_token) {
+        logError('es-connect', {
+          message: `token_exchange_failed business_id=${business_id} waba_id=${waba_id} status=${tokenRes.status}`,
+          stack: '',
+        });
+        return res.status(400).json({ error: 'Token exchange falló', detail: tokenData });
+      }
+      accessToken = tokenData.access_token;
+    } else {
+      // Flujo sin code: verificar PARTNER_APP_INSTALLED en webhook-POST logs de /webhook (hasta 3 reintentos, 2s entre cada uno)
+      if (!process.env.META_SYSTEM_TOKEN) {
+        return res.status(500).json({ error: 'META_SYSTEM_TOKEN no configurado — requerido sin code' });
+      }
+      const _sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      let verified = false;
+      let rowsChecked = 0;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) await _sleep(2000);
+        const rows = getErrorsFiltered('webhook-POST', 200);
+        rowsChecked = rows.length;
+        const cutoff = Date.now() - 60 * 60 * 1000;
+        verified = rows.some(r => {
+          const ts = parseSqliteUtc(r.created_at);
+          if (!ts || ts < cutoff) return false;
+          try {
+            const m = r.message.match(/raw=(\{.*)/s);
+            if (!m) return false;
+            const body = JSON.parse(m[1]);
+            return (body.entry || []).some(e =>
+              (e.changes || []).some(c =>
+                c.field === 'account_update' &&
+                c.value?.event === 'PARTNER_APP_INSTALLED' &&
+                String(c.value?.waba_info?.waba_id) === String(waba_id)
+              )
+            );
+          } catch { return false; }
+        });
+        if (verified) break;
+      }
+      if (!verified) {
+        logError('es-connect', {
+          message: `no_webhook_event business_id=${business_id} waba_id=${waba_id} rows_checked=${rowsChecked} — no PARTNER_APP_INSTALLED row with matching waba_id in last 60min`,
+          stack: '',
+        });
+        return res.status(403).json({
+          error: 'No se recibió confirmación de Meta de que la app fue instalada en esta WABA. Esperá unos segundos e intentá de nuevo.',
+          error_code: 'partner_app_not_confirmed',
+        });
+      }
+      // Sin code: accessToken queda null → metaFetch usa META_SYSTEM_TOKEN automáticamente
     }
 
-    const accessToken = tokenData.access_token;
+    // Verificar que phone_number_id pertenece a la WABA y no está asignado a otro negocio
+    const pnListRes  = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(waba_id)}/phone_numbers`, {
+      headers: { 'Authorization': `Bearer ${process.env.META_SYSTEM_TOKEN}` },
+    });
+    const pnListData = await pnListRes.json();
+    if (!pnListRes.ok) {
+      logError('es-connect', {
+        message: `phone_numbers_fetch_failed business_id=${business_id} waba_id=${waba_id} status=${pnListRes.status}`,
+        stack: '',
+      });
+      return res.status(502).json({ error: 'No se pudo verificar el número en Meta.', detail: pnListData });
+    }
+    const knownPnIds = (pnListData.data || []).map(p => String(p.id));
+    if (!knownPnIds.includes(String(phone_number_id))) {
+      logError('es-connect', {
+        message: `phone_number_id_not_in_waba business_id=${business_id} waba_id=${waba_id} pnid_last4=${String(phone_number_id).slice(-4)} available_count=${knownPnIds.length}`,
+        stack: '',
+      });
+      return res.status(403).json({ error: 'El número no pertenece a esta WABA.' });
+    }
+    const pnOwner = getBusinessByPhoneNumberId(phone_number_id);
+    if (pnOwner && pnOwner.id !== Number(business_id)) {
+      logError('es-connect', {
+        message: `phone_number_id_taken business_id=${business_id} phone_number_id_last4=${String(phone_number_id).slice(-4)} owned_by=${pnOwner.id}`,
+        stack: '',
+      });
+      return res.status(403).json({ error: 'Este número ya está asociado a otro negocio.' });
+    }
 
-    // 2. Subscribe WABA to Daxos webhook
-    const subRes = await fetch(`https://graph.facebook.com/v21.0/${waba_id}/subscribed_apps`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}` },
+    const subToken = accessToken || process.env.META_SYSTEM_TOKEN;
+    const subRes   = await fetch(`https://graph.facebook.com/v21.0/${waba_id}/subscribed_apps`, {
+      method:  'POST',
+      headers: { 'Authorization': `Bearer ${subToken}` },
     });
     const subData = await subRes.json();
 
     if (!subRes.ok) {
-      console.error('[whatsapp-callback] subscribed_apps failed:', subData);
       logError('whatsapp-sub-failed', {
         message: `business_id=${business_id} waba_id=${waba_id} status=${subRes.status} detail=${JSON.stringify(subData).slice(0, 200)}`,
         stack: '',
       });
     }
 
-    // 3. Persist credentials (access token encrypted at rest)
-    saveWabaCredentials(Number(business_id), { wabaId: waba_id, phoneNumberId: phone_number_id, accessToken, provider: 'meta' });
+    saveWabaCredentials(Number(business_id), {
+      wabaId:        waba_id,
+      phoneNumberId: phone_number_id,
+      accessToken,   // null en flujo sin code → metaFetch usa META_SYSTEM_TOKEN
+      provider:      'meta',
+    });
 
     const savedBusiness = getBusinessById(Number(business_id));
     if (savedBusiness) notifyAdmin('wa_connected', { businessName: savedBusiness.name, phoneNumber: phone_number_id, provider: 'meta', source: 'callback' }).catch(() => {});
 
+    logError('es-connect', {
+      message: `ok business_id=${business_id} waba_id=${waba_id} phone_number_id_last4=${String(phone_number_id).slice(-4)} had_code=${!!code} sub_ok=${subRes.ok}`,
+      stack: '',
+    });
     res.json({ ok: true, waba_id, phone_number_id, subscribed: subRes.ok });
   } catch (err) {
-    console.error('[whatsapp-callback]', err.message);
+    logError('es-connect', { message: `exception business_id=${business_id} err=${err.message}`, stack: '' });
     res.status(500).json({ error: err.message });
   }
 });

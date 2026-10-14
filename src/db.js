@@ -808,6 +808,13 @@ function getBusinessByPhoneNumberId(phoneNumberId) {
   return deserializeBusiness(row);
 }
 
+const stmtGetBusinessByWabaId = db.prepare('SELECT * FROM businesses WHERE waba_id = ? LIMIT 1');
+function getBusinessByWabaId(wabaId) {
+  const row = stmtGetBusinessByWabaId.get(String(wabaId));
+  if (!row) return null;
+  return deserializeBusiness(row);
+}
+
 function getBusinessByUserId(userId) {
   const row = db.prepare(`
     SELECT b.* FROM businesses b
@@ -1397,7 +1404,7 @@ module.exports = {
   upsertBusiness,
   getBusinessById,
   getBusinessByWhatsappNumber,
-  getBusinessByPhoneNumberId,
+  getBusinessByPhoneNumberId, getBusinessByWabaId,
   getBusinessByUserId,
   setUserBusiness,
   getConversationsByBusinessId,
