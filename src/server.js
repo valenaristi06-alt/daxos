@@ -4160,6 +4160,69 @@ app.post('/admin/api/meta-waba-connect', requireAdmin, async (req, res) => {
   });
 });
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Meta phone number status — solo lectura, no modifica nada
+// GET /admin/api/meta-phone-status/:business_id
+app.get('/admin/api/meta-phone-status/:business_id', requireAdmin, async (req, res) => {
+  const systemToken = process.env.META_SYSTEM_TOKEN;
+  if (!systemToken) return res.status(500).json({ error: 'META_SYSTEM_TOKEN no configurado' });
+
+  const id = parseInt(req.params.business_id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'business_id inválido' });
+
+  const business = getBusinessById(id);
+  if (!business?.phone_number_id) {
+    return res.status(404).json({ error: `Negocio ${id} no encontrado o sin phone_number_id` });
+  }
+
+  const pnid = business.phone_number_id;
+
+  // Meta rechaza campos inexistentes con error code 100 — no los ignora silenciosamente.
+  // Consultamos cada campo por separado en paralelo y acumulamos los que responden.
+  const FIELDS = [
+    'display_phone_number', 'verified_name', 'status', 'name_status',
+    'quality_rating', 'platform_type', 'account_mode',
+    'is_on_biz_app', 'code_verification_status', 'messaging_limit_tier',
+  ];
+
+  const authHdr = { 'Authorization': `Bearer ${systemToken}` };
+
+  async function fetchField(field) {
+    const r = await fetch(`https://graph.facebook.com/v21.0/${pnid}?fields=${field}`, { headers: authHdr });
+    const d = await r.json();
+    return { field, ok: r.ok, data: d };
+  }
+
+  try {
+    const results = await Promise.all(FIELDS.map(fetchField));
+
+    // Si todos fallaron con un error duro (auth, not found, etc.) reportar el primero
+    const hardFail = results.find(r => !r.ok && r.data?.error?.code !== 100);
+    if (hardFail && results.every(r => !r.ok)) {
+      return res.status(502).json({
+        error: hardFail.data?.error?.message ?? 'Error desconocido de Meta',
+        meta_error: hardFail.data?.error ?? hardFail.data,
+      });
+    }
+
+    const combined = {};
+    const unavailable = [];
+    for (const r of results) {
+      if (r.ok && r.data[r.field] !== undefined) {
+        combined[r.field] = r.data[r.field];
+      } else {
+        unavailable.push(r.field);
+      }
+    }
+    const anyOk = results.find(r => r.ok && r.data.id);
+    if (anyOk) combined.id = anyOk.data.id;
+
+    res.json({ ...combined, _campos_no_disponibles: unavailable });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/admin/test-embedded-signup', requireAdmin, (_req, res) => {
   res.sendFile(path.join(__dirname, 'views/admin/test-embedded-signup.html'));
 });
