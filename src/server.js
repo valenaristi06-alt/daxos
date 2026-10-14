@@ -224,7 +224,7 @@ app.use(cors({ origin: _corsAllowedOrigin, credentials: !!_corsAllowedOrigin }))
 
 app.use(express.json({
   verify: (req, _res, buf) => {
-    if (req.path === '/webhook/kapso' || req.path === '/webhook/kapso-platform') req.rawBody = buf;
+    if (req.path.startsWith('/webhook')) req.rawBody = buf;
   },
 }));
 if (IS_PROD && !process.env.SESSION_SECRET) {
@@ -2095,6 +2095,46 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
 
 // --- WhatsApp webhook ---
 
+// WEBHOOK_SIG_MODE: 'off' | 'log' (default) | 'enforce'
+// Validates X-Hub-Signature-256 with META_APP_SECRET.
+// 'log' → mismatch logged but request accepted; 'enforce' → 401.
+function _checkMetaSig(req, logTag) {
+  const mode = (process.env.WEBHOOK_SIG_MODE || 'log').toLowerCase();
+  if (mode === 'off') return true;
+
+  const secret = process.env.META_APP_SECRET;
+  if (!secret) {
+    logError('sig-mismatch', { message: `${logTag} META_APP_SECRET not set — skipping sig check mode=${mode}`, stack: '' });
+    return true;
+  }
+
+  const rawBody   = req.rawBody;
+  const sigHeader = req.headers['x-hub-signature-256'] || '';
+
+  if (!rawBody) {
+    logError('sig-mismatch', { message: `${logTag} rawBody missing mode=${mode}`, stack: '' });
+    return mode !== 'enforce';
+  }
+  if (!sigHeader) {
+    logError('sig-mismatch', { message: `${logTag} no x-hub-signature-256 header mode=${mode}`, stack: '' });
+    return mode !== 'enforce';
+  }
+
+  const expected    = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  const expectedBuf = Buffer.from(expected);
+  const headerBuf   = Buffer.from(sigHeader);
+  const match = expectedBuf.length === headerBuf.length
+    && crypto.timingSafeEqual(expectedBuf, headerBuf);
+
+  if (match) return true;
+
+  logError('sig-mismatch', {
+    message: `${logTag} sig_mismatch mode=${mode} raw_len=${rawBody.length} header_prefix=${sigHeader.slice(0, 12)}…`,
+    stack: '',
+  });
+  return mode !== 'enforce';
+}
+
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
@@ -2112,6 +2152,7 @@ app.get('/webhook', (req, res) => {
 });
 
 app.post('/webhook', async (req, res) => {
+  if (!_checkMetaSig(req, 'webhook')) return res.status(401).send('Unauthorized');
   // Respond 200 immediately so Meta doesn't retry
   res.status(200).send('OK');
 
@@ -2312,6 +2353,7 @@ app.get('/webhook/meta', (req, res) => {
 });
 
 app.post('/webhook/meta', (req, res) => {
+  if (!_checkMetaSig(req, 'webhook/meta')) return res.status(401).send('Unauthorized');
   res.status(200).send('OK');
   const b    = req.body;
   const wabaId  = b?.entry?.[0]?.id ?? null;
