@@ -137,9 +137,9 @@
           </div>
 
           <div style="margin-top:14px; padding:14px 16px; background:#111; border:1px solid #222; border-radius:6px; font-size:13px; color:#aaa; line-height:1.7;">
-            <a href="/antes-de-conectar.html" target="_blank" style="color:var(--accent); text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">Antes de conectar, revisá estos 6 puntos</a><br>
-            <a href="/ayuda/conectar-whatsapp" target="_blank" style="color:var(--accent); text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">¿Te apareció un error al conectar?</a><br>
-            <span style="color:#888;">Para que la conexión no se corte, abrí WhatsApp Business en tu celular y usalo al menos una vez por semana.</span>
+            <span id="wa-pre-connect-links"><a href="/antes-de-conectar.html" target="_blank" style="color:var(--accent); text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">Antes de conectar, revisá estos 6 puntos</a><br>
+            <a href="/ayuda/conectar-whatsapp" target="_blank" style="color:var(--accent); text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">¿Te apareció un error al conectar?</a><br></span>
+            <span id="wa-tip-weekly" style="color:#888; display:none;">Para que la conexión no se corte, abrí WhatsApp Business en tu celular y usalo al menos una vez por semana.</span>
           </div>
 
           <p id="wa-connect-error" style="display:none; color:#ef4444; font-size:12px; margin-top:6px;"></p>
@@ -1810,15 +1810,21 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
     // ── WhatsApp Embedded Signup ──
 
     function renderWaConnectionStatus(b) {
-      const statusEl = document.getElementById('wa-connect-status');
-      const btnEl    = document.getElementById('btn-wa-connect');
-      const numEl    = document.getElementById('wa-connected-number');
+      const statusEl  = document.getElementById('wa-connect-status');
+      const btnEl     = document.getElementById('btn-wa-connect');
+      const numEl     = document.getElementById('wa-connected-number');
+      const preLinks  = document.getElementById('wa-pre-connect-links');
+      const tipWeekly = document.getElementById('wa-tip-weekly');
       if (b && b.phone_number_id) {
         statusEl.style.display = 'flex';
         numEl.textContent = b.whatsapp_number ? `(${b.whatsapp_number})` : `ID: ${b.phone_number_id}`;
         btnEl.textContent = 'Reconectar WhatsApp';
+        if (preLinks)  preLinks.style.display  = 'none';
+        if (tipWeekly) tipWeekly.style.display = '';
       } else {
         statusEl.style.display = 'none';
+        if (preLinks)  preLinks.style.display  = '';
+        if (tipWeekly) tipWeekly.style.display = 'none';
         btnEl.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex-shrink:0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.855L.057 23.886a.5.5 0 0 0 .608.617l6.224-1.633A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.686-.528-5.208-1.44l-.374-.22-3.894 1.022 1.001-3.804-.242-.392A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg> Conectar WhatsApp Business`;
       }
     }
