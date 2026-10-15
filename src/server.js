@@ -2182,8 +2182,17 @@ app.post('/webhook', async (req, res) => {
 
         const value = change.value;
         const phoneNumberId = value.metadata?.phone_number_id;
-        const messages = value.messages || [];
 
+        for (const st of value.statuses || []) {
+          if (st.status !== 'failed') continue;
+          const e = st.errors?.[0];
+          logError('wa-status-failed', {
+            message: `phone_number_id=${phoneNumberId} code=${e?.code ?? 'n/a'} title=${String(e?.title ?? '').slice(0, 100)} msg=${String(e?.message ?? '').slice(0, 150)} details=${String(e?.error_data?.details ?? '').slice(0, 150)}`,
+            stack: '',
+          });
+        }
+
+        const messages = value.messages || [];
         if (!messages.length) continue;
 
         const business = getBusinessByPhoneNumberId(phoneNumberId);
