@@ -1848,9 +1848,36 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       }).catch(() => {});
     }
 
-    let pendingEsCode = null;
-    let pendingEsData = null; // { waba_id, phone_number_id }
-    let esSubmitted   = false;
+    let pendingEsCode    = null;
+    let pendingEsData    = null; // { waba_id, phone_number_id }
+    let esSubmitted      = false;
+    let esPollingHandle  = null;
+
+    function startEsPolling() {
+      if (esPollingHandle) clearInterval(esPollingHandle);
+      const start = Date.now();
+      esPollingHandle = setInterval(async () => {
+        if (Date.now() - start > 90_000) {
+          clearInterval(esPollingHandle);
+          esPollingHandle = null;
+          document.getElementById('btn-wa-connect').disabled = false;
+          waStep('');
+          return;
+        }
+        try {
+          const b = await fetch('/api/business').then(r => r.json());
+          if (b && b.phone_number_id && b.phone_number_id !== currentBusiness?.phone_number_id) {
+            clearInterval(esPollingHandle);
+            esPollingHandle = null;
+            currentBusiness = b;
+            renderWaConnectionStatus(b);
+            waStep('');
+            document.getElementById('btn-wa-connect').disabled = false;
+            toast('WhatsApp conectado correctamente ✓', 'ok');
+          }
+        } catch {}
+      }, 3000);
+    }
 
     async function trySubmitEsConnection() {
       if (!pendingEsData) return;
@@ -1878,6 +1905,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         }
         currentBusiness = { ...currentBusiness, phone_number_id, waba_id };
         renderWaConnectionStatus(currentBusiness);
+        if (esPollingHandle) { clearInterval(esPollingHandle); esPollingHandle = null; }
       } catch (err) {
         errEl.textContent = `Error al guardar la conexión: ${err.message}`;
         errEl.style.display = 'block';
@@ -1952,6 +1980,9 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       pendingEsData = null;
       document.getElementById('wa-connect-error').style.display = 'none';
       this.disabled = true;
+      // Register pending for server-side auto-connect and start polling
+      fetch('/api/es-pending', { method: 'POST' }).catch(() => {});
+      startEsPolling();
       FB.login(function (response) {
         if (response.authResponse?.code) {
           pendingEsCode = response.authResponse.code;

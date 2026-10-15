@@ -51,7 +51,8 @@ const multer = require('multer');
 const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
   incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
   getConvAssistantCountLastHour, setSpendingCapNotified,
-  createPasswordResetToken, getPasswordResetToken, markPasswordResetTokenUsed, changeUserPassword } = require('./db');
+  createPasswordResetToken, getPasswordResetToken, markPasswordResetTokenUsed, changeUserPassword,
+  insertEsPending, getActivePendingBusinesses, deleteEsPending, cleanExpiredEsPending } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -866,6 +867,16 @@ app.get('/api/debug/me', requireAdmin, (req, res) => {
     ? getConversationsByBusinessId(user.business_id).length
     : 0;
   res.json({ sessionUserId: req.session.userId, userId: user?.id, email: user?.email, businessId: user?.business_id ?? null, convCount });
+});
+
+// Registers business as pending ES connection (20-min window) for server-side auto-connect.
+app.post('/api/es-pending', requireAuth, rateLimitWith(10, 15 * 60 * 1000, req => `es-pending:${req.session.userId}`), (req, res) => {
+  const business = getBusinessByUserId(req.session.userId);
+  if (!business) return res.status(404).json({ error: 'Negocio no encontrado' });
+  if (business.phone_number_id) return res.status(400).json({ error: 'Ya conectado' });
+  cleanExpiredEsPending();
+  insertEsPending(business.id);
+  res.json({ ok: true });
 });
 
 app.post('/api/debug/es-log', requireAuth, rateLimitWith(5, 15 * 60 * 1000, req => `es-log:user:${req.session.userId}`), (req, res) => {
@@ -2214,6 +2225,115 @@ app.post('/webhook', async (req, res) => {
             logError('webhook-process-error', err);
           }
         }
+      }
+    }
+
+    // PARTNER_APP_INSTALLED — server-side auto-connect for ES flows where postMessage FINISH is missing
+    for (const entry of body.entry || []) {
+      for (const change of entry.changes || []) {
+        if (change.field !== 'account_update') continue;
+        if (change.value?.event !== 'PARTNER_APP_INSTALLED') continue;
+        const wabaId = String(change.value?.waba_info?.waba_id || '');
+        if (!wabaId) continue;
+        // Ignore events for other apps sharing this WABA
+        const partnerAppId = change.value?.waba_info?.partner_app_id;
+        if (partnerAppId && String(partnerAppId) !== String(process.env.META_APP_ID)) continue;
+
+        cleanExpiredEsPending();
+        const pending = getActivePendingBusinesses();
+
+        if (pending.length !== 1) {
+          logError('es-connect', {
+            message: `auto-ambiguo PARTNER_APP_INSTALLED waba_id=${wabaId} pending_count=${pending.length}`,
+            stack: '',
+          });
+          continue;
+        }
+
+        const businessId = pending[0].business_id;
+        const business   = getBusinessById(businessId);
+        if (!business) { deleteEsPending(businessId); continue; }
+
+        if (business.phone_number_id) {
+          logError('es-connect', {
+            message: `auto-skip waba_id=${wabaId} business_id=${businessId} already_connected`,
+            stack: '',
+          });
+          deleteEsPending(businessId);
+          continue;
+        }
+
+        const existingWaba = getBusinessByWabaId(wabaId);
+        if (existingWaba && existingWaba.id !== businessId) {
+          logError('es-connect', {
+            message: `auto-blocked waba_id=${wabaId} already_owned_by=${existingWaba.id}`,
+            stack: '',
+          });
+          continue;
+        }
+
+        if (!process.env.META_SYSTEM_TOKEN) {
+          logError('es-connect', {
+            message: `auto-skip waba_id=${wabaId} META_SYSTEM_TOKEN not set`,
+            stack: '',
+          });
+          continue;
+        }
+
+        const pnRes  = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(wabaId)}/phone_numbers`, {
+          headers: { 'Authorization': `Bearer ${process.env.META_SYSTEM_TOKEN}` },
+        });
+        const pnData = await pnRes.json();
+
+        if (!pnRes.ok) {
+          logError('es-connect', {
+            message: `auto-pn-fetch-failed waba_id=${wabaId} status=${pnRes.status}`,
+            stack: '',
+          });
+          continue;
+        }
+
+        const phones = pnData.data || [];
+        if (phones.length !== 1) {
+          logError('es-connect', {
+            message: `auto-ambiguo waba_id=${wabaId} business_id=${businessId} phone_count=${phones.length}`,
+            stack: '',
+          });
+          continue;
+        }
+
+        const phoneNumberId = String(phones[0].id);
+        const pnOwner = getBusinessByPhoneNumberId(phoneNumberId);
+        if (pnOwner && pnOwner.id !== businessId) {
+          logError('es-connect', {
+            message: `auto-pn-taken waba_id=${wabaId} pnid_last4=${phoneNumberId.slice(-4)} owned_by=${pnOwner.id}`,
+            stack: '',
+          });
+          continue;
+        }
+
+        const subRes  = await fetch(`https://graph.facebook.com/v21.0/${wabaId}/subscribed_apps`, {
+          method:  'POST',
+          headers: { 'Authorization': `Bearer ${process.env.META_SYSTEM_TOKEN}` },
+        });
+        const subData = await subRes.json();
+        if (!subRes.ok) {
+          logError('whatsapp-sub-failed', {
+            message: `auto business_id=${businessId} waba_id=${wabaId} status=${subRes.status}`,
+            stack: '',
+          });
+        }
+
+        saveWabaCredentials(businessId, { wabaId, phoneNumberId, accessToken: null, provider: 'meta' });
+        deleteEsPending(businessId);
+
+        const saved = getBusinessById(businessId);
+        if (saved) notifyAdmin('wa_connected', { businessName: saved.name, phoneNumber: phoneNumberId, provider: 'meta', source: 'auto' }).catch(() => {});
+
+        logError('es-connect', {
+          message: `auto ok business_id=${businessId} waba_id=${wabaId} pnid_last4=${phoneNumberId.slice(-4)} sub_ok=${subRes.ok}`,
+          stack: '',
+        });
       }
     }
   } catch (err) {

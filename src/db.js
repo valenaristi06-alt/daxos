@@ -490,6 +490,12 @@ db.exec(`
 
 })();
 
+db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  business_id INTEGER NOT NULL UNIQUE REFERENCES businesses(id),
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+
 // --- spending caps ---
 
 function incrementAnthropicCall(businessId) {
@@ -1516,6 +1522,7 @@ module.exports = {
   setWaHealthAlertedAt,
   clearWaHealthAlertedAt,
   purgeOldErrorLog,
+  insertEsPending, getActivePendingBusinesses, deleteEsPending, cleanExpiredEsPending,
   incrementAnthropicCall,
   incrementElevenLabsChars,
   getSpendingToday,
@@ -1818,3 +1825,13 @@ function clearWaHealthAlertedAt(businessId) {
 function purgeOldErrorLog() {
   return db.prepare(`DELETE FROM error_log WHERE created_at < datetime('now', '-30 days')`).run();
 }
+
+const stmtInsertEsPending  = db.prepare('INSERT OR REPLACE INTO es_pending (business_id) VALUES (?)');
+const stmtGetActivePending = db.prepare("SELECT business_id FROM es_pending WHERE created_at >= datetime('now', '-20 minutes')");
+const stmtDeleteEsPending  = db.prepare('DELETE FROM es_pending WHERE business_id = ?');
+const stmtCleanEsPending   = db.prepare("DELETE FROM es_pending WHERE created_at < datetime('now', '-20 minutes')");
+
+function insertEsPending(businessId)  { stmtInsertEsPending.run(Number(businessId)); }
+function getActivePendingBusinesses() { return stmtGetActivePending.all(); }
+function deleteEsPending(businessId)  { stmtDeleteEsPending.run(Number(businessId)); }
+function cleanExpiredEsPending()      { stmtCleanEsPending.run(); }
