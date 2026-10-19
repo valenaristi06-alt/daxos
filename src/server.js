@@ -4550,6 +4550,55 @@ app.post('/admin/api/meta-phone-register', requireAdmin, async (req, res) => {
   }
 });
 
+// POST /admin/api/meta-resubscribe/:business_id
+app.post('/admin/api/meta-resubscribe/:business_id', requireAdmin, async (req, res) => {
+  const id       = Number(req.params.business_id);
+  const business = getBusinessById(id);
+  if (!business) return res.status(404).json({ error: 'Negocio no encontrado' });
+  const waba_id = business.waba_id;
+  if (!waba_id) return res.status(400).json({ error: 'El negocio no tiene waba_id' });
+
+  const token = process.env.META_SYSTEM_TOKEN;
+  if (!token) return res.status(500).json({ error: 'META_SYSTEM_TOKEN no configurado' });
+
+  const appsUrl = `https://graph.facebook.com/v21.0/${encodeURIComponent(waba_id)}/subscribed_apps`;
+
+  function extractApps(data) {
+    return (data?.data || []).map(a => ({ id: a.id, name: a.name }));
+  }
+
+  try {
+    // 1. GET before
+    const beforeRes  = await fetch(appsUrl, { headers: { 'Authorization': `Bearer ${token}` } });
+    const beforeData = await beforeRes.json();
+    const antes      = beforeRes.ok ? extractApps(beforeData) : { error: beforeData?.error?.message, status: beforeRes.status };
+
+    // 2. POST subscribed_apps
+    const postRes  = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(waba_id)}/subscribed_apps`, {
+      method:  'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    const postData  = await postRes.json();
+    const post_ok   = postRes.ok && !!postData.success;
+    const post_error = postRes.ok ? null : (postData?.error?.message ?? `status ${postRes.status}`);
+
+    // 3. GET after
+    const afterRes  = await fetch(appsUrl, { headers: { 'Authorization': `Bearer ${token}` } });
+    const afterData = await afterRes.json();
+    const despues   = afterRes.ok ? extractApps(afterData) : { error: afterData?.error?.message, status: afterRes.status };
+
+    logError('meta-resubscribe', {
+      message: `business_id=${id} waba_id=${waba_id} post_ok=${post_ok} post_error=${post_error ?? 'none'} antes_count=${Array.isArray(antes) ? antes.length : 'err'} despues_count=${Array.isArray(despues) ? despues.length : 'err'}`,
+      stack: '',
+    });
+
+    res.json({ waba_id, antes, post_ok, post_error, despues });
+  } catch (err) {
+    logError('meta-resubscribe', { message: `exception business_id=${id} err=${err.message}`, stack: '' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/admin/test-embedded-signup', requireAdmin, (_req, res) => {
   res.sendFile(path.join(__dirname, 'views/admin/test-embedded-signup.html'));
 });
