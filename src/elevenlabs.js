@@ -3,10 +3,11 @@ require('dotenv').config({ path: '.env.local' });
 const { convertToMp3 } = require('./audio');
 
 const EL_TIMEOUT_MS = 15_000;
+const STT_TIMEOUT_MS = 30_000;
 
-async function fetchWithTimeout(url, opts) {
+async function fetchWithTimeout(url, opts, timeoutMs = EL_TIMEOUT_MS) {
   const ac = new AbortController();
-  const tid = setTimeout(() => ac.abort(), EL_TIMEOUT_MS);
+  const tid = setTimeout(() => ac.abort(), timeoutMs);
   try {
     return await fetch(url, { ...opts, signal: ac.signal });
   } finally {
@@ -127,4 +128,22 @@ async function deleteVoice(voiceId) {
   }
 }
 
-module.exports = { cloneVoice, generatePreview, generateAudioBuffer, deleteVoice };
+async function transcribeAudio(buffer, contentType) {
+  requireKey();
+  const form = new FormData();
+  form.append('model_id', 'scribe_v1');
+  form.append('audio', new Blob([buffer], { type: contentType || 'audio/ogg' }), 'audio.ogg');
+  const res = await fetchWithTimeout(`${BASE}/speech-to-text`, {
+    method: 'POST',
+    headers: { 'xi-api-key': API_KEY },
+    body: form,
+  }, STT_TIMEOUT_MS);
+  if (!res.ok) {
+    const err = await res.text().catch(() => '');
+    throw new Error(`ElevenLabs STT error ${res.status}: ${err.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  return (data.text || '').trim();
+}
+
+module.exports = { cloneVoice, generatePreview, generateAudioBuffer, deleteVoice, transcribeAudio };

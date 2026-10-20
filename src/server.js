@@ -143,8 +143,8 @@ async function extractTextFromFile(buffer, mimetype, originalname) {
 }
 
 const fs = require('fs');
-const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, downloadKapsoMedia } = require('./whatsapp');
-const { generateAudioBuffer } = require('./elevenlabs');
+const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, downloadKapsoMedia, downloadMetaMedia } = require('./whatsapp');
+const { generateAudioBuffer, transcribeAudio } = require('./elevenlabs');
 const { convertToOgg } = require('./audio');
 
 fs.mkdirSync(path.join(__dirname, '../data/uploads'), { recursive: true });
@@ -2207,10 +2207,9 @@ app.post('/webhook', async (req, res) => {
         const waCredentials = { phoneNumberId: business.phone_number_id, accessToken: business.wa_access_token, provider: business.wa_provider || 'meta' };
 
         for (const msg of messages) {
-          if (msg.type !== 'text') continue;
+          if (msg.type !== 'text' && msg.type !== 'audio') continue;
           const customerPhone = msg.from;
-          const text = msg.text?.body;
-          if (!text) continue;
+          if (!customerPhone) continue;
 
           // Dedup: INSERT OR IGNORE — if already processed, skip
           if (msg.id) {
@@ -2223,13 +2222,51 @@ app.post('/webhook', async (req, res) => {
           // Meta sends timestamp as a Unix epoch string
           const msgTimestamp = msg.timestamp ? parseInt(msg.timestamp, 10) || null : null;
 
+          let text;
+          if (msg.type === 'text') {
+            text = msg.text?.body;
+            if (!text) {
+              if (msg.id) deleteProcessedMessage(business.id, msg.id);
+              continue;
+            }
+          } else {
+            // audio — download from Meta then transcribe with ElevenLabs Scribe
+            const mediaId = msg.audio?.id;
+            if (!mediaId) {
+              logError('audio-skip', { message: `business_id=${business.id} from=${customerPhone} no_media_id`, stack: '' });
+              continue;
+            }
+            let audioBuffer, audioContentType;
+            try {
+              ({ buffer: audioBuffer, contentType: audioContentType } = await downloadMetaMedia(mediaId, business.wa_access_token));
+              logError('audio-download', { message: `business_id=${business.id} from=${customerPhone} bytes=${audioBuffer.length} mime=${audioContentType}`, stack: '' });
+            } catch (dlErr) {
+              logError('audio-download', { message: `business_id=${business.id} from=${customerPhone} err=${dlErr.message}`, stack: '' });
+              sendWhatsAppMessage(customerPhone, 'No pude escuchar el audio, ¿me lo escribís?', waCredentials).catch(() => {});
+              continue;
+            }
+            try {
+              text = await transcribeAudio(audioBuffer, audioContentType);
+              logError('audio-transcribe', { message: `business_id=${business.id} from=${customerPhone} chars=${text.length}`, stack: '' });
+            } catch (sttErr) {
+              logError('audio-transcribe', { message: `business_id=${business.id} from=${customerPhone} err=${sttErr.message}`, stack: '' });
+              sendWhatsAppMessage(customerPhone, 'No pude escuchar el audio, ¿me lo escribís?', waCredentials).catch(() => {});
+              continue;
+            }
+            if (!text.trim()) {
+              logError('audio-skip', { message: `business_id=${business.id} from=${customerPhone} empty_transcript`, stack: '' });
+              sendWhatsAppMessage(customerPhone, 'No pude escuchar el audio, ¿me lo escribís?', waCredentials).catch(() => {});
+              continue;
+            }
+          }
+
           try {
             await processIncomingMessage(business, waCredentials, {
               msgId: msg.id, customerPhone, text,
               msgTimestamp, msgTimestampField: 'msg.timestamp',
             });
           } catch (err) {
-            // Rollback dedup mark so Kapso/Meta retry can reprocess
+            // Rollback dedup mark so Meta retry can reprocess
             if (msg.id) deleteProcessedMessage(business.id, msg.id);
             logError('webhook-process-error', err);
           }

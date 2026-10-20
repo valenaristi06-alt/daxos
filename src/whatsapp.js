@@ -162,6 +162,40 @@ async function sendTypingIndicator(to, creds) {
   }, 'sendTypingIndicator').catch(() => {});
 }
 
+const AUDIO_MAX_BYTES = 2 * 1024 * 1024; // ~2 min at 128 kbps
+
+async function downloadMetaMedia(mediaId, bizToken) {
+  const metaRes = await metaFetch(
+    `${GRAPH_BASE}/${encodeURIComponent(mediaId)}`,
+    { method: 'GET', headers: {} },
+    bizToken,
+    'downloadMetaMedia'
+  );
+  if (!metaRes.ok) {
+    const body = await metaRes.text().catch(() => '');
+    throw new Error(`meta_resolve:status=${metaRes.status} body=${body.slice(0, 150)}`);
+  }
+  const meta = await metaRes.json();
+  const fileSize = meta.file_size ?? 0;
+  if (fileSize > AUDIO_MAX_BYTES) throw new Error(`too_large:file_size=${fileSize}`);
+  const downloadUrl = meta.url;
+  if (!downloadUrl) throw new Error('meta_media_no_url');
+
+  const token = bizToken || process.env.META_SYSTEM_TOKEN;
+  const dlRes = await fetch(downloadUrl, {
+    headers: { 'Authorization': `Bearer ${token}` },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!dlRes.ok) throw new Error(`meta_download:status=${dlRes.status}`);
+  const cl = parseInt(dlRes.headers.get('content-length') || '0', 10);
+  if (cl > AUDIO_MAX_BYTES) throw new Error(`too_large:content_length=${cl}`);
+  const buffer = await readBodyCapped(dlRes, AUDIO_MAX_BYTES);
+  const contentType = (dlRes.headers.get('content-type') || '').split(';')[0].trim()
+    || meta.mime_type
+    || 'audio/ogg';
+  return { buffer, contentType };
+}
+
 // Host allowlist for incoming Kapso media URLs.
 const KAPSO_HOST_RE = /^(?:[a-z0-9-]+\.)?kapso\.ai$/i;
 
@@ -261,4 +295,4 @@ async function downloadKapsoMedia(mediaUrl, mediaId, phoneNumberId) {
   return { buffer: buf2, contentType: contentType2 };
 }
 
-module.exports = { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, downloadKapsoMedia, isAllowedKapsoHost };
+module.exports = { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, downloadKapsoMedia, downloadMetaMedia, isAllowedKapsoHost };
