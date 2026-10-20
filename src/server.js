@@ -15,6 +15,10 @@ const TRIAL_WARN_DAYS   = 11;
 const TRIAL_GRACE_HOURS = 72;
 const AUDIO_MAX_CHARS   = 600;
 
+// Mercado Pago plan mapping — single source of truth
+const MP_AMOUNT_TO_PLAN = { 2990: 'arranque', 5990: 'crecimiento', 12990: 'a_medida' };
+const MP_REF_TO_PLAN    = { arranque: 'arranque', crecimiento: 'crecimiento', negocio: 'a_medida' };
+
 // Spending cap defaults per plan (overridable via runtime_config)
 const _CAP_ANTHROPIC = { arranque: 70,  crecimiento: 150, a_medida: 300  };
 const _CAP_TTS_CHARS = { arranque: 20000, crecimiento: 100000, a_medida: 500000 };
@@ -53,7 +57,8 @@ const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserByI
   getConvAssistantCountLastHour, setSpendingCapNotified,
   createPasswordResetToken, getPasswordResetToken, markPasswordResetTokenUsed, changeUserPassword,
   insertEsPending, getActivePendingBusinesses, deleteEsPending, cleanExpiredEsPending,
-  getLastWebhookInboundAt, getRecentWaStatusFailed } = require('./db');
+  getLastWebhookInboundAt, getRecentWaStatusFailed,
+  isPaymentProcessed } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -2922,33 +2927,33 @@ app.post('/webhook/kapso-platform', async (req, res) => {
 // --- Mercado Pago webhook ---
 
 app.post('/webhook/mercadopago', async (req, res) => {
-  // Validate HMAC signature before processing anything
+  // Reject immediately if secret is not configured — do not process unsigned webhooks
   const webhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
-  if (webhookSecret) {
-    const xSignature = req.headers['x-signature'] || '';
-    const xRequestId = req.headers['x-request-id'] || '';
-    const paymentId  = req.query?.['data.id'] || req.body?.data?.id || '';
+  if (!webhookSecret) {
+    console.error('[mp-webhook] MERCADOPAGO_WEBHOOK_SECRET not set — rejecting request');
+    return res.status(200).send('OK'); // 200 so MP doesn't keep retrying an unconfigured server
+  }
 
-    const tsMatch = xSignature.match(/ts=([^,]+)/);
-    const v1Match = xSignature.match(/v1=([^,]+)/);
+  // Validate HMAC-SHA256 signature
+  const xSignature = req.headers['x-signature'] || '';
+  const xRequestId = req.headers['x-request-id'] || '';
+  const paymentId  = req.query?.['data.id'] || req.body?.data?.id || '';
+  const tsMatch    = xSignature.match(/ts=([^,]+)/);
+  const v1Match    = xSignature.match(/v1=([^,]+)/);
 
-    if (!tsMatch || !v1Match) {
-      console.warn('[mp-webhook] Missing or malformed x-signature header — rejected');
-      return res.status(200).send('OK'); // 200 so MP doesn't retry; we reject silently
-    }
+  if (!tsMatch || !v1Match) {
+    console.warn('[mp-webhook] Missing or malformed x-signature — rejected');
+    return res.status(200).send('OK');
+  }
 
-    const ts       = tsMatch[1];
-    const received = v1Match[1];
-    const manifest = `id:${paymentId};request-id:${xRequestId};ts:${ts};`;
-    const expected = crypto.createHmac('sha256', webhookSecret).update(manifest).digest('hex');
+  const manifest = `id:${paymentId};request-id:${xRequestId};ts:${tsMatch[1]};`;
+  const expected = crypto.createHmac('sha256', webhookSecret).update(manifest).digest('hex');
+  const received = v1Match[1];
 
-    if (received.length !== expected.length ||
-        !crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected))) {
-      console.warn('[mp-webhook] Invalid HMAC signature — rejected');
-      return res.status(200).send('OK');
-    }
-  } else {
-    console.warn('[mp-webhook] MERCADOPAGO_WEBHOOK_SECRET not set — skipping signature check');
+  if (received.length !== expected.length ||
+      !crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected))) {
+    console.warn('[mp-webhook] Invalid HMAC signature — rejected');
+    return res.status(200).send('OK');
   }
 
   // Respond 200 immediately — MP retries on non-2xx
@@ -2963,6 +2968,8 @@ app.post('/webhook/mercadopago', async (req, res) => {
       console.error('[mp-webhook] MERCADOPAGO_ACCESS_TOKEN not set');
       return;
     }
+
+    const adminEmail = process.env.ADMIN_EMAIL;
 
     // ── Subscription cancelled / paused ──
     if (type === 'subscription_preapproval') {
@@ -2982,7 +2989,7 @@ app.post('/webhook/mercadopago', async (req, res) => {
         const user = getUserByEmail(payerEmail);
         if (user?.business_id) {
           setSubscriptionStatus(user.business_id, subStatus);
-          console.log(`[mp-webhook] Subscription ${data.id} ${subStatus} — business ${user.business_id} marked, access until plan_expires_at`);
+          console.log(`[mp-webhook] Subscription ${data.id} ${subStatus} — business ${user.business_id} marked`);
         } else {
           console.warn(`[mp-webhook] Subscription ${subStatus} but no business for ${payerEmail}`);
         }
@@ -2993,11 +3000,16 @@ app.post('/webhook/mercadopago', async (req, res) => {
     // ── Payment (alta + renovaciones mensuales) ──
     if (type !== 'payment') return;
 
-    // Verify payment directly with MP API — never trust notification body alone
+    // Dedup: skip if already processed (MP can send the same notification more than once)
+    if (isPaymentProcessed(String(data.id))) {
+      console.log(`[mp-webhook] Payment ${data.id} already processed — skipping`);
+      return;
+    }
+
+    // Verify payment directly with MP API — never trust the notification body alone
     const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${data.id}`, {
       headers: { 'Authorization': `Bearer ${mpToken}` },
     });
-
     if (!mpRes.ok) {
       console.error(`[mp-webhook] MP API returned ${mpRes.status} for payment ${data.id}`);
       return;
@@ -3006,7 +3018,7 @@ app.post('/webhook/mercadopago', async (req, res) => {
     const payment = await mpRes.json();
 
     if (payment.status !== 'approved') {
-      console.log(`[mp-webhook] Payment ${data.id} status=${payment.status}, ignoring`);
+      console.log(`[mp-webhook] Payment ${data.id} status=${payment.status} — ignoring`);
       return;
     }
 
@@ -3016,47 +3028,54 @@ app.post('/webhook/mercadopago', async (req, res) => {
       return;
     }
 
-    const paidAt = payment.date_approved || payment.date_created || new Date().toISOString();
+    const amount    = payment.transaction_amount;
+    const currency  = payment.currency_id;
+    const paidAt    = payment.date_approved || payment.date_created || new Date().toISOString();
     const expiresAt = new Date(new Date(paidAt).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const rawRef    = (payment.external_reference || '').toLowerCase().trim();
 
-    // Match payer email to a registered user
-    const user = getUserByEmail(payerEmail);
-    if (user && user.business_id) {
-      upgradePlan(user.business_id, 'crecimiento', paidAt, expiresAt);
-      savePayment({
-        businessId: user.business_id,
-        mpPaymentId: String(data.id),
-        amount: payment.transaction_amount,
-        currency: payment.currency_id,
-        paidAt,
-        rawJson: JSON.stringify(payment),
+    // Resolve plan from amount (source of truth) and external_reference (validation)
+    const planByAmount = MP_AMOUNT_TO_PLAN[Math.round(amount)];
+    const planByRef    = rawRef ? MP_REF_TO_PLAN[rawRef] : undefined;
+
+    // Guard: unknown amount or mismatch between amount and reference → manual review
+    const mismatch = planByRef !== undefined && planByRef !== planByAmount;
+    if (!planByAmount || mismatch) {
+      const reason = !planByAmount ? 'unknown_amount' : 'amount_ref_mismatch';
+      savePendingPayment({ mpPaymentId: String(data.id), payerEmail, amount, currency, paidAt, rawJson: JSON.stringify(payment) });
+      logError('mp-webhook-pending', {
+        message: `payment=${data.id} reason=${reason} amount=${amount} planByAmount=${planByAmount ?? 'none'} planByRef=${planByRef ?? 'none'} ref=${rawRef || 'empty'} payer=${payerEmail}`,
+        stack: '',
       });
-      console.log(`[mp-webhook] Upgraded business ${user.business_id} to crecimiento (payment ${data.id})`);
+      if (adminEmail) {
+        sendAdminNotificationEmail({ adminEmail, event: 'mp_payment_manual_review', data: {
+          reason, payment_id: data.id, payer_email: payerEmail,
+          amount: `${amount} ${currency}`, plan_by_amount: planByAmount ?? 'desconocido',
+          plan_by_ref: planByRef ?? 'no especificado', external_reference: rawRef || '(vacío)',
+        }}).catch(err => console.error('[mp-webhook] alert email failed:', err.message));
+      }
+      console.warn(`[mp-webhook] Payment ${data.id} held for manual review — reason=${reason}`);
       return;
     }
 
-    // No match — save for manual review and alert admin
-    savePendingPayment({
-      mpPaymentId: String(data.id),
-      payerEmail,
-      amount: payment.transaction_amount,
-      currency: payment.currency_id,
-      paidAt,
-      rawJson: JSON.stringify(payment),
-    });
+    const plan = planByAmount;
 
-    const adminEmail = process.env.ADMIN_EMAIL;
-    if (adminEmail) {
-      sendUnmatchedPaymentAlert({
-        adminEmail,
-        payerEmail,
-        amount: payment.transaction_amount,
-        currency: payment.currency_id,
-        mpPaymentId: data.id,
-      }).catch(err => console.error('[mp-webhook] alert email failed:', err.message));
+    // Match payer email to a registered user
+    const user = getUserByEmail(payerEmail);
+    if (user?.business_id) {
+      upgradePlan(user.business_id, plan, paidAt, expiresAt);
+      savePayment({ businessId: user.business_id, mpPaymentId: String(data.id), amount, currency, paidAt, rawJson: JSON.stringify(payment) });
+      console.log(`[mp-webhook] Upgraded business ${user.business_id} to ${plan} (payment ${data.id} amount=${amount})`);
+      return;
     }
 
-    console.warn(`[mp-webhook] No business found for payer ${payerEmail}, payment ${data.id} saved as pending`);
+    // No user found — save for manual review
+    savePendingPayment({ mpPaymentId: String(data.id), payerEmail, amount, currency, paidAt, rawJson: JSON.stringify(payment) });
+    if (adminEmail) {
+      sendUnmatchedPaymentAlert({ adminEmail, payerEmail, amount, currency, mpPaymentId: data.id })
+        .catch(err => console.error('[mp-webhook] alert email failed:', err.message));
+    }
+    console.warn(`[mp-webhook] No business for ${payerEmail}, payment ${data.id} saved as pending`);
   } catch (err) {
     console.error('[mp-webhook] Error processing payment:', err.message);
   }

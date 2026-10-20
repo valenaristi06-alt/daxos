@@ -1120,6 +1120,10 @@ function getPendingPayments() {
   return db.prepare('SELECT * FROM pending_payments ORDER BY created_at DESC').all();
 }
 
+function isPaymentProcessed(mpPaymentId) {
+  return !!db.prepare('SELECT 1 FROM payments WHERE mp_payment_id = ? LIMIT 1').get(String(mpPaymentId));
+}
+
 function setWaPaymentConfirmed(businessId) {
   db.prepare('UPDATE businesses SET wa_payment_confirmed = 1 WHERE id = ?').run(businessId);
 }
@@ -1438,6 +1442,7 @@ module.exports = {
   setSubscriptionStatus,
   savePayment,
   savePendingPayment,
+  isPaymentProcessed,
   getPendingPayments,
   getAllBusinesses,
   getGlobalStats,
