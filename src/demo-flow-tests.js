@@ -24,7 +24,7 @@ const {
   FOLLOWUP_DELAY_MS,
   EXPIRING_STATES,
 } = require('./demo-flow');
-const { htmlToText } = require('./demo-scraper');
+const { htmlToText, isJsOnly } = require('./demo-scraper');
 
 // ─── Mini test runner ─────────────────────────────────────────────────────────
 let passed = 0;
@@ -234,14 +234,40 @@ test('htmlToText keeps visible text', () => {
   assert(t.includes('24 hs'), 'visible text must survive');
 });
 
-test('page of only tracking scripts → short text → isJsOnly detects it', () => {
-  const SCRIPTS_ONLY = `<html><head>
-<script>var x=1;</script><script>var y=2;</script>
-<noscript>Enable JavaScript</noscript>
-<style>body{}</style><!-- comment -->
-</head><body><div id="root"></div></body></html>`;
-  const t = htmlToText(SCRIPTS_ONLY);
-  assert(t.length < 80, `text too long after strip: "${t}" (${t.length} chars)`);
+// GTM-style page: looks "big" in raw HTML due to noscript/scripts,
+// but after stripping only visible content text remains → isJsOnly → jsOnly path → needsText.
+const GTM_PAGE = `<!DOCTYPE html><html><head>
+<script>
+(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});
+var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';
+j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-XXXXX');
+</script>
+<style>.gtm-tracking{display:none;position:absolute;visibility:hidden;z-index:-9999}</style>
+</head><body>
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-XXXXX"
+height="0" width="0" style="display:none;visibility:hidden"></iframe>
+Activá JavaScript para continuar. Activá JavaScript para continuar. Activá JavaScript.
+Este sitio requiere JavaScript habilitado para funcionar correctamente. Por favor activalo.
+</noscript>
+<!-- Google Tag Manager body -->
+<div id="root"></div>
+</body></html>`;
+
+test('GTM page: htmlToText strips all tracking noise', () => {
+  const t = htmlToText(GTM_PAGE);
+  assert(!t.includes('gtm.start'), 'GTM script content must be removed');
+  assert(!t.includes('GTM-XXXXX'), 'GTM id in noscript must be removed');
+  assert(!t.includes('Activá JavaScript'), 'noscript fallback text must be removed');
+  assert(!t.includes('.gtm-tracking'), 'style content must be removed');
+});
+
+test('GTM page: isJsOnly returns true → triggers jsOnly path → demo-flow sends needsText', () => {
+  // isJsOnly=true means scrapeWebsite returns { jsOnly: true }
+  // demo-flow.js line ~213: if (result.jsOnly) → esperando_texto + MSG.needsText
+  const t = htmlToText(GTM_PAGE);
+  assert(isJsOnly(GTM_PAGE, t) === true,
+    `expected isJsOnly=true but text was ${t.length} chars: "${t.slice(0, 120)}"`);
 });
 
 // ─── hasEnoughData — quality gate ────────────────────────────────────────────

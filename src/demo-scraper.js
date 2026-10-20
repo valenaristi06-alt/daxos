@@ -150,4 +150,4 @@ async function scrapeWebsite(rawUrl) {
   return { pages, jsOnly: false };
 }
 
-module.exports = { scrapeWebsite, htmlToText };
+module.exports = { scrapeWebsite, htmlToText, isJsOnly };
