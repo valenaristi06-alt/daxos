@@ -46,7 +46,7 @@ const MSG = {
     'Ocurrió un error al procesar tu mensaje. Intentá de nuevo.',
 
   chatLimitReached:
-    'Llegaste al límite de mensajes de esta demo. Para seguir, activá tu plan en daxos.ai',
+    'Llegaste al límite de mensajes de esta demo. Para seguir, activá tu plan en daxos.lat',
 };
 
 module.exports = { MSG };

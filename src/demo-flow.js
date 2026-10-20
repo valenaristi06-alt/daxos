@@ -10,7 +10,7 @@ const db = require('./db');
 const GENERATION_TIMEOUT_MS  = 90_000;
 const SESSION_EXPIRY_MINUTES = 30;
 const FOLLOWUP_DELAY_MS      = 2 * 60 * 60 * 1000; // 2 hours
-const DEMO_BASE_URL          = process.env.DEMO_BASE_URL || 'https://daxos.ai';
+const DEMO_BASE_URL          = process.env.DEMO_BASE_URL || 'https://daxos.lat';
 
 // Daily rate limits
 const LIMIT_PER_IP    = 3;
