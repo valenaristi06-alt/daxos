@@ -131,16 +131,18 @@ async function deleteVoice(voiceId) {
 async function transcribeAudio(buffer, contentType) {
   requireKey();
   const form = new FormData();
+  form.append('file', new Blob([buffer], { type: contentType || 'audio/ogg' }), 'audio.ogg');
   form.append('model_id', 'scribe_v1');
-  form.append('audio', new Blob([buffer], { type: contentType || 'audio/ogg' }), 'audio.ogg');
+  form.append('language_code', 'spa');
+  // No Content-Type header — let fetch set it with the multipart boundary
   const res = await fetchWithTimeout(`${BASE}/speech-to-text`, {
     method: 'POST',
-    headers: { 'xi-api-key': API_KEY },
+    headers: { 'xi-api-key': API_KEY.trim() },
     body: form,
   }, STT_TIMEOUT_MS);
   if (!res.ok) {
-    const err = await res.text().catch(() => '');
-    throw new Error(`ElevenLabs STT error ${res.status}: ${err.slice(0, 200)}`);
+    const errBody = await res.text().catch(() => '');
+    throw new Error(`ElevenLabs STT ${res.status}: ${errBody.slice(0, 300)}`);
   }
   const data = await res.json();
   return (data.text || '').trim();
