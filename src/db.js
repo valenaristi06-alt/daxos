@@ -1522,6 +1522,8 @@ module.exports = {
   setWaHealthAlertedAt,
   clearWaHealthAlertedAt,
   purgeOldErrorLog,
+  getLastWebhookInboundAt,
+  getRecentWaStatusFailed,
   insertEsPending, getActivePendingBusinesses, deleteEsPending, cleanExpiredEsPending,
   incrementAnthropicCall,
   incrementElevenLabsChars,
@@ -1824,6 +1826,24 @@ function clearWaHealthAlertedAt(businessId) {
 
 function purgeOldErrorLog() {
   return db.prepare(`DELETE FROM error_log WHERE created_at < datetime('now', '-30 days')`).run();
+}
+
+function getLastWebhookInboundAt(businessId) {
+  const row = db.prepare(
+    `SELECT created_at FROM error_log WHERE context = 'webhook-lookup' AND message LIKE ? AND message LIKE '%found=true%' ORDER BY id DESC LIMIT 1`
+  ).get(`%business_id=${businessId}%`);
+  return row?.created_at ?? null;
+}
+
+function getRecentWaStatusFailed(phoneNumberId) {
+  const rows = db.prepare(
+    `SELECT message, created_at FROM error_log WHERE context = 'wa-status-failed' AND message LIKE ? AND created_at > datetime('now', '-1 day') ORDER BY id DESC LIMIT 10`
+  ).all(`%phone_number_id=${phoneNumberId}%`);
+  return rows.map(r => {
+    const code  = (r.message.match(/code=(\S+)/)          || [])[1] ?? null;
+    const title = (r.message.match(/title=(.*?)(?:\s+msg=|\s+details=|$)/) || [])[1]?.trim() ?? null;
+    return { code, title, at: r.created_at };
+  });
 }
 
 const stmtInsertEsPending  = db.prepare('INSERT OR REPLACE INTO es_pending (business_id) VALUES (?)');

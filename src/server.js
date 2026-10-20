@@ -52,7 +52,8 @@ const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserByI
   incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
   getConvAssistantCountLastHour, setSpendingCapNotified,
   createPasswordResetToken, getPasswordResetToken, markPasswordResetTokenUsed, changeUserPassword,
-  insertEsPending, getActivePendingBusinesses, deleteEsPending, cleanExpiredEsPending } = require('./db');
+  insertEsPending, getActivePendingBusinesses, deleteEsPending, cleanExpiredEsPending,
+  getLastWebhookInboundAt, getRecentWaStatusFailed } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -4523,6 +4524,173 @@ app.get('/admin/api/meta-phone-status/:business_id', requireAdmin, async (req, r
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
+// GET /admin/api/wa-verify/:business_id  (?fix=1 para re-suscribir si falta)
+app.get('/admin/api/wa-verify/:business_id', requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.business_id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'business_id inválido' });
+
+  const business = getBusinessById(id);
+  if (!business) return res.status(404).json({ error: 'Negocio no encontrado' });
+
+  const fix         = req.query.fix === '1';
+  const systemToken = process.env.META_SYSTEM_TOKEN;
+  const metaAppId   = process.env.META_APP_ID;
+  const authHdr     = systemToken ? { 'Authorization': `Bearer ${systemToken}` } : null;
+  const pnid        = business.phone_number_id || null;
+  const wabaId      = business.waba_id || null;
+
+  const result = {
+    business: {
+      id:              business.id,
+      name:            business.name,
+      wa_provider:     business.wa_provider || 'meta',
+      phone_number_id: pnid,
+      waba_id:         wabaId,
+    },
+    phone_status:  null,
+    health_status: null,
+    subscription:  null,
+    activity:      null,
+    fix_applied:   null,
+    verdict:       'ok',
+    reasons:       [],
+  };
+
+  if (!pnid) {
+    result.verdict = 'fail';
+    result.reasons.push('No conectado: falta phone_number_id');
+    return res.json(result);
+  }
+
+  if (!systemToken) {
+    result.verdict = 'fail';
+    result.reasons.push('META_SYSTEM_TOKEN no configurado en el servidor');
+    return res.json(result);
+  }
+
+  // 2. Estado del número
+  try {
+    const fields = 'status,platform_type,is_on_biz_app,quality_rating,messaging_limit_tier';
+    const r = await fetch(`https://graph.facebook.com/v21.0/${pnid}?fields=${fields}`, { headers: authHdr });
+    const d = await r.json();
+    if (r.ok) {
+      result.phone_status = {
+        status:               d.status               ?? null,
+        platform_type:        d.platform_type        ?? null,
+        is_on_biz_app:        d.is_on_biz_app        ?? null,
+        quality_rating:       d.quality_rating       ?? null,
+        messaging_limit_tier: d.messaging_limit_tier ?? null,
+      };
+      if (d.status && d.status !== 'CONNECTED') {
+        result.verdict = 'fail';
+        result.reasons.push(`Estado del número: ${d.status}`);
+      }
+      if (d.is_on_biz_app === false) {
+        if (result.verdict === 'ok') result.verdict = 'warn';
+        result.reasons.push('Número no está en la Business App (is_on_biz_app=false)');
+      }
+    } else {
+      result.phone_status = { error: d?.error?.message ?? `HTTP ${r.status}` };
+    }
+  } catch (e) {
+    result.phone_status = { error: e.message };
+  }
+
+  // 3. health_status — detecta bloqueos (ej. error 131031)
+  try {
+    const r = await fetch(`https://graph.facebook.com/v21.0/${pnid}?fields=health_status`, { headers: authHdr });
+    const d = await r.json();
+    if (r.ok) {
+      const hs      = d.health_status ?? {};
+      const canSend = hs.can_send_message ?? null;
+      const errors  = (hs.entities ?? [])
+        .flatMap(e => e.errors ?? [])
+        .map(e => ({ code: e.error_code, description: e.error_description }));
+      result.health_status = { can_send_message: canSend, errors };
+      if (canSend && canSend !== 'AVAILABLE') {
+        result.verdict = 'fail';
+        result.reasons.push(`can_send_message: ${canSend}`);
+      }
+    } else {
+      result.health_status = { error: d?.error?.message ?? `HTTP ${r.status}` };
+    }
+  } catch (e) {
+    result.health_status = { error: e.message };
+  }
+
+  // 4. Suscripción al WABA
+  if (wabaId) {
+    try {
+      const appsUrl = `https://graph.facebook.com/v21.0/${encodeURIComponent(wabaId)}/subscribed_apps`;
+      const r = await fetch(appsUrl, { headers: authHdr });
+      const d = await r.json();
+      if (r.ok) {
+        // Meta anida el nombre/id dentro de whatsapp_business_api_data
+        const apps = (d.data || []).map(a => {
+          const wba = a.whatsapp_business_api_data || {};
+          return { id: String(wba.id || a.id || ''), name: wba.name || a.name || '' };
+        });
+        const daxosSubscribed = metaAppId
+          ? apps.some(a => a.id && a.id === String(metaAppId))
+          : null;
+        const otherApps = metaAppId
+          ? apps.filter(a => a.id !== String(metaAppId)).map(a => a.name || a.id)
+          : apps.map(a => a.name || a.id);
+        result.subscription = { daxos_subscribed: daxosSubscribed, other_apps: otherApps, total_apps: apps.length };
+
+        if (daxosSubscribed === false) {
+          result.verdict = 'fail';
+          result.reasons.push('Daxos no está suscrito al WABA');
+
+          if (fix) {
+            try {
+              const fixRes  = await fetch(appsUrl, { method: 'POST', headers: authHdr });
+              const fixData = await fixRes.json();
+              if (fixRes.ok && fixData.success) {
+                result.fix_applied = 'subscribed';
+                result.subscription.daxos_subscribed = true;
+                result.reasons = result.reasons.filter(r => r !== 'Daxos no está suscrito al WABA');
+                if (result.verdict === 'fail' && result.reasons.length === 0) result.verdict = 'ok';
+              } else {
+                result.fix_applied = `failed: ${fixData?.error?.message ?? `HTTP ${fixRes.status}`}`;
+              }
+            } catch (fixErr) {
+              result.fix_applied = `error: ${fixErr.message}`;
+            }
+          }
+        }
+      } else {
+        result.subscription = { error: d?.error?.message ?? `HTTP ${r.status}` };
+        if (result.verdict === 'ok') result.verdict = 'warn';
+        result.reasons.push('No se pudo consultar suscripción WABA');
+      }
+    } catch (e) {
+      result.subscription = { error: e.message };
+    }
+  } else {
+    result.subscription = { error: 'waba_id no configurado' };
+    if (result.verdict === 'ok') result.verdict = 'warn';
+    result.reasons.push('waba_id no configurado en el negocio');
+  }
+
+  // 5. Actividad en error_log
+  const lastInbound = getLastWebhookInboundAt(business.id);
+  const recentFailed = getRecentWaStatusFailed(pnid);
+  result.activity = { last_inbound_at: lastInbound, recent_failed_deliveries: recentFailed };
+
+  const ms48h = 48 * 3600 * 1000;
+  const inboundAge = lastInbound ? Date.now() - new Date(lastInbound + 'Z').getTime() : Infinity;
+  if (inboundAge > ms48h) {
+    if (result.verdict === 'ok') result.verdict = 'warn';
+    result.reasons.push(lastInbound
+      ? `Sin mensajes entrantes desde ${lastInbound} (más de 48 h)`
+      : 'Sin mensajes entrantes registrados');
+  }
+
+  res.json(result);
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Registrar número en WhatsApp Cloud API
 // POST /admin/api/meta-phone-register
 // Body: { business_id, pin }
@@ -4601,7 +4769,10 @@ app.post('/admin/api/meta-resubscribe/:business_id', requireAdmin, async (req, r
   const appsUrl = `https://graph.facebook.com/v21.0/${encodeURIComponent(waba_id)}/subscribed_apps`;
 
   function extractApps(data) {
-    return (data?.data || []).map(a => ({ id: a.id, name: a.name }));
+    return (data?.data || []).map(a => {
+      const wba = a.whatsapp_business_api_data || {};
+      return { id: String(wba.id || a.id || ''), name: wba.name || a.name || '' };
+    });
   }
 
   try {

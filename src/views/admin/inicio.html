@@ -7,6 +7,19 @@
   <title>Admin — Daxos</title>
   <link rel="stylesheet" href="/dashboard.css" />
   <style>
+    .btn-small {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted-2);
+      padding: 2px 7px;
+      cursor: pointer;
+    }
+    .btn-small:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .btn-small:disabled { opacity: 0.4; cursor: not-allowed; }
     .admin-badge {
       font-family: var(--mono);
       font-size: 8px;
@@ -290,10 +303,11 @@
             <th>Convs.</th>
             <th>Mensajes</th>
             <th>Último msg.</th>
+            <th>WhatsApp</th>
           </tr>
         </thead>
         <tbody id="biz-body">
-          <tr><td colspan="7" class="muted-text" style="padding:20px 12px;">Cargando...</td></tr>
+          <tr><td colspan="8" class="muted-text" style="padding:20px 12px;">Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -365,7 +379,7 @@
     const businesses = await fetch('/admin/api/businesses').then(r => r.json());
     const tbody = document.getElementById('biz-body');
     if (!businesses.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="muted-text" style="padding:20px 12px;">Sin negocios registrados.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="muted-text" style="padding:20px 12px;">Sin negocios registrados.</td></tr>';
       return;
     }
     tbody.innerHTML = businesses.map(b => {
@@ -382,6 +396,7 @@
         <td class="muted-text">${b.conv_count}</td>
         <td class="muted-text">${b.msg_count}</td>
         <td class="muted-text">${fmt(b.last_msg_at)}</td>
+        <td id="wa-verify-${b.id}"><button class="btn-small" onclick="verifyWa(${b.id},this)">Verificar</button></td>
       </tr>`;
     }).join('');
   }
@@ -420,6 +435,48 @@
       btn.disabled = false;
     }
   });
+
+  async function verifyWa(id, btn) {
+    const cell = document.getElementById(`wa-verify-${id}`);
+    if (btn) btn.disabled = true;
+    cell.innerHTML = '<span class="muted-text">Verificando…</span>';
+    try {
+      const res  = await fetch(`/admin/api/wa-verify/${id}`);
+      const data = await res.json();
+      if (!res.ok) { cell.innerHTML = `<span style="color:var(--danger)">${escHtml(data.error || 'Error')}</span>`; return; }
+      const icon = data.verdict === 'ok' ? '✓' : data.verdict === 'warn' ? '⚠' : '✗';
+      const color = data.verdict === 'ok' ? '#4ade80' : data.verdict === 'warn' ? '#facc15' : 'var(--danger)';
+      const reasonsHtml = data.reasons.length
+        ? `<ul style="margin:4px 0 0 0;padding:0 0 0 14px;font-size:10px;color:var(--muted-2)">${data.reasons.map(r => `<li>${escHtml(r)}</li>`).join('')}</ul>`
+        : '';
+      const fixBtn = (data.subscription?.daxos_subscribed === false)
+        ? `<button class="btn-small" style="margin-top:4px" onclick="verifyWaFix(${id},this)">Re-suscribir</button>`
+        : '';
+      cell.innerHTML = `<span style="color:${color};font-weight:600">${icon} ${data.verdict.toUpperCase()}</span>${reasonsHtml}${fixBtn}`;
+    } catch (err) {
+      cell.innerHTML = `<span style="color:var(--danger)">${escHtml(err.message)}</span>`;
+    }
+  }
+
+  async function verifyWaFix(id, btn) {
+    const cell = document.getElementById(`wa-verify-${id}`);
+    if (btn) btn.disabled = true;
+    cell.innerHTML = '<span class="muted-text">Aplicando fix…</span>';
+    try {
+      const res  = await fetch(`/admin/api/wa-verify/${id}?fix=1`);
+      const data = await res.json();
+      if (!res.ok) { cell.innerHTML = `<span style="color:var(--danger)">${escHtml(data.error || 'Error')}</span>`; return; }
+      const fixMsg = data.fix_applied ? ` (fix: ${escHtml(data.fix_applied)})` : '';
+      const icon = data.verdict === 'ok' ? '✓' : data.verdict === 'warn' ? '⚠' : '✗';
+      const color = data.verdict === 'ok' ? '#4ade80' : data.verdict === 'warn' ? '#facc15' : 'var(--danger)';
+      const reasonsHtml = data.reasons.length
+        ? `<ul style="margin:4px 0 0 0;padding:0 0 0 14px;font-size:10px;color:var(--muted-2)">${data.reasons.map(r => `<li>${escHtml(r)}</li>`).join('')}</ul>`
+        : '';
+      cell.innerHTML = `<span style="color:${color};font-weight:600">${icon} ${data.verdict.toUpperCase()}</span><span class="muted-text" style="font-size:10px">${fixMsg}</span>${reasonsHtml}`;
+    } catch (err) {
+      cell.innerHTML = `<span style="color:var(--danger)">${escHtml(err.message)}</span>`;
+    }
+  }
 
   document.getElementById('btn-logout').addEventListener('click', async () => {
     await fetch('/admin/auth/logout', { method: 'POST' });
