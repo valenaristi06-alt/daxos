@@ -3983,7 +3983,8 @@ async function runWaHealthCheck({ dryRun = (process.env.WA_HEALTH_ALERTS !== 'on
   const apiKey     = process.env.KAPSO_API_KEY;
   if (!adminEmail || !apiKey) return [];
 
-  const businesses = getConnectedBusinesses().filter(b => b.id !== 1);
+  const daxosPnid  = process.env.DAXOS_PHONE_NUMBER_ID;
+  const businesses = getConnectedBusinesses().filter(b => !daxosPnid || b.phone_number_id !== daxosPnid);
   const nowSec = Math.floor(Date.now() / 1000);
   const results = [];
 
