@@ -58,7 +58,11 @@ const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserByI
   createPasswordResetToken, getPasswordResetToken, markPasswordResetTokenUsed, changeUserPassword,
   insertEsPending, getActivePendingBusinesses, deleteEsPending, cleanExpiredEsPending,
   getLastWebhookInboundAt, getRecentWaStatusFailed,
-  isPaymentProcessed } = require('./db');
+  isPaymentProcessed,
+  createDemo, getDemo, patchDemo, incrementDemoMsgCount,
+  getDemoDailyCountByIp, getDemoDailyCountByPhone, getDemoDailyGlobalCount,
+  logDemoCost, getDemoFlowSession, upsertDemoFlowSession, deleteDemoFlowSession,
+  getDemosForFollowup, getUserByPhone } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -69,6 +73,7 @@ if (_apiKey) {
 const { generateReply, analyzeStyle, summarizeWebsite, initAnthropicKey, getLastClaudeUsageId } = require('./claude');
 initAnthropicKey(_apiKey);
 const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = require('./bookings');
+const { handleDemoFlow, processFollowups } = require('./demo-flow');
 const { sendWeeklySummaries } = require('./weekly');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
 const { sendPauseEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail } = require('./email');
@@ -513,57 +518,10 @@ app.patch('/api/business/wa-payment-confirmed', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// SSRF guard: returns the string error reason if the IP is blocked, null if OK.
-function _ssrfBlockedReason(ip) {
-  if (net.isIPv4(ip)) {
-    const parts = ip.split('.').map(Number);
-    const [a, b] = parts;
-    if (a === 127) return 'loopback';
-    if (a === 10) return 'private';
-    if (a === 172 && b >= 16 && b <= 31) return 'private';
-    if (a === 192 && b === 168) return 'private';
-    if (a === 169 && b === 254) return 'link-local';
-    if (a === 0) return 'reserved';
-    if (a === 100 && b >= 64 && b <= 127) return 'cgnat';
-    return null;
-  }
-  if (net.isIPv6(ip)) {
-    const normalized = ip.toLowerCase();
-    // loopback, link-local, unique-local, site-local
-    if (normalized === '::1') return 'loopback';
-    if (normalized.startsWith('fe80:')) return 'link-local';
-    if (normalized.startsWith('fc') || normalized.startsWith('fd')) return 'private';
-    // IPv4-mapped: ::ffff:x.x.x.x
-    if (normalized.startsWith('::ffff:')) {
-      const v4 = normalized.slice(7);
-      if (net.isIPv4(v4)) return _ssrfBlockedReason(v4);
-    }
-    return null;
-  }
-  return 'unknown-family';
-}
-
-const SSRF_MAX_RESPONSE_BYTES = 2 * 1024 * 1024; // 2 MB
-const SSRF_MAX_REDIRECTS = 5;
-const SSRF_TIMEOUT_MS = 10_000;
-
-async function _validateSsrfUrl(rawUrl) {
-  let parsed;
-  try { parsed = new URL(rawUrl); } catch { throw new Error('URL inválida'); }
-  if (parsed.protocol !== 'https:') throw new Error('Solo se permiten URLs con HTTPS');
-  const hostname = parsed.hostname;
-  // Reject bare IPs
-  if (net.isIP(hostname)) {
-    const reason = _ssrfBlockedReason(hostname);
-    if (reason) throw new Error(`URL no permitida (${reason})`);
-  } else {
-    // DNS resolution to catch IP-based tricks
-    let address;
-    try { ({ address } = await dns.lookup(hostname, { family: 0 })); } catch { throw new Error('No se pudo resolver el host'); }
-    const reason = _ssrfBlockedReason(address);
-    if (reason) throw new Error(`URL no permitida (${reason})`);
-  }
-}
+// SSRF guard — shared implementation in src/ssrf.js
+const { blockedReason: _ssrfBlockedReason, validateUrl: _validateSsrfUrl,
+        MAX_RESPONSE_BYTES: SSRF_MAX_RESPONSE_BYTES, MAX_REDIRECTS: SSRF_MAX_REDIRECTS,
+        TIMEOUT_MS: SSRF_TIMEOUT_MS } = require('./ssrf');
 
 async function fetchAndSummarizeWebsite(rawUrl) {
   let currentUrl = rawUrl;
@@ -1610,6 +1568,17 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     }
   }
   // ────────────────────────────────────────────────────────────────────────
+  // Demo flow — gated by env vars; only runs for Daxos's own number; prospects only
+  if (process.env.DEMO_FLOW_ENABLED === '1' &&
+      business.phone_number_id === process.env.DAXOS_PHONE_NUMBER_ID) {
+    try {
+      const handled = await handleDemoFlow(business, waCredentials, customerPhone, text);
+      if (handled) return;
+    } catch (demoErr) {
+      logError('demo-flow-error', { message: demoErr.message, stack: demoErr.stack || '' });
+    }
+  }
+
   const sendCtxOk  = waCredentials.provider === 'kapso' ? 'kapso-send-ok'  : 'webhook-send-ok';
   const sendCtxErr = waCredentials.provider === 'kapso' ? 'kapso-send-err' : 'webhook-send-error';
 
@@ -3081,6 +3050,120 @@ app.post('/webhook/mercadopago', async (req, res) => {
   }
 });
 
+// ─── Demo generator ───────────────────────────────────────────────────────────
+
+const { generateDemoChatReply, extractBusinessData: _extractBizData, MAX_CHAT_MSGS } = require('./demo-generator');
+const { scrapeWebsite } = require('./demo-scraper');
+
+// POST /api/demos  — create demo from URL (web-triggered, IP-rate-limited)
+app.post('/api/demos', rateLimitWith(3, 24 * 60 * 60 * 1000, req => `demo-ip:${req.ip}`), async (req, res) => {
+  const { url } = req.body || {};
+  if (!url || typeof url !== 'string') return res.status(400).json({ error: 'url requerida' });
+
+  const ip = req.ip;
+
+  if (getDemoDailyCountByIp(ip) >= 3)
+    return res.status(429).json({ error: 'Límite diario por IP alcanzado' });
+  if (getDemoDailyGlobalCount() >= 200)
+    return res.status(429).json({ error: 'Límite global diario alcanzado' });
+
+  let cleanUrl;
+  try {
+    const parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
+    cleanUrl = parsed.href;
+  } catch {
+    return res.status(400).json({ error: 'URL inválida' });
+  }
+
+  try {
+    await _validateSsrfUrl(cleanUrl, { allowHttp: false });
+  } catch (e) {
+    return res.status(400).json({ error: e.message });
+  }
+
+  try {
+    const TIMEOUT = 90_000;
+    const start = Date.now();
+    const result = await Promise.race([
+      (async () => {
+        const { pages, jsOnly } = await scrapeWebsite(cleanUrl);
+        if (jsOnly) throw Object.assign(new Error('El sitio requiere JavaScript'), { code: 'JS_ONLY' });
+        const data = await _extractBizData(pages, ({ event, inTokens, outTokens }) => {
+          logDemoCost({ demoId: null, event, inTokens, outTokens });
+        });
+        const slug = crypto.randomBytes(6).toString('base64url');
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+        return createDemo({ slug, dataJson: JSON.stringify(data), sourceUrl: cleanUrl, ip, durationMs: Date.now() - start, expiresAt });
+      })(),
+      new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error('timeout'), { code: 'TIMEOUT' })), TIMEOUT)),
+    ]);
+    res.json({ slug: result.slug, url: `/d/${result.slug}` });
+  } catch (err) {
+    if (err.code === 'JS_ONLY') return res.status(422).json({ error: err.message });
+    if (err.code === 'TIMEOUT') return res.status(504).json({ error: 'Timeout generando demo' });
+    console.error('[demo] create error:', err.message);
+    res.status(500).json({ error: 'Error generando demo' });
+  }
+});
+
+// GET /api/demos/:slug
+app.get('/api/demos/:slug', (req, res) => {
+  const row = getDemo(req.params.slug);
+  if (!row) return res.status(404).json({ error: 'Demo no encontrada' });
+  if (row.expires_at && new Date(row.expires_at) < new Date()) return res.status(410).json({ error: 'Demo expirada' });
+  let data = {};
+  try { data = JSON.parse(row.data_json); } catch {}
+  res.json({ slug: row.slug, data, sourceUrl: row.source_url, msgCount: row.msg_count, createdAt: row.created_at });
+});
+
+// PATCH /api/demos/:slug  — update extracted data (editable fields)
+app.patch('/api/demos/:slug', (req, res) => {
+  const row = getDemo(req.params.slug);
+  if (!row) return res.status(404).json({ error: 'Demo no encontrada' });
+  const { data } = req.body || {};
+  if (!data || typeof data !== 'object') return res.status(400).json({ error: 'data requerida' });
+  let existing = {};
+  try { existing = JSON.parse(row.data_json); } catch {}
+  const merged = Object.assign({}, existing, data);
+  patchDemo(req.params.slug, JSON.stringify(merged));
+  res.json({ ok: true });
+});
+
+// POST /api/demos/:slug/chat
+app.post('/api/demos/:slug/chat', rateLimitWith(30, 60 * 60 * 1000, req => `demo-chat:${req.ip}`), async (req, res) => {
+  const row = getDemo(req.params.slug);
+  if (!row) return res.status(404).json({ error: 'Demo no encontrada' });
+  if (row.expires_at && new Date(row.expires_at) < new Date()) return res.status(410).json({ error: 'Demo expirada' });
+  if (row.msg_count >= MAX_CHAT_MSGS) return res.status(429).json({ error: 'Límite de mensajes alcanzado', limitReached: true });
+
+  const { message, history } = req.body || {};
+  if (!message || typeof message !== 'string') return res.status(400).json({ error: 'message requerido' });
+
+  let data = {};
+  try { data = JSON.parse(row.data_json); } catch {}
+
+  const conversationHistory = Array.isArray(history) ? history.slice(-20) : [];
+
+  try {
+    const reply = await generateDemoChatReply(data, conversationHistory, message.slice(0, 1000), ({ event, inTokens, outTokens }) => {
+      logDemoCost({ demoId: row.id, event, inTokens, outTokens });
+    });
+    incrementDemoMsgCount(req.params.slug);
+    res.json({ reply, msgCount: row.msg_count + 1 });
+  } catch (err) {
+    console.error('[demo] chat error:', err.message);
+    res.status(500).json({ error: 'Error generando respuesta' });
+  }
+});
+
+// GET /d/:slug — serve demo page
+app.get('/d/:slug', (req, res) => {
+  const row = getDemo(req.params.slug);
+  if (!row) return res.status(404).send('Demo no encontrada');
+  if (row.expires_at && new Date(row.expires_at) < new Date()) return res.status(410).send('Esta demo expiró');
+  res.sendFile(path.join(__dirname, '..', 'public', 'demo.html'));
+});
+
 // ─── Admin panel ──────────────────────────────────────────────────────────────
 
 function requireAdmin(req, res, next) {
@@ -4098,6 +4181,17 @@ setInterval(() => {
     runDailyTrialCheck().catch(err => logError('trial-daily-check', { message: err.message, stack: err.stack || '' }));
   }
 }, 30 * 60 * 1000);
+
+// Demo follow-up scheduler — every 10 minutes
+setInterval(() => {
+  if (process.env.DEMO_FLOW_ENABLED !== '1') return;
+  const daxosBiz = getAllBusinesses().find(b => b.phone_number_id === process.env.DAXOS_PHONE_NUMBER_ID);
+  if (!daxosBiz) return;
+  getBookingCredentials(daxosBiz.id).then(creds => {
+    if (!creds) return;
+    return processFollowups(creds);
+  }).catch(err => logError('demo-followup-job', { message: err.message, stack: err.stack || '' }));
+}, 10 * 60 * 1000);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

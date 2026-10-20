@@ -496,6 +496,41 @@ db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 )`);
 
+// --- demo generator tables ---
+
+db.exec(`CREATE TABLE IF NOT EXISTS demos (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug              TEXT NOT NULL UNIQUE,
+  data_json         TEXT NOT NULL,
+  source_url        TEXT NOT NULL,
+  whatsapp_contacto TEXT,
+  ip                TEXT,
+  msg_count         INTEGER NOT NULL DEFAULT 0,
+  duration_ms       INTEGER,
+  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at        TEXT NOT NULL
+)`);
+
+db.exec(`CREATE TABLE IF NOT EXISTS demo_costs (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  demo_id    INTEGER REFERENCES demos(id),
+  event      TEXT NOT NULL,
+  in_tokens  INTEGER NOT NULL DEFAULT 0,
+  out_tokens INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+
+db.exec(`CREATE TABLE IF NOT EXISTS demo_flow_sessions (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  phone               TEXT NOT NULL UNIQUE,
+  state               TEXT NOT NULL,
+  demo_slug           TEXT,
+  followup_sent       INTEGER NOT NULL DEFAULT 0,
+  followup_eligible_at TEXT,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+
 // --- spending caps ---
 
 function incrementAnthropicCall(businessId) {
@@ -1539,6 +1574,20 @@ module.exports = {
   getPasswordResetToken,
   markPasswordResetTokenUsed,
   changeUserPassword,
+  // demo generator
+  createDemo,
+  getDemo,
+  patchDemo,
+  incrementDemoMsgCount,
+  getDemoDailyCountByIp,
+  getDemoDailyCountByPhone,
+  getDemoDailyGlobalCount,
+  logDemoCost,
+  getDemoFlowSession,
+  upsertDemoFlowSession,
+  deleteDemoFlowSession,
+  getDemosForFollowup,
+  getUserByPhone,
 };
 
 function setWeeklySummaryEnabled(businessId, enabled) {
@@ -1860,3 +1909,101 @@ function insertEsPending(businessId)  { stmtInsertEsPending.run(Number(businessI
 function getActivePendingBusinesses() { return stmtGetActivePending.all(); }
 function deleteEsPending(businessId)  { stmtDeleteEsPending.run(Number(businessId)); }
 function cleanExpiredEsPending()      { stmtCleanEsPending.run(); }
+
+// ─── Demo generator ──────────────────────────────────────────────────────────
+
+function createDemo({ slug, dataJson, sourceUrl, whatsappContacto, ip, durationMs, expiresAt }) {
+  db.prepare(`
+    INSERT INTO demos (slug, data_json, source_url, whatsapp_contacto, ip, duration_ms, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(slug, dataJson, sourceUrl, whatsappContacto ?? null, ip ?? null, durationMs ?? null, expiresAt);
+  return db.prepare('SELECT * FROM demos WHERE slug = ?').get(slug);
+}
+
+function getDemo(slug) {
+  return db.prepare('SELECT * FROM demos WHERE slug = ?').get(slug) || null;
+}
+
+function patchDemo(slug, dataJson) {
+  db.prepare('UPDATE demos SET data_json = ? WHERE slug = ?').run(dataJson, slug);
+}
+
+function incrementDemoMsgCount(slug) {
+  db.prepare('UPDATE demos SET msg_count = msg_count + 1 WHERE slug = ?').run(slug);
+}
+
+function getDemoDailyCountByIp(ip) {
+  return db.prepare(
+    "SELECT COUNT(*) as n FROM demos WHERE ip = ? AND created_at >= datetime('now', '-1 day')"
+  ).get(ip)?.n ?? 0;
+}
+
+function getDemoDailyCountByPhone(phone) {
+  return db.prepare(
+    "SELECT COUNT(*) as n FROM demos WHERE whatsapp_contacto = ? AND created_at >= datetime('now', '-1 day')"
+  ).get(phone)?.n ?? 0;
+}
+
+function getDemoDailyGlobalCount() {
+  return db.prepare(
+    "SELECT COUNT(*) as n FROM demos WHERE created_at >= datetime('now', '-1 day')"
+  ).get()?.n ?? 0;
+}
+
+function logDemoCost({ demoId, event, inTokens, outTokens }) {
+  db.prepare('INSERT INTO demo_costs (demo_id, event, in_tokens, out_tokens) VALUES (?, ?, ?, ?)')
+    .run(demoId ?? null, event, inTokens ?? 0, outTokens ?? 0);
+}
+
+function getDemoFlowSession(phone) {
+  return db.prepare('SELECT * FROM demo_flow_sessions WHERE phone = ?').get(phone) || null;
+}
+
+function upsertDemoFlowSession(phone, state, demoSlug, extra = {}) {
+  const now = new Date().toISOString();
+  const existing = getDemoFlowSession(phone);
+  if (existing) {
+    db.prepare(`
+      UPDATE demo_flow_sessions SET state = ?, demo_slug = ?, followup_sent = ?,
+      followup_eligible_at = ?, updated_at = ? WHERE phone = ?
+    `).run(
+      state,
+      demoSlug ?? existing.demo_slug,
+      extra.followup_sent ?? existing.followup_sent,
+      extra.followup_eligible_at ?? existing.followup_eligible_at,
+      now, phone
+    );
+  } else {
+    db.prepare(`
+      INSERT INTO demo_flow_sessions (phone, state, demo_slug, followup_eligible_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(phone, state, demoSlug ?? null, extra.followup_eligible_at ?? null, now, now);
+  }
+  return getDemoFlowSession(phone);
+}
+
+function deleteDemoFlowSession(phone) {
+  db.prepare('DELETE FROM demo_flow_sessions WHERE phone = ?').run(phone);
+}
+
+// Returns sessions eligible for follow-up: state=listo, not sent, 2h elapsed, still within 24h
+function getDemosForFollowup() {
+  return db.prepare(`
+    SELECT * FROM demo_flow_sessions
+    WHERE state = 'listo'
+      AND followup_sent = 0
+      AND followup_eligible_at IS NOT NULL
+      AND followup_eligible_at <= datetime('now')
+      AND created_at >= datetime('now', '-22 hours')
+  `).all();
+}
+
+// Match sender phone to a registered business owner (last 8 digits, tolerates local/intl formats)
+function getUserByPhone(phone) {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 6) return null;
+  const suffix = digits.slice(-8);
+  const users = db.prepare('SELECT * FROM users WHERE phone IS NOT NULL AND phone != ""').all();
+  return users.find(u => u.phone && u.phone.replace(/\D/g, '').endsWith(suffix)) || null;
+}

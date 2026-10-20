@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Demo — Daxos</title>
+  <link rel="icon" type="image/png" href="/logodaxosnaranjanofondo.png">
+  <link rel="stylesheet" href="/demo.css">
+</head>
+<body>
+
+<div class="demo-banner">
+  Esta es una demo de Daxos — <a href="https://daxos.ai" target="_blank" rel="noopener">activá tu asistente en daxos.ai</a>
+</div>
+
+<div id="demo-root">
+  <div class="demo-loading" id="loading-state">Cargando demo…</div>
+  <div class="demo-error" id="error-state" style="display:none">Demo no encontrada o expirada.</div>
+
+  <div class="demo-wrap" id="demo-content" style="display:none">
+    <div class="demo-header">
+      <div class="demo-label">Asistente virtual para</div>
+      <div class="demo-name" id="demo-name" contenteditable="true" spellcheck="false">—</div>
+      <div class="demo-description" id="demo-description" contenteditable="true" spellcheck="false"></div>
+      <div class="demo-meta" id="demo-meta"></div>
+    </div>
+
+    <div class="chat-section">
+      <div class="chat-section-title">Probalo ahora</div>
+      <div class="chat-messages" id="chat-messages"></div>
+      <div class="chat-input-row" id="chat-input-row">
+        <textarea
+          class="chat-input"
+          id="chat-input"
+          placeholder="Escribí tu pregunta…"
+          rows="1"
+        ></textarea>
+        <button class="chat-send-btn" id="chat-send" title="Enviar">↑</button>
+      </div>
+      <div class="chat-limit-msg" id="chat-limit" style="display:none">
+        Llegaste al límite de mensajes de esta demo.
+        <a href="https://daxos.ai" target="_blank" rel="noopener">Activá tu plan para continuar →</a>
+      </div>
+    </div>
+
+    <div class="demo-cta">
+      <div class="demo-cta-title">¿Querés este asistente para tu negocio?</div>
+      <div class="demo-cta-sub">En menos de 5 minutos lo configurás y lo conectás a WhatsApp.</div>
+      <a href="https://daxos.ai" class="demo-cta-btn" target="_blank" rel="noopener">Activar Daxos →</a>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const slug = location.pathname.split('/').pop();
+  const MAX_MSGS = 10;
+  let demoData = null;
+  let history = [];
+  let msgCount = 0;
+
+  async function loadDemo() {
+    try {
+      const r = await fetch('/api/demos/' + slug);
+      if (!r.ok) throw new Error('not found');
+      const d = await r.json();
+      demoData = d.data;
+      msgCount = d.msgCount || 0;
+      renderDemo(d);
+    } catch {
+      document.getElementById('loading-state').style.display = 'none';
+      document.getElementById('error-state').style.display = '';
+    }
+  }
+
+  function renderDemo(d) {
+    const data = d.data || {};
+    document.title = (data.nombre || 'Demo') + ' — Daxos';
+    document.getElementById('demo-name').textContent = data.nombre || '(nombre del negocio)';
+    document.getElementById('demo-description').textContent = data.descripcion || '';
+
+    const meta = document.getElementById('demo-meta');
+    if (data.rubro)    meta.innerHTML += `<span class="demo-tag">${esc(data.rubro)}</span>`;
+    if (data.ubicacion) meta.innerHTML += `<span class="demo-tag">📍 ${esc(data.ubicacion)}</span>`;
+    if ((data.servicios || []).length) {
+      data.servicios.slice(0, 3).forEach(s => {
+        meta.innerHTML += `<span class="demo-tag">${esc(s)}</span>`;
+      });
+    }
+
+    // Greeting message
+    appendMsg('assistant', '¡Hola! Soy el asistente virtual de ' + (data.nombre || 'este negocio') + '. ¿En qué puedo ayudarte?');
+
+    document.getElementById('loading-state').style.display = 'none';
+    document.getElementById('demo-content').style.display = '';
+
+    if (msgCount >= MAX_MSGS) showLimit();
+    updateSendState();
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function appendMsg(role, text) {
+    const el = document.createElement('div');
+    el.className = 'chat-msg chat-msg--' + role;
+    el.textContent = text;
+    const container = document.getElementById('chat-messages');
+    container.appendChild(el);
+    container.scrollTop = container.scrollHeight;
+    return el;
+  }
+
+  function showLimit() {
+    document.getElementById('chat-input-row').style.display = 'none';
+    document.getElementById('chat-limit').style.display = '';
+  }
+
+  function updateSendState() {
+    const btn = document.getElementById('chat-send');
+    const input = document.getElementById('chat-input');
+    if (!btn) return;
+    const empty = !input.value.trim();
+    btn.disabled = empty || msgCount >= MAX_MSGS;
+  }
+
+  async function sendMessage() {
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text || msgCount >= MAX_MSGS) return;
+
+    input.value = '';
+    updateSendState();
+    appendMsg('user', text);
+
+    const thinking = appendMsg('thinking', '…');
+    document.getElementById('chat-send').disabled = true;
+
+    history.push({ role: 'user', content: text });
+
+    try {
+      const r = await fetch('/api/demos/' + slug + '/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, history: history.slice(-20) }),
+      });
+      thinking.remove();
+      if (r.status === 429) { showLimit(); return; }
+      if (!r.ok) throw new Error('error');
+      const d = await r.json();
+      msgCount = d.msgCount || msgCount + 1;
+      appendMsg('assistant', d.reply || '');
+      history.push({ role: 'assistant', content: d.reply || '' });
+      if (d.limitReached || msgCount >= MAX_MSGS) showLimit();
+    } catch {
+      thinking.remove();
+      appendMsg('assistant', 'Ocurrió un error. Intentá de nuevo.');
+    }
+
+    updateSendState();
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    loadDemo();
+
+    const input = document.getElementById('chat-input');
+    const btn = document.getElementById('chat-send');
+
+    input.addEventListener('input', function () {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+      updateSendState();
+    });
+
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (!btn.disabled) sendMessage();
+      }
+    });
+
+    btn.addEventListener('click', function () {
+      if (!this.disabled) sendMessage();
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
