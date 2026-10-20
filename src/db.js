@@ -2004,6 +2004,6 @@ function getUserByPhone(phone) {
   const digits = phone.replace(/\D/g, '');
   if (digits.length < 6) return null;
   const suffix = digits.slice(-8);
-  const users = db.prepare('SELECT * FROM users WHERE phone IS NOT NULL AND phone != ""').all();
+  const users = db.prepare("SELECT * FROM users WHERE phone IS NOT NULL AND phone != ''").all();
   return users.find(u => u.phone && u.phone.replace(/\D/g, '').endsWith(suffix)) || null;
 }

@@ -188,6 +188,34 @@ test('follow-up window: 22h is the cutoff (21h59m → eligible, 22h01m → not)'
   assert(!rows.some(r => r.phone === phoneOut), '22.1h should NOT be eligible');
 });
 
+// ─── getUserByPhone — SQL double-quote regression ────────────────────────────
+
+console.log('\n[3] getUserByPhone — SQL syntax and 8-digit match\n');
+
+test('getUserByPhone does not throw (was: double-quoted "" in SQL)', () => {
+  assert(db.getUserByPhone('5491100000000') === null, 'unknown phone → null');
+});
+
+test('getUserByPhone returns null when no users have a phone', () => {
+  assert(db.getUserByPhone('5491199998888') === null, 'no matching user');
+});
+
+test('getUserByPhone matches by last 8 digits', () => {
+  // Insert a user with a known phone, then verify match by suffix
+  const rawDb = require('better-sqlite3')(require('path').join(process.env.DB_DIR, 'daxos.db'));
+  rawDb.prepare("INSERT OR IGNORE INTO users (email, password_hash, phone) VALUES ('test@x.com','hash','+5491187654321')").run();
+  rawDb.close();
+  const found = db.getUserByPhone('+549187654321'); // shares last 8 digits: 87654321
+  assert(found !== null, 'should match by last 8 digits');
+  assert(found.email === 'test@x.com');
+});
+
+test('getUserByPhone does NOT match when only last 4 digits overlap', () => {
+  // phone in DB ends in 87654321; test phone ends in 00004321 — last 8 differ
+  const found = db.getUserByPhone('+549100004321');
+  assert(found === null, 'partial suffix should not match');
+});
+
 // ─── Results ─────────────────────────────────────────────────────────────────
 
 console.log(`\n${'─'.repeat(50)}`);
