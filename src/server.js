@@ -1569,10 +1569,6 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   }
   // ────────────────────────────────────────────────────────────────────────
   // Demo flow — gated by env vars; only runs for Daxos's own number; prospects only
-  // TEMP DIAGNOSTIC — remove after confirming guard values
-  if (business.id === 6) {
-    console.log(`[demo-guard] biz=${business.id} ENABLED=[${process.env.DEMO_FLOW_ENABLED}] biz_pnid=[${business.phone_number_id}] env_pnid=[${process.env.DAXOS_PHONE_NUMBER_ID}] match=${business.phone_number_id === process.env.DAXOS_PHONE_NUMBER_ID}`);
-  }
   if (process.env.DEMO_FLOW_ENABLED === '1' &&
       business.phone_number_id === process.env.DAXOS_PHONE_NUMBER_ID) {
     try {

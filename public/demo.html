@@ -11,7 +11,7 @@
 <body>
 
 <div class="demo-banner">
-  Esta es una demo de Daxos — <a href="https://daxos.lat" target="_blank" rel="noopener">activá tu asistente en daxos.lat</a>
+  Es una simulación, no está conectada a tu WhatsApp — <a href="https://daxos.lat" target="_blank" rel="noopener">activá tu asistente en daxos.lat</a>
 </div>
 
 <div id="demo-root">
@@ -103,10 +103,24 @@
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
+  // Renders **bold** markers safely using DOM nodes — no innerHTML, no XSS risk.
+  function renderText(el, text) {
+    var parts = String(text).split(/\*\*([^*]+)\*\*/g);
+    parts.forEach(function(part, i) {
+      if (i % 2 === 1) {
+        var strong = document.createElement('strong');
+        strong.textContent = part;
+        el.appendChild(strong);
+      } else if (part) {
+        el.appendChild(document.createTextNode(part));
+      }
+    });
+  }
+
   function appendMsg(role, text) {
     const el = document.createElement('div');
     el.className = 'chat-msg chat-msg--' + role;
-    el.textContent = text;
+    renderText(el, text);
     const container = document.getElementById('chat-messages');
     container.appendChild(el);
     container.scrollTop = container.scrollHeight;

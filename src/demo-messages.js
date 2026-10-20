@@ -7,9 +7,9 @@ const MSG = {
   generating:
     'Recibido ✅ Estoy leyendo tu web y armando la demo. Dame menos de 1 minuto.',
 
-  // {nombre} and {link} are template variables
   delivery: (nombre, link) =>
-    `Lista tu demo de *${nombre}* 👇\n${link}\n\nProbala como si fueras un cliente: preguntale precios, horarios, lo que quieras.\n\nEs una simulación con lo que encontré en tu web, no está conectada a tu WhatsApp. Si algún dato está mal, lo podés corregir ahí mismo.\n\nSi te gusta, se prueba 14 días gratis, sin tarjeta: daxos.lat`,
+    (nombre ? `Lista tu demo de *${nombre}* 👇` : `Lista tu demo 👇`) +
+    `\n${link}\n\nProbala como si fueras un cliente: preguntale precios, horarios, lo que quieras.\n\nEs una simulación con lo que encontré en tu web, no está conectada a tu WhatsApp. Si algún dato está mal, lo podés corregir ahí mismo.\n\nSi te gusta, se prueba 14 días gratis, sin tarjeta: daxos.lat`,
 
   invalidUrl:
     'Para armarla necesito el link de tu web (por ejemplo, https://minegocio.com.uy). Si no tenés web, escribime “no tengo” y me pasás los datos por acá.',

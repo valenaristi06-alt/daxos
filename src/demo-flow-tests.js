@@ -19,10 +19,12 @@ const db = require('./db');
 const {
   isSessionExpired,
   normalizeActivation,
+  hasEnoughData,
   SESSION_EXPIRY_MINUTES,
   FOLLOWUP_DELAY_MS,
   EXPIRING_STATES,
 } = require('./demo-flow');
+const { htmlToText } = require('./demo-scraper');
 
 // ─── Mini test runner ─────────────────────────────────────────────────────────
 let passed = 0;
@@ -188,9 +190,115 @@ test('follow-up window: 22h is the cutoff (21h59m → eligible, 22h01m → not)'
   assert(!rows.some(r => r.phone === phoneOut), '22.1h should NOT be eligible');
 });
 
+// ─── htmlToText — strips tracking noise before measuring ─────────────────────
+
+console.log('\n[3] htmlToText — noscript/script/style/comment stripping\n');
+
+const TRACKING_PAGE = `<!DOCTYPE html>
+<html><head>
+<script>window.dataLayer=[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());</script>
+<style>.hidden{display:none}</style>
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-XXXXX" height="0" width="0"></iframe>
+This page requires JavaScript. Please enable it. GTM GTM GTM GTM GTM GTM GTM GTM GTM GTM GTM GTM GTM GTM GTM GTM GTM.</noscript>
+</head><body>
+<!-- Google Analytics tracking pixel -->
+<div class="visible">Plomería González — Servicio urgente 24 hs</div>
+<script>trackEvent('pageview','home');</script>
+</body></html>`;
+
+test('htmlToText removes <script> content', () => {
+  const t = htmlToText(TRACKING_PAGE);
+  assert(!t.includes('dataLayer'), 'script content must be removed');
+  assert(!t.includes('trackEvent'), 'inline script must be removed');
+});
+
+test('htmlToText removes <style> content', () => {
+  const t = htmlToText(TRACKING_PAGE);
+  assert(!t.includes('.hidden'), 'style content must be removed');
+});
+
+test('htmlToText removes <noscript> content', () => {
+  const t = htmlToText(TRACKING_PAGE);
+  assert(!t.includes('GTM'), 'noscript GTM noise must be removed');
+  assert(!t.includes('requires JavaScript'), 'noscript text must be removed');
+});
+
+test('htmlToText removes HTML comments', () => {
+  const t = htmlToText(TRACKING_PAGE);
+  assert(!t.includes('Google Analytics tracking pixel'), 'comment must be removed');
+});
+
+test('htmlToText keeps visible text', () => {
+  const t = htmlToText(TRACKING_PAGE);
+  assert(t.includes('Plomería González'), 'visible text must survive');
+  assert(t.includes('24 hs'), 'visible text must survive');
+});
+
+test('page of only tracking scripts → short text → isJsOnly detects it', () => {
+  const SCRIPTS_ONLY = `<html><head>
+<script>var x=1;</script><script>var y=2;</script>
+<noscript>Enable JavaScript</noscript>
+<style>body{}</style><!-- comment -->
+</head><body><div id="root"></div></body></html>`;
+  const t = htmlToText(SCRIPTS_ONLY);
+  assert(t.length < 80, `text too long after strip: "${t}" (${t.length} chars)`);
+});
+
+// ─── hasEnoughData — quality gate ────────────────────────────────────────────
+
+console.log('\n[4] hasEnoughData — quality gate\n');
+
+test('empty object {} → false', () => {
+  assert(!hasEnoughData({}));
+});
+
+test('nombre only, no content → false', () => {
+  assert(!hasEnoughData({ nombre: 'Acme', servicios: [], descripcion: null }));
+});
+
+test('nombre + 1 servicio → true', () => {
+  assert(hasEnoughData({ nombre: 'Acme', servicios: ['instalaciones'] }));
+});
+
+test('nombre + descripcion ≥80 chars → true', () => {
+  assert(hasEnoughData({ nombre: 'Acme', descripcion: 'x'.repeat(80) }));
+});
+
+test('nombre + descripcion <80 chars → false', () => {
+  assert(!hasEnoughData({ nombre: 'Acme', descripcion: 'corta' }));
+});
+
+test('nombre + 1 FAQ, no servicios → true', () => {
+  assert(hasEnoughData({ nombre: 'Acme', preguntas_frecuentes: ['¿Cómo funciona?: Muy bien'] }));
+});
+
+test('nombre + 1 promo → true', () => {
+  assert(hasEnoughData({ nombre: 'Acme', promos: ['50% off en mayo'] }));
+});
+
+test('nombre + sede con horario → true', () => {
+  assert(hasEnoughData({ nombre: 'Acme', sedes: [{ horario: 'Lun-Vie 9-18' }] }));
+});
+
+test('nombre + sede sin datos → false', () => {
+  assert(!hasEnoughData({ nombre: 'Acme', sedes: [{ nombre: 'Central' }] }));
+});
+
+test('no nombre + 2 servicios → true', () => {
+  assert(hasEnoughData({ servicios: ['pinturas', 'barnices'] }));
+});
+
+test('no nombre + 1 servicio → false', () => {
+  assert(!hasEnoughData({ servicios: ['pinturas'] }));
+});
+
+test('antel.com.uy case: all undefined → false', () => {
+  assert(!hasEnoughData({ tono: 'formal' }));
+});
+
 // ─── getUserByPhone — SQL double-quote regression ────────────────────────────
 
-console.log('\n[3] getUserByPhone — SQL syntax and 8-digit match\n');
+console.log('\n[5] getUserByPhone — SQL syntax and 8-digit match\n');
 
 test('getUserByPhone does not throw (was: double-quoted "" in SQL)', () => {
   assert(db.getUserByPhone('5491100000000') === null, 'unknown phone → null');

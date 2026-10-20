@@ -78,6 +78,26 @@ function isSocialMedia(hostname) {
   return SOCIAL_DOMAINS.some(d => h === d || h.endsWith('.' + d));
 }
 
+// ─── Data quality gate ───────────────────────────────────────────────────────
+
+// Returns true if extracted data has enough content to build a useful demo.
+// Rule: (nombre AND ≥1 real content block) OR (≥2 servicios without nombre).
+// Content blocks: servicios≥1, preguntas_frecuentes≥1, promos≥1,
+//                 sede with horario/direccion/telefono, or descripcion≥80 chars.
+function hasEnoughData(data) {
+  const nombre = !!data.nombre;
+  const hasContent = (
+    (data.servicios || []).length >= 1 ||
+    (data.preguntas_frecuentes || []).length >= 1 ||
+    (data.promos || []).length >= 1 ||
+    (data.sedes || []).some(s => s && (s.horario || s.direccion || s.telefono)) ||
+    (data.descripcion || '').length >= 80
+  );
+  if (nombre && hasContent) return true;
+  if ((data.servicios || []).length >= 2) return true;
+  return false;
+}
+
 // ─── Demo generation (shared by URL and text paths) ──────────────────────────
 
 async function runGeneration(pages, sourceUrl, customerPhone, ip, waCredentials) {
@@ -103,6 +123,9 @@ async function runGeneration(pages, sourceUrl, customerPhone, ip, waCredentials)
         const data = await extractBusinessData(pages, ({ event, inTokens, outTokens }) => {
           db.logDemoCost({ demoId: null, event, inTokens, outTokens });
         });
+        if (!hasEnoughData(data)) {
+          throw Object.assign(new Error('insufficient data'), { code: 'INSUFFICIENT_DATA' });
+        }
         const slug      = generateSlug();
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
         const row = db.createDemo({
@@ -123,7 +146,7 @@ async function runGeneration(pages, sourceUrl, customerPhone, ip, waCredentials)
 
     const { row, data } = result;
     const demoUrl  = `${DEMO_BASE_URL}/d/${row.slug}`;
-    const nombre   = data.nombre || 'tu negocio';
+    const nombre   = data.nombre || null;
     const followupEligibleAt = new Date(Date.now() + FOLLOWUP_DELAY_MS).toISOString();
 
     db.upsertDemoFlowSession(customerPhone, 'listo', row.slug, { followup_eligible_at: followupEligibleAt });
@@ -134,6 +157,9 @@ async function runGeneration(pages, sourceUrl, customerPhone, ip, waCredentials)
     if (err.code === 'TIMEOUT') {
       db.upsertDemoFlowSession(customerPhone, 'esperando_texto', null);
       await sendWA(waCredentials, customerPhone, MSG.generationTimeout);
+    } else if (err.code === 'INSUFFICIENT_DATA') {
+      db.upsertDemoFlowSession(customerPhone, 'esperando_texto', null);
+      await sendWA(waCredentials, customerPhone, MSG.needsText);
     } else {
       db.upsertDemoFlowSession(customerPhone, 'esperando_texto', null);
       await sendWA(waCredentials, customerPhone, MSG.generationError);
@@ -307,6 +333,7 @@ module.exports = {
   // Exported for testing only
   isSessionExpired,
   normalizeActivation,
+  hasEnoughData,
   SESSION_EXPIRY_MINUTES,
   FOLLOWUP_DELAY_MS,
   EXPIRING_STATES,

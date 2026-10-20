@@ -13,17 +13,20 @@ const MAX_CHAT_MSGS  = 10;
 const EXTRACT_SYSTEM = `Sos un extractor de información estructurada. A partir del texto de un sitio web, extraé información del negocio en JSON con esta forma exacta:
 
 {
-  "nombre":       "<nombre del negocio o null>",
-  "rubro":        "<sector/industria en 2-4 palabras o null>",
-  "descripcion":  "<qué hace el negocio, 1-2 oraciones, o null>",
-  "servicios":    ["<servicio 1>", "<servicio 2>"] o [],
-  "ubicacion":    "<ciudad/país si se menciona o null>",
-  "tono":         "formal" | "informal" | "neutro",
-  "publico":      "<a quiénes va dirigido, 1 oración, o null>"
+  "nombre":               "<nombre del negocio o null>",
+  "rubro":                "<sector/industria en 2-4 palabras o null>",
+  "descripcion":          "<qué hace el negocio, 1-2 oraciones, o null>",
+  "servicios":            ["<servicio o producto 1>", "<servicio o producto 2>"] o [],
+  "preguntas_frecuentes": ["<pregunta: respuesta breve>"] o [],
+  "promos":               ["<promoción o descuento activo>"] o [],
+  "sedes": [{"nombre": null, "direccion": null, "horario": null, "telefono": null}] o [],
+  "ubicacion":            "<ciudad/país si se menciona o null>",
+  "tono":                 "formal" | "informal" | "neutro",
+  "publico":              "<a quiénes va dirigido, 1 oración, o null>"
 }
 
 Reglas:
-- Si un dato no aparece claramente en el texto, usá null (nunca inventes).
+- Si un dato no aparece claramente en el texto, usá null o [] (nunca inventes).
 - Respondé SOLO con el JSON, sin explicaciones ni markdown.`;
 
 async function extractBusinessData(pages, logCost) {
@@ -60,16 +63,27 @@ function buildDemoSystemPrompt(data) {
   const ubicacion   = data.ubicacion   ? `Ubicación: ${data.ubicacion}.` : '';
   const publico     = data.publico     ? `Público objetivo: ${data.publico}.` : '';
   const tono        = data.tono        ?? 'neutro';
+  const faqs        = (data.preguntas_frecuentes ?? []).length
+    ? `Preguntas frecuentes: ${data.preguntas_frecuentes.join(' | ')}.` : '';
+  const promos      = (data.promos ?? []).length
+    ? `Promociones activas: ${data.promos.join(', ')}.` : '';
+  const sedes       = (data.sedes ?? []).filter(s => s.direccion || s.horario || s.telefono);
+  const sedesStr    = sedes.length
+    ? 'Sedes: ' + sedes.map(s => [s.nombre, s.direccion, s.horario, s.telefono].filter(Boolean).join(', ')).join(' | ') + '.'
+    : '';
 
   return `Sos el asistente virtual de ${nombre}, un negocio de ${rubro}.
 ${descripcion}
 Servicios: ${servicios}.
+${faqs}
+${promos}
+${sedesStr}
 ${ubicacion}
 ${publico}
 
 Respondé en tono ${tono}. Sé útil, conciso y orientado al cliente. Si no sabés algo sobre el negocio, decí que no tenés esa información disponible en este momento. No inventes datos.
 
-Esta es una demo de Daxos. Si el usuario pregunta cómo activar este asistente para su negocio, mencioná que puede hacerlo en daxos.ai.`;
+Esta es una demo de Daxos. Si el usuario pregunta cómo activar este asistente para su negocio, mencioná que puede hacerlo en daxos.lat.`;
 }
 
 // ─── Demo chat ────────────────────────────────────────────────────────────────

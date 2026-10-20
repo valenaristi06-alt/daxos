@@ -17,7 +17,7 @@ async function fetchSafe(rawUrl, redirectsLeft = MAX_REDIRECTS) {
   return new Promise((resolve, reject) => {
     const req = lib.get(rawUrl, {
       timeout: TIMEOUT_MS,
-      headers: { 'User-Agent': 'DaxosBot/1.0 (+https://daxos.ai)' },
+      headers: { 'User-Agent': 'DaxosBot/1.0 (+https://daxos.lat)' },
     }, (res) => {
       // Follow redirects
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
@@ -46,11 +46,13 @@ async function fetchSafe(rawUrl, redirectsLeft = MAX_REDIRECTS) {
   });
 }
 
-// Strip HTML tags, collapse whitespace, truncate
+// Strip HTML tags, collapse whitespace, truncate.
+// Removes script/style/noscript/comments before measuring or sending to Claude.
 function htmlToText(html) {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
     .replace(/<!--[\s\S]*?-->/g, ' ')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/gi, ' ')
@@ -148,4 +150,4 @@ async function scrapeWebsite(rawUrl) {
   return { pages, jsOnly: false };
 }
 
-module.exports = { scrapeWebsite };
+module.exports = { scrapeWebsite, htmlToText };
