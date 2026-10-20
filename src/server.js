@@ -16,7 +16,7 @@ const TRIAL_GRACE_HOURS = 72;
 const AUDIO_MAX_CHARS   = 600;
 
 // Spending cap defaults per plan (overridable via runtime_config)
-const _CAP_ANTHROPIC = { arranque: 200, crecimiento: 600, a_medida: 1500 };
+const _CAP_ANTHROPIC = { arranque: 70,  crecimiento: 150, a_medida: 300  };
 const _CAP_TTS_CHARS = { arranque: 20000, crecimiento: 100000, a_medida: 500000 };
 const _CAP_CONV_HOURLY = 8;
 
