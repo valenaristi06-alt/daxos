@@ -37,6 +37,18 @@ const NO_TIENE_TRIGGERS = new Set(['no tengo', 'no tengo web', 'no tengo sitio',
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+// Normalize for activation check: lowercase, strip accents, strip non-alphanumeric.
+// "DEMO", "démò", "¡demo!", "🎯 demo" all → "demo".
+// "quiero una demo" → "quierounademo" (does NOT equal "demo").
+function normalizeActivation(s) {
+  return s
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
 // Thin wrapper — delegates to shared sendWhatsAppMessage (handles Meta and Kapso)
 async function sendWA(waCredentials, to, text) {
   return sendWhatsAppMessage(to, text, waCredentials);
@@ -139,8 +151,9 @@ async function handleDemoFlow(business, waCredentials, customerPhone, text) {
   const normalizedText = text.trim().toLowerCase();
   const session        = db.getDemoFlowSession(customerPhone);
 
-  // ── Activation: exact "demo" with no active (or expired) session ──────────
-  if (normalizedText === 'demo' && (!session || isSessionExpired(session))) {
+  // ── Activation: "demo" after normalization (strips accents/punctuation/emoji)
+  //    "¡Demo!" and "DEMO" activate; "quiero una demo" does NOT
+  if (normalizeActivation(text) === 'demo' && (!session || isSessionExpired(session))) {
     if (session) db.deleteDemoFlowSession(customerPhone);
 
     const existingUser = db.getUserByPhone(customerPhone);
@@ -293,6 +306,7 @@ module.exports = {
   processFollowups,
   // Exported for testing only
   isSessionExpired,
+  normalizeActivation,
   SESSION_EXPIRY_MINUTES,
   FOLLOWUP_DELAY_MS,
   EXPIRING_STATES,

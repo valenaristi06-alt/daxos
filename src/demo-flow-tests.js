@@ -18,6 +18,7 @@ process.env.DB_DIR = tmpDir;
 const db = require('./db');
 const {
   isSessionExpired,
+  normalizeActivation,
   SESSION_EXPIRY_MINUTES,
   FOLLOWUP_DELAY_MS,
   EXPIRING_STATES,
@@ -46,6 +47,27 @@ function assert(value, msg) {
 function assertEqual(a, b, msg) {
   if (a !== b) throw new Error(msg || `expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
 }
+
+// ─── normalizeActivation ─────────────────────────────────────────────────────
+
+console.log('\n[0] normalizeActivation — activation trigger\n');
+
+const activates  = (s) => { assert(normalizeActivation(s) === 'demo', `"${s}" should activate`); };
+const noActivate = (s) => { assert(normalizeActivation(s) !== 'demo', `"${s}" should NOT activate`); };
+
+test('bare "demo" activates',           () => activates('demo'));
+test('uppercase "DEMO" activates',      () => activates('DEMO'));
+test('mixed case "Demo" activates',     () => activates('Demo'));
+test('"¡demo!" activates',             () => activates('¡demo!'));
+test('"démò" (accented) activates',    () => activates('démò'));
+test('"🎯 demo" (emoji+space) activates', () => activates('🎯 demo'));
+test('" demo " (padded spaces) activates', () => activates(' demo '));
+test('"quiero una demo" does NOT activate', () => noActivate('quiero una demo'));
+test('"demo gratis" does NOT activate', () => noActivate('demo gratis'));
+test('"quiero demo" does NOT activate', () => noActivate('quiero demo'));
+test('"no demo" does NOT activate',    () => noActivate('no demo'));
+test('"una demo por favor" does NOT activate', () => noActivate('una demo por favor'));
+test('"demostracion" does NOT activate', () => noActivate('demostracion'));
 
 // ─── isSessionExpired — pure function tests ───────────────────────────────────
 
