@@ -4607,8 +4607,12 @@ app.get('/admin/api/wa-verify/:business_id', requireAdmin, async (req, res) => {
         .flatMap(e => e.errors ?? [])
         .map(e => ({ code: e.error_code, description: e.error_description }));
       result.health_status = { can_send_message: canSend, errors };
-      if (canSend && canSend !== 'AVAILABLE') {
+      if (canSend === 'BLOCKED') {
         result.verdict = 'fail';
+        result.reasons.push('can_send_message: BLOCKED');
+      } else if (canSend && canSend !== 'AVAILABLE') {
+        // LIMITED (SIP errors, etc.) — informational warn only
+        if (result.verdict === 'ok') result.verdict = 'warn';
         result.reasons.push(`can_send_message: ${canSend}`);
       }
     } else {
@@ -4677,6 +4681,12 @@ app.get('/admin/api/wa-verify/:business_id', requireAdmin, async (req, res) => {
   const lastInbound = getLastWebhookInboundAt(business.id);
   const recentFailed = getRecentWaStatusFailed(pnid);
   result.activity = { last_inbound_at: lastInbound, recent_failed_deliveries: recentFailed };
+
+  // Cuenta bloqueada (131031) en entregas fallidas últimas 24 h → fail
+  if (recentFailed.some(f => String(f.code) === '131031')) {
+    result.verdict = 'fail';
+    result.reasons.push('Cuenta bloqueada detectada (código 131031 en últimas 24 h)');
+  }
 
   const ms48h = 48 * 3600 * 1000;
   const inboundAge = lastInbound ? Date.now() - new Date(lastInbound + 'Z').getTime() : Infinity;
