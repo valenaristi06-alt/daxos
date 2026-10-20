@@ -1934,19 +1934,19 @@ function incrementDemoMsgCount(slug) {
 
 function getDemoDailyCountByIp(ip) {
   return db.prepare(
-    "SELECT COUNT(*) as n FROM demos WHERE ip = ? AND created_at >= datetime('now', '-1 day')"
+    "SELECT COUNT(*) as n FROM demos WHERE ip = ? AND datetime(created_at) >= datetime('now', '-1 day')"
   ).get(ip)?.n ?? 0;
 }
 
 function getDemoDailyCountByPhone(phone) {
   return db.prepare(
-    "SELECT COUNT(*) as n FROM demos WHERE whatsapp_contacto = ? AND created_at >= datetime('now', '-1 day')"
+    "SELECT COUNT(*) as n FROM demos WHERE whatsapp_contacto = ? AND datetime(created_at) >= datetime('now', '-1 day')"
   ).get(phone)?.n ?? 0;
 }
 
 function getDemoDailyGlobalCount() {
   return db.prepare(
-    "SELECT COUNT(*) as n FROM demos WHERE created_at >= datetime('now', '-1 day')"
+    "SELECT COUNT(*) as n FROM demos WHERE datetime(created_at) >= datetime('now', '-1 day')"
   ).get()?.n ?? 0;
 }
 
@@ -1986,15 +1986,15 @@ function deleteDemoFlowSession(phone) {
   db.prepare('DELETE FROM demo_flow_sessions WHERE phone = ?').run(phone);
 }
 
-// Returns sessions eligible for follow-up: state=listo, not sent, 2h elapsed, still within 24h
+// Returns sessions eligible for follow-up: state=listo, not sent, 2h elapsed, still within 22h
 function getDemosForFollowup() {
   return db.prepare(`
     SELECT * FROM demo_flow_sessions
     WHERE state = 'listo'
       AND followup_sent = 0
       AND followup_eligible_at IS NOT NULL
-      AND followup_eligible_at <= datetime('now')
-      AND created_at >= datetime('now', '-22 hours')
+      AND datetime(followup_eligible_at) <= datetime('now')
+      AND datetime(created_at) >= datetime('now', '-22 hours')
   `).all();
 }
 

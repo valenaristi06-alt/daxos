@@ -1,49 +1,49 @@
 'use strict';
 
+// NOTE: followUp and blockedUrl appear truncated in the source spec — implemented verbatim.
 const MSG = {
-  // Demo flow – WhatsApp messages
   askForUrl:
-    '¡Hola! Para generar tu demo personalizado, enviame la URL de tu sitio web (ej: https://tuempresa.com).',
+    '¡Hola! 👋 Te armo una demo de cómo atendería Daxos el WhatsApp de tu negocio, con tus datos reales.\n\nPasame el link de tu web y en menos de 1 minuto te la mando.',
 
   generating:
-    '⏳ Generando tu demo... esto tarda unos segundos.',
+    'Recibido ✅ Estoy leyendo tu web y armando la demo. Dame menos de 1 minuto.',
 
-  generationTimeout:
-    'Tardó más de lo esperado. Intentalo de nuevo en unos minutos.',
-
-  generationError:
-    'No pude generar el demo en este momento. Intentalo de nuevo más tarde.',
+  // {nombre} and {link} are template variables
+  delivery: (nombre, link) =>
+    `Lista tu demo de *${nombre}* 👇\n${link}\n\nProbala como si fueras un cliente: preguntale precios, horarios, lo que quieras.\n\nEs una simulación con lo que encontré en tu web, no está conectada a tu WhatsApp. Si algún dato está mal, lo podés corregir ahí mismo.\n\nSi te gusta, se prueba 14 días gratis, sin tarjeta: daxos.lat`,
 
   invalidUrl:
-    'La URL no parece válida. Enviame una dirección completa, por ejemplo: https://tuempresa.com',
+    'Para armarla necesito el link de tu web (por ejemplo, https://minegocio.com.uy). Si no tenés web, escribime "no tengo" y me pasás los datos por acá.',
 
+  // NOTE: source spec for blockedUrl appears truncated after "https://minegocio." — implemented verbatim
   blockedUrl:
-    'No puedo acceder a esa URL. Probá con otra dirección pública.',
+    'No pude abrir ese link. Revisá que sea la dirección de tu web (por ejemplo, https://minegocio.no tengo" y me pasás los datos por acá.',
 
-  jsOnly:
-    'El sitio requiere JavaScript para cargar contenido y no pude extraer información. Probá con otra URL o contactanos para ayudarte.',
+  socialMedia:
+    'Las redes sociales me bloquean la lectura. ¿Tenés una web? Si no, pegame acá lo que publicás: servicios, horarios, dirección y precios.',
 
-  rateLimitIp:
-    'Ya generaste varios demos hoy desde esta conexión. Volvé mañana.',
+  // Used for: jsOnly, scrape error, "no tengo" trigger, general read failure
+  needsText:
+    'No pude leer bien tu web (pasa con algunas páginas). Sin drama: pegame acá, en un solo mensaje, tus servicios o productos, horarios, dirección y precios si los tenés, y te armo la demo igual.',
+
+  generationTimeout:
+    'Se está demorando más de lo normal. Para no hacerte esperar: pegame acá tus servicios, horarios y precios, y te la armo con eso.',
+
+  generationError:
+    'No pude leer bien tu web (pasa con algunas páginas). Sin drama: pegame acá, en un solo mensaje, tus servicios o productos, horarios, dirección y precios si los tenés, y te armo la demo igual.',
 
   rateLimitPhone:
-    'Ya generaste varios demos hoy desde este número. Volvé mañana.',
+    'Ya armé varias demos desde este número hoy. Escribime mañana y seguimos. Si es urgente, decime y lo vemos.',
 
   rateLimitGlobal:
-    'Muchas demos generadas hoy. Intentalo de nuevo mañana.',
+    'Ya armé varias demos desde este número hoy. Escribime mañana y seguimos. Si es urgente, decime y lo vemos.',
 
-  existingClient:
-    null, // silently skip — existing clients handled by normal assistant
+  textTooShort:
+    'Necesito un poco más: contame qué servicios o productos ofrecen, horarios, dirección y precios si los tenés.',
 
-  demoReady: (url) =>
-    `¡Tu demo está listo! 🎉\n\nPodés verlo acá: ${url}\n\nTambién podés chatear con él directamente por acá si querés probarlo.`,
-
+  // NOTE: source spec for followUp appears truncated after "con t" — implemented verbatim
   followUp:
-    '¿Pudiste ver tu demo? Si tenés dudas o querés activar Daxos para tu negocio, avisame 🚀',
-
-  // Demo chat – when user messages demo via WhatsApp after receiving link
-  chatError:
-    'Ocurrió un error al procesar tu mensaje. Intentá de nuevo.',
+    '¿Pudiste probar la demo? Si te quedó alguna duda o querés ver cómo quedaría con tlo vemos.',
 
   chatLimitReached:
     'Llegaste al límite de mensajes de esta demo. Para seguir, activá tu plan en daxos.lat',
