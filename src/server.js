@@ -1158,7 +1158,7 @@ app.post('/api/business/documents', requireAuth, scriptUpload.single('doc'), asy
     const DOC_PAGE_CHARS = 1500;
     const remainingPages = Math.floor(result.remaining / DOC_PAGE_CHARS);
     return res.status(422).json({
-      error: `Superaste el límite de contexto. Te quedan ~${remainingPages} página${remainingPages !== 1 ? 's' : ''} disponibles. Eliminá un documento para hacer lugar.`,
+      error: `Llegaste al límite de espacio para documentos (te quedan ~${remainingPages} página${remainingPages !== 1 ? 's' : ''}). Dejá solo lo más importante (productos más vendidos, precios, envíos, formas de pago) o eliminá un documento para hacer lugar. Si tenés un catálogo completo, subilo como PDF en la sección Catálogo: el asistente lo envía cuando un cliente lo pide.`,
       remaining: result.remaining,
     });
   }
