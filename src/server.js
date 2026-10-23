@@ -2149,11 +2149,17 @@ app.post('/webhook', async (req, res) => {
 
   try {
     const body = req.body;
-    if (body.object !== 'whatsapp_business_account') return;
+    if (body.object !== 'whatsapp_business_account') {
+      logError('webhook-discard', { message: `reason=wrong_object object=${body.object}`, stack: '' });
+      return;
+    }
 
     for (const entry of body.entry || []) {
       for (const change of entry.changes || []) {
-        if (change.field !== 'messages') continue;
+        if (change.field !== 'messages') {
+          logError('webhook-discard', { message: `reason=wrong_field field=${change.field}`, stack: '' });
+          continue;
+        }
 
         const value = change.value;
         const phoneNumberId = value.metadata?.phone_number_id;
@@ -2168,7 +2174,12 @@ app.post('/webhook', async (req, res) => {
         }
 
         const messages = value.messages || [];
-        if (!messages.length) continue;
+        if (!messages.length) {
+          if (!(value.statuses?.length)) {
+            logError('webhook-discard', { message: `reason=no_messages phone_number_id=${phoneNumberId}`, stack: '' });
+          }
+          continue;
+        }
 
         const business = getBusinessByPhoneNumberId(phoneNumberId);
         logError('webhook-lookup', {
@@ -2182,9 +2193,15 @@ app.post('/webhook', async (req, res) => {
         const waCredentials = { phoneNumberId: business.phone_number_id, accessToken: business.wa_access_token, provider: business.wa_provider || 'meta' };
 
         for (const msg of messages) {
-          if (msg.type !== 'text' && msg.type !== 'audio') continue;
+          if (msg.type !== 'text' && msg.type !== 'audio') {
+            logError('msg-discard', { message: `reason=unsupported_type type=${msg.type} business_id=${business.id} msg_id=${msg.id || 'none'}`, stack: '' });
+            continue;
+          }
           const customerPhone = msg.from;
-          if (!customerPhone) continue;
+          if (!customerPhone) {
+            logError('msg-discard', { message: `reason=no_from type=${msg.type} business_id=${business.id} msg_id=${msg.id || 'none'}`, stack: '' });
+            continue;
+          }
 
           // Dedup: INSERT OR IGNORE — if already processed, skip
           if (msg.id) {
@@ -2202,6 +2219,7 @@ app.post('/webhook', async (req, res) => {
             text = msg.text?.body;
             if (!text) {
               if (msg.id) deleteProcessedMessage(business.id, msg.id);
+              logError('msg-discard', { message: `reason=empty_text_body business_id=${business.id} msg_id=${msg.id || 'none'}`, stack: '' });
               continue;
             }
           } else {

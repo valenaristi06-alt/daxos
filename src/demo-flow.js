@@ -267,7 +267,8 @@ async function handleDemoFlow(business, waCredentials, customerPhone, text) {
     // (d) Short / unrecognized → warn once, then release
     if (session.state === 'esperando_link_warned') {
       db.deleteDemoFlowSession(customerPhone);
-      return true; // silent release
+      db.logError('demo-flow-discard', { message: `reason=link_warned_release business_id=${business.id}`, stack: '' });
+      return false;
     }
     db.upsertDemoFlowSession(customerPhone, 'esperando_link_warned', null);
     await sendWA(waCredentials, customerPhone, MSG.invalidUrl);
@@ -291,7 +292,8 @@ async function handleDemoFlow(business, waCredentials, customerPhone, text) {
     // Too short → warn once, then release
     if (session.state === 'esperando_texto_warned') {
       db.deleteDemoFlowSession(customerPhone);
-      return true; // silent release
+      db.logError('demo-flow-discard', { message: `reason=texto_warned_release business_id=${business.id}`, stack: '' });
+      return false;
     }
     db.upsertDemoFlowSession(customerPhone, 'esperando_texto_warned', null);
     await sendWA(waCredentials, customerPhone, MSG.textTooShort);
@@ -300,6 +302,13 @@ async function handleDemoFlow(business, waCredentials, customerPhone, text) {
 
   // ── State: procesando — ignore duplicates while generating ────────────────
   if (session.state === 'procesando') {
+    const stuckMs = Date.now() - new Date(session.updated_at).getTime();
+    if (stuckMs > 3 * 60 * 1000) {
+      db.deleteDemoFlowSession(customerPhone);
+      db.logError('demo-flow-discard', { message: `reason=procesando_stuck_release business_id=${business.id} age_ms=${stuckMs}`, stack: '' });
+      return false;
+    }
+    db.logError('demo-flow-discard', { message: `reason=procesando_absorb business_id=${business.id} age_ms=${stuckMs}`, stack: '' });
     return true;
   }
 
