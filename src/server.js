@@ -1743,7 +1743,6 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   // Conversation paused — record message so owner sees it, but no AI reply
   if (conversation.needs_attention) {
     addMessage(conversation.id, 'user', text);
-    markAsRead(msgId, waCredentials).catch(() => {});
     if (conversation.paused_reason === 'keyword' && conversation.pause_reply_count < 3) {
       const nowSec = Math.floor(Date.now() / 1000);
       const lastAt = conversation.pause_last_reply_at || 0;
