@@ -1390,7 +1390,7 @@ function isTrialExpired(business) {
   return false;
 }
 
-async function notifyOwnerOfPause({ business, owner, contactId, messageText, conversationId, waCredentials }) {
+async function notifyOwnerOfPause({ business, owner, contactId, messageText, conversationId, waCredentials, subject = '⚠️ Conversación pausada' }) {
   const convUrl = `${process.env.APP_URL || 'https://daxos.lat'}/conversations.html?conv=${conversationId}`;
 
   if (!owner) {
@@ -1412,7 +1412,7 @@ async function notifyOwnerOfPause({ business, owner, contactId, messageText, con
   } else if (normPhone === normBizPhone) {
     logError('pause-notify-wa-error', { message: `conv ${conversationId}: skip — owner phone ****${normPhone.slice(-4)} same as business WA (self-send prevented)`, stack: '' });
   } else {
-    const waMsg = `⚠️ Conversación pausada — ${business.name}\nCliente: ${contactId}\nMensaje: ${messageText}\nAbrir la conversación: ${convUrl}`;
+    const waMsg = `${subject} — ${business.name}\nCliente: ${contactId}\nMensaje: ${messageText}\nAbrir la conversación: ${convUrl}`;
     sendWhatsAppMessage(normPhone, waMsg, waCredentials)
       .catch(err => logError('pause-notify-wa-error', { message: `conv ${conversationId} dest=****${normPhone.slice(-4)}: ${err.message}`, stack: '' }));
   }
@@ -2223,26 +2223,103 @@ app.post('/webhook', async (req, res) => {
           // Meta sends timestamp as a Unix epoch string
           const msgTimestamp = msg.timestamp ? parseInt(msg.timestamp, 10) || null : null;
 
-          // ── Image with caption → treat caption as message text ──────────────
-          if (msgType === 'image' && msg.image?.caption?.trim()) {
-            const caption = msg.image.caption.trim();
-            try {
-              await processIncomingMessage(business, waCredentials, {
-                msgId: msg.id, customerPhone,
-                text: caption,
-                claudeText: `[El cliente adjuntó una imagen que no podés ver. Respondé solo a lo que escribió y avisale que no podés ver imágenes.]\n${caption}`,
-                msgTimestamp, msgTimestampField: 'msg.timestamp',
-              });
-            } catch (err) {
-              if (msg.id) deleteProcessedMessage(business.id, msg.id);
-              logError('webhook-process-error', err);
+          // ── Image → try vision; fallback to fixed reply if download/validation fails ──
+          if (msgType === 'image') {
+            const IMG_ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+            const caption = msg.image?.caption?.trim() || '';
+            const declaredMime = (msg.image?.mime_type || '').split(';')[0].trim();
+            const mediaId = msg.image?.id;
+
+            let imgBuffer = null, actualMime = null, downloadErr = null;
+
+            if (!mediaId) {
+              downloadErr = 'no_media_id';
+            } else if (declaredMime && declaredMime.startsWith('image/') && !IMG_ALLOWED.has(declaredMime)) {
+              downloadErr = `unsupported_mime:${declaredMime}`;
+            } else {
+              try {
+                const { buffer } = await downloadMetaMedia(
+                  mediaId, business.wa_access_token, { maxBytes: 5 * 1024 * 1024, timeoutMs: 10000 }
+                );
+                const detected = detectMimeFromBytes(buffer);
+                if (!detected || !IMG_ALLOWED.has(detected)) {
+                  downloadErr = `unsupported_content:detected=${detected}`;
+                } else {
+                  imgBuffer = buffer;
+                  actualMime = detected;
+                }
+              } catch (dlErr) {
+                downloadErr = dlErr.message;
+                logError('image-download-error', { message: `business_id=${business.id} err=${dlErr.message}`, stack: '' });
+              }
             }
+
+            if (imgBuffer) {
+              // Vision path: pass image + caption directly to Claude
+              const storedText = caption ? `[imagen] ${caption}` : '[imagen]';
+              const imageData = { base64: imgBuffer.toString('base64'), mimeType: actualMime, caption };
+              logError('meta-image-vision', { message: `business_id=${business.id} mime=${actualMime} bytes=${imgBuffer.length} has_caption=${!!caption}`, stack: '' });
+              try {
+                await processIncomingMessage(business, waCredentials, {
+                  msgId: msg.id, customerPhone,
+                  text: storedText,
+                  msgTimestamp, msgTimestampField: 'msg.timestamp',
+                  imageData,
+                });
+              } catch (err) {
+                if (msg.id) deleteProcessedMessage(business.id, msg.id);
+                logError('webhook-process-error', err);
+              }
+              continue;
+            }
+
+            // Fallback: download/validation failed → fixed reply + owner notify
+            logError('meta-image-fallback', { message: `business_id=${business.id} reason=${downloadErr}`, stack: '' });
+            const imgStaleReason = isMsgStale(business, msgTimestamp);
+            if (imgStaleReason) {
+              if (msg.id) deleteProcessedMessage(business.id, msg.id);
+              logError('msg-stale', { message: `type=image msgId=${msg.id} business_id=${business.id} reason=${imgStaleReason}`, stack: '' });
+              continue;
+            }
+            const imgConv = getOrCreateConversation(business.id, customerPhone);
+            addMessage(imgConv.id, 'user', caption ? `[imagen] ${caption}` : '[imagen]');
+
+            if (imgConv.needs_attention || isTrialExpired(business)) {
+              logError('msg-discard', { message: `reason=${imgConv.needs_attention ? 'paused' : 'trial_expired'} type=image business_id=${business.id}`, stack: '' });
+              continue;
+            }
+
+            const imgHourKey = Math.floor(Date.now() / 3_600_000);
+            pruneImgMaps(imgHourKey);
+            const imgNotifyKey = `${imgConv.id}:${imgHourKey}`;
+            if (_mediaNotifyAt.has(imgNotifyKey)) {
+              logError('msg-discard', { message: `reason=media_throttled type=image business_id=${business.id} conv_id=${imgConv.id}`, stack: '' });
+              continue;
+            }
+            _mediaNotifyAt.set(imgNotifyKey, true);
+
+            const imgFixedMsg = 'Recibí tu mensaje. Por ahora no puedo ver fotos ni archivos, pero se lo paso a una persona del equipo para que te responda.';
+            addMessage(imgConv.id, 'assistant', imgFixedMsg);
+            sendWhatsAppMessage(customerPhone, imgFixedMsg, waCredentials)
+              .catch(err => logError('media-reply-send', { message: err.message, stack: '' }));
+
+            const imgOwner = getUserByBusinessId(business.id);
+            notifyOwnerOfPause({
+              business, owner: imgOwner,
+              contactId: customerPhone,
+              messageText: '📷 imagen que no pude procesar',
+              conversationId: imgConv.id,
+              waCredentials,
+              subject: '📷 Imagen sin procesar',
+            }).catch(() => {});
+
+            logError('media-handled', { message: `type=image business_id=${business.id} conv_id=${imgConv.id} fallback=true`, stack: '' });
             continue;
           }
 
-          // ── Image (no caption), document, video, location, contacts ─────────
+          // ── Document, video, location, contacts ─────────────────────────────
           // Send a fixed reply once per conv per hour; notify owner without pausing.
-          if (msgType === 'image' || msgType === 'document' || msgType === 'video' ||
+          if (msgType === 'document' || msgType === 'video' ||
               msgType === 'location' || msgType === 'contacts') {
             const staleReason = isMsgStale(business, msgTimestamp);
             if (staleReason) {

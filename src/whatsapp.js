@@ -164,7 +164,7 @@ async function sendTypingIndicator(to, creds) {
 
 const AUDIO_MAX_BYTES = 2 * 1024 * 1024; // ~2 min at 128 kbps
 
-async function downloadMetaMedia(mediaId, bizToken) {
+async function downloadMetaMedia(mediaId, bizToken, { maxBytes = AUDIO_MAX_BYTES, timeoutMs = 15000 } = {}) {
   const metaRes = await metaFetch(
     `${GRAPH_BASE}/${encodeURIComponent(mediaId)}`,
     { method: 'GET', headers: {} },
@@ -177,19 +177,19 @@ async function downloadMetaMedia(mediaId, bizToken) {
   }
   const meta = await metaRes.json();
   const fileSize = meta.file_size ?? 0;
-  if (fileSize > AUDIO_MAX_BYTES) throw new Error(`too_large:file_size=${fileSize}`);
+  if (fileSize > maxBytes) throw new Error(`too_large:file_size=${fileSize}`);
   const downloadUrl = meta.url;
   if (!downloadUrl) throw new Error('meta_media_no_url');
 
   const token = bizToken || process.env.META_SYSTEM_TOKEN;
   const dlRes = await fetch(downloadUrl, {
     headers: { 'Authorization': `Bearer ${token}` },
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!dlRes.ok) throw new Error(`meta_download:status=${dlRes.status}`);
   const cl = parseInt(dlRes.headers.get('content-length') || '0', 10);
-  if (cl > AUDIO_MAX_BYTES) throw new Error(`too_large:content_length=${cl}`);
-  const buffer = await readBodyCapped(dlRes, AUDIO_MAX_BYTES);
+  if (cl > maxBytes) throw new Error(`too_large:content_length=${cl}`);
+  const buffer = await readBodyCapped(dlRes, maxBytes);
   const contentType = (dlRes.headers.get('content-type') || '').split(';')[0].trim()
     || meta.mime_type
     || 'audio/ogg';
