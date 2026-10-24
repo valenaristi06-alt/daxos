@@ -720,6 +720,28 @@ function markConversationResumed(conversationId) {
   `).run(conversationId);
 }
 
+function resetConversation(convId, businessId, userId) {
+  const conv = db.prepare('SELECT id FROM conversations WHERE id = ? AND business_id = ?').get(convId, businessId);
+  if (!conv) throw new Error(`reset_not_found:conv=${convId} biz=${businessId}`);
+  db.transaction(() => {
+    db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(convId);
+    db.prepare(`UPDATE conversations SET
+      needs_attention = 0, needs_human = 0,
+      paused_reason = NULL, paused_at = NULL, auto_resumed_at = NULL,
+      human_paused_at = NULL, silent = 0,
+      pause_reply_count = 0, pause_last_reply_at = NULL,
+      pause_notified_at = NULL, pause_followup_sent = NULL, pause_24h_sent = NULL,
+      spending_cap_notified_at = NULL, trial_ended_notified_at = NULL,
+      booking_state = NULL, label = NULL
+    WHERE id = ?`).run(convId);
+    db.prepare('INSERT INTO error_log (context, message, stack) VALUES (?, ?, ?)').run(
+      'conv-reset',
+      `conv_id=${convId} business_id=${businessId} user_id=${userId}`,
+      ''
+    );
+  })();
+}
+
 function setNeedsHuman(conversationId, val) {
   db.prepare('UPDATE conversations SET needs_human = ? WHERE id = ?').run(val ? 1 : 0, conversationId);
 }
@@ -1462,6 +1484,7 @@ module.exports = {
   getConversationHistory,
   markConversationPaused,
   markConversationResumed,
+  resetConversation,
   setNeedsHuman,
   setHumanPaused,
   clearHumanPause,

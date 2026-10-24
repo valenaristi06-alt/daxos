@@ -102,6 +102,56 @@
       padding: 10px 0 4px;
       user-select: none;
     }
+    .btn-reset-conv {
+      font-size: 11px;
+      font-family: var(--mono, monospace);
+      padding: 4px 10px;
+      border: 1px solid #3a1a1a;
+      border-radius: 4px;
+      background: transparent;
+      color: #8a4040;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn-reset-conv:hover { border-color: #ef4444; color: #ef4444; }
+    #reset-modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    #reset-modal-overlay.active { display: flex; }
+    .reset-modal-card {
+      background: #161616;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 24px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.7);
+    }
+    .reset-modal-card h3 { margin: 0 0 8px; font-size: 15px; color: #f0ede8; }
+    .reset-modal-card p  { margin: 0 0 16px; font-size: 13px; color: #888; line-height: 1.5; }
+    .reset-modal-input {
+      width: 100%; box-sizing: border-box;
+      background: #1a1a1a; border: 1px solid #2a2a2a;
+      border-radius: 4px; color: #f0ede8;
+      font-size: 13px; padding: 8px 10px;
+      margin-bottom: 16px;
+    }
+    .reset-modal-input:focus { outline: none; border-color: #ef4444; }
+    .reset-modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .btn-reset-cancel {
+      padding: 7px 16px; border-radius: 4px; border: 1px solid #3a3a3a;
+      background: transparent; color: #888; font-size: 13px; cursor: pointer;
+    }
+    .btn-reset-confirm {
+      padding: 7px 16px; border-radius: 4px; border: none;
+      background: #ef4444; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .btn-reset-confirm:disabled { opacity: 0.35; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -349,6 +399,7 @@
               <option value="no_interesado" ${conversation.label === 'no_interesado' ? 'selected' : ''}>No interesado</option>
             </select>
             ${!isPaused ? `<button class="btn-pause-toggle" onclick="pauseConv(${id})">Pausar bot</button>` : ''}
+            <button class="btn-reset-conv" onclick="showResetModal(${id})">Reiniciar</button>
           </div>
         </div>
         ${needsHuman && !isPaused ? `
@@ -701,6 +752,41 @@
       if (convId > 0) openConvById(convId);
     });
 
+    // ── Reset conversation ──
+    let _resetConvId = null;
+    function showResetModal(id) {
+      _resetConvId = id;
+      const input = document.getElementById('reset-confirm-input');
+      input.value = '';
+      document.getElementById('btn-reset-confirm').disabled = true;
+      document.getElementById('reset-modal-overlay').classList.add('active');
+      setTimeout(() => input.focus(), 50);
+    }
+    function closeResetModal() {
+      _resetConvId = null;
+      document.getElementById('reset-modal-overlay').classList.remove('active');
+    }
+    async function confirmReset() {
+      if (!_resetConvId) return;
+      const id = _resetConvId;
+      const btn = document.getElementById('btn-reset-confirm');
+      btn.disabled = true;
+      btn.textContent = 'Borrando…';
+      const res = await fetch(`/api/conversations/${id}/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmation: 'BORRAR' }),
+      });
+      closeResetModal();
+      if (!res.ok) {
+        alert('No se pudo reiniciar la conversación.');
+        return;
+      }
+      // Reload thread to show empty state
+      const btn2 = document.querySelector(`.conv-item[data-id="${id}"]`);
+      if (btn2) openConv(id, btn2);
+    }
+
     async function openConvById(id) {
       // Clear tag filter so conv is visible in list even if filtered out
       activeFilterTagId = null;
@@ -724,6 +810,20 @@
       openConv(id, btn);
     }
   </script>
+
+  <div id="reset-modal-overlay" onclick="if(event.target===this)closeResetModal()">
+    <div class="reset-modal-card">
+      <h3>Reiniciar conversación</h3>
+      <p>Se borrarán todos los mensajes y se resetearán los estados (pausa, etiqueta, turno). Esta acción no se puede deshacer.</p>
+      <p>Escribí <strong style="color:#f0ede8;">BORRAR</strong> para confirmar:</p>
+      <input id="reset-confirm-input" class="reset-modal-input" type="text" autocomplete="off"
+        placeholder="BORRAR" oninput="document.getElementById('btn-reset-confirm').disabled=this.value!=='BORRAR'">
+      <div class="reset-modal-actions">
+        <button class="btn-reset-cancel" onclick="closeResetModal()">Cancelar</button>
+        <button id="btn-reset-confirm" class="btn-reset-confirm" disabled onclick="confirmReset()">Confirmar</button>
+      </div>
+    </div>
+  </div>
 
   <nav class="mobile-nav" aria-label="Navegación principal">
     <a href="/inicio.html" class="mobile-nav-item">
