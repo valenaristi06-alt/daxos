@@ -1796,8 +1796,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
 
   await maybeSendDisclosure(business, conversation.id, history, customerPhone, waCredentials);
 
-  // Mark as read + show typing indicator immediately
-  markAsRead(msgId, waCredentials).catch(() => {});
+  // Show typing indicator immediately; markAsRead is deferred until after reply is sent
   sendTypingIndicator(customerPhone, waCredentials).catch(() => {});
 
   // Spending cap check (skip for plan_cortesia)
@@ -2024,6 +2023,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     }
   }
 
+  let replySent = false;
   const planAllowsAudio = ['crecimiento', 'a_medida'].includes(business.plan);
   const replyFitsAudio = reply.length <= AUDIO_MAX_CHARS;
   const isFirstMessage = history.length === 0;
@@ -2066,11 +2066,17 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
         logError('webhook-send-result', { message: `mode=text body=${JSON.stringify(sendResult).slice(0, 300)}`, stack: '' });
       }
     }
+    replySent = true;
   } catch (sendErr) {
     logError(sendCtxErr, sendErr);
   }
 
   if (!imageSent) await sendImageNow();
+
+  // Mark as read only when bot sent a reply and it's not a derivation
+  if (!needsHuman && replySent) {
+    markAsRead(msgId, waCredentials).catch(() => {});
+  }
 
   // Derivación: notificar al dueño pero NO pausar el bot — sigue respondiendo
   if (needsHuman && !conversation.needs_human) {
