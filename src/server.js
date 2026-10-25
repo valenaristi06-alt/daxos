@@ -874,7 +874,7 @@ app.get('/api/conversations/:id/messages', requireAuth, (req, res) => {
   }
   const messages = getConversationHistory(conv.id, 200);
   const business = getBusinessById(user.business_id);
-  res.json({ conversation: conv, messages, wa_connected: !!business?.phone_number_id });
+  res.json({ conversation: conv, messages, wa_connected: !!business?.phone_number_id, owner_phone: user?.phone || null });
 });
 
 app.get('/api/stats', requireAuth, (req, res) => {
@@ -986,11 +986,20 @@ app.patch('/api/conversations/:id/pause', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+function ownerPhoneMatchesCustomer(ownerPhone, customerId) {
+  if (!ownerPhone || !customerId) return false;
+  const digits = s => s.replace(/\D/g, '');
+  const strip598 = s => s.startsWith('598') ? s.slice(3) : s;
+  const a = digits(ownerPhone), b = digits(customerId);
+  return a === b || strip598(a) === strip598(b);
+}
+
 app.post('/api/conversations/:id/reset', requireAuth, (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   const conv = getConversationById(parseInt(req.params.id));
   if (!conv || conv.business_id !== user.business_id) return res.status(404).json({ error: 'Conversación no encontrada.' });
+  if (!ownerPhoneMatchesCustomer(user.phone, conv.customer_id)) return res.status(403).json({ error: 'Solo podés reiniciar tu propia conversación de prueba.' });
   if (req.body?.confirmation !== 'BORRAR') return res.status(400).json({ error: 'Confirmación inválida.' });
   try {
     resetConversation(conv.id, user.business_id, req.session.userId);

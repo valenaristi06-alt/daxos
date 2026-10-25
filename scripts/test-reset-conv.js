@@ -71,7 +71,7 @@ function openDb() {
   return new Database(path.join(DB_DIR, 'daxos.db'));
 }
 
-async function seedBusiness(db, email, pnid, cookie) {
+async function seedBusiness(db, email, pnid, cookie, ownerPhone) {
   await req('PUT', '/api/business', { name: `Biz ${email}`, plan: 'crecimiento' }, cookie);
   const userId = db.prepare('SELECT id FROM users WHERE email = ?').get(email)?.id;
   const bizId  = db.prepare('SELECT business_id FROM users WHERE id = ?').get(userId)?.business_id;
@@ -80,8 +80,9 @@ async function seedBusiness(db, email, pnid, cookie) {
     wa_connected_at = datetime('now'), plan = 'crecimiento',
     plan_paid_at = datetime('now'), response_delay = 0
     WHERE id = ?`).run(pnid, bizId);
+  if (ownerPhone) db.prepare('UPDATE users SET phone = ? WHERE id = ?').run(ownerPhone, userId);
   db.pragma('wal_checkpoint(FULL)');
-  return bizId;
+  return { bizId, userId };
 }
 
 async function main() {
@@ -114,13 +115,16 @@ async function main() {
   const cookieA = await register('biz-a@test.com');
   const cookieB = await register('biz-b@test.com');
 
-  const bizA = await seedBusiness(db, 'biz-a@test.com', 'pnid-a', cookieA);
-  const bizB = await seedBusiness(db, 'biz-b@test.com', 'pnid-b', cookieB);
+  // ownerPhone for A matches convA1's customer_id (with +598 prefix variant)
+  const { bizId: bizA } = await seedBusiness(db, 'biz-a@test.com', 'pnid-a', cookieA, '+5985491100001');
+  const { bizId: bizB } = await seedBusiness(db, 'biz-b@test.com', 'pnid-b', cookieB, '5491100003');
 
   // Seed conversations and messages directly in DB
+  // convA1: customer matches ownerA (5491100001 == strip598(+5985491100001))
   const convA1 = db.prepare(
     "INSERT INTO conversations (business_id, customer_id) VALUES (?, ?)"
   ).run(bizA, '5491100001').lastInsertRowid;
+  // convA2: customer does NOT match ownerA → reset should return 403
   const convA2 = db.prepare(
     "INSERT INTO conversations (business_id, customer_id) VALUES (?, ?)"
   ).run(bizA, '5491100002').lastInsertRowid;
@@ -174,27 +178,41 @@ async function main() {
   }
   console.log();
 
-  // ── Suite 3: confirmación incorrecta no borra nada ─────────────────────────
-  console.log('Suite 3: confirmación inválida no borra mensajes');
+  // ── Suite 3: conversación de cliente real (no dueño) → 403 ───────────────
+  console.log('Suite 3: convA2 (cliente real, no dueño) → 403, mensajes intactos');
   {
     const before = countMessages(convA2);
     const r = await req('POST', `/api/conversations/${convA2}/reset`,
-      { confirmation: 'borrar' }, cookieA);
+      { confirmation: 'BORRAR' }, cookieA);
     const after = countMessages(convA2);
-    assert(r.status === 400, '3.1 endpoint devuelve 400 con confirmación incorrecta', `got ${r.status}`);
+    assert(r.status === 403, '3.1 endpoint devuelve 403 para conv de cliente', `got ${r.status}`);
     assert(after === before, `3.2 mensajes de convA2 intactos (${before})`, `got ${after}`);
   }
   console.log();
 
-  // ── Suite 4: audit log registra el reset ──────────────────────────────────
-  console.log('Suite 4: error_log registra el reset');
+  // ── Suite 4: confirmación inválida → 400 ─────────────────────────────────
+  console.log('Suite 4: confirmación inválida → 400, mensajes intactos');
+  {
+    db.prepare("INSERT INTO messages (conversation_id, role, content) VALUES (?, 'user', 'msg-reseed')").run(convA1);
+    db.pragma('wal_checkpoint(FULL)');
+    const before = countMessages(convA1);
+    const r = await req('POST', `/api/conversations/${convA1}/reset`,
+      { confirmation: 'borrar' }, cookieA);
+    const after = countMessages(convA1);
+    assert(r.status === 400, '4.1 endpoint devuelve 400 con confirmación incorrecta', `got ${r.status}`);
+    assert(after === before, `4.2 mensajes intactos (${before})`, `got ${after}`);
+  }
+  console.log();
+
+  // ── Suite 5: audit log registra el reset ──────────────────────────────────
+  console.log('Suite 5: error_log registra el reset');
   {
     const entry = db.prepare(
       "SELECT message FROM error_log WHERE context = 'conv-reset' ORDER BY id DESC LIMIT 1"
     ).get();
-    assert(!!entry, '4.1 existe entrada en error_log con context=conv-reset');
+    assert(!!entry, '5.1 existe entrada en error_log con context=conv-reset');
     assert(entry?.message?.includes(`conv_id=${convA1}`),
-      `4.2 entrada menciona conv_id=${convA1}`, entry?.message);
+      `5.2 entrada menciona conv_id=${convA1}`, entry?.message);
   }
   console.log();
 

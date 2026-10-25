@@ -365,10 +365,11 @@
         document.getElementById('thread-messages').innerHTML = `<p class="no-msgs">${msg}</p>`;
         return;
       }
-      const { conversation, messages, wa_connected } = await res.json();
+      const { conversation, messages, wa_connected, owner_phone } = await res.json();
 
-      const isPaused   = !!conversation.needs_attention;
-      const needsHuman = !!conversation.needs_human;
+      const isPaused    = !!conversation.needs_attention;
+      const needsHuman  = !!conversation.needs_human;
+      const isOwnerConv = ownerPhoneMatchesCustomer(owner_phone, conversation.customer_id);
 
       const convTags = conversation.tags || [];
       document.getElementById('thread-header').innerHTML = `
@@ -399,7 +400,7 @@
               <option value="no_interesado" ${conversation.label === 'no_interesado' ? 'selected' : ''}>No interesado</option>
             </select>
             ${!isPaused ? `<button class="btn-pause-toggle" onclick="pauseConv(${id})">Pausar bot</button>` : ''}
-            <button class="btn-reset-conv" onclick="showResetModal(${id})">Reiniciar</button>
+            ${isOwnerConv ? `<button class="btn-reset-conv" onclick="showResetModal(${id})">Reiniciar</button>` : ''}
           </div>
         </div>
         ${needsHuman && !isPaused ? `
@@ -753,6 +754,14 @@
     });
 
     // ── Reset conversation ──
+    function ownerPhoneMatchesCustomer(ownerPhone, customerId) {
+      if (!ownerPhone || !customerId) return false;
+      const digits = s => s.replace(/\D/g, '');
+      const strip598 = s => s.startsWith('598') ? s.slice(3) : s;
+      const a = digits(ownerPhone), b = digits(customerId);
+      return a === b || strip598(a) === strip598(b);
+    }
+
     let _resetConvId = null;
     function showResetModal(id) {
       _resetConvId = id;
