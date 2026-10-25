@@ -178,7 +178,7 @@ async function main() {
   }
   console.log();
 
-  // ── Suite 3: conversación de cliente real (no dueño) → 403 ───────────────
+  // ── Suite 3: conversación de cliente real → 403, no borra nada ───────────
   console.log('Suite 3: convA2 (cliente real, no dueño) → 403, mensajes intactos');
   {
     const before = countMessages(convA2);
@@ -190,9 +190,10 @@ async function main() {
   }
   console.log();
 
-  // ── Suite 4: confirmación inválida → 400 ─────────────────────────────────
+  // ── Suite 4: confirmación incorrecta → 400, no borra nada ─────────────────
   console.log('Suite 4: confirmación inválida → 400, mensajes intactos');
   {
+    // Re-seed convA1 messages (was reset in suite 2)
     db.prepare("INSERT INTO messages (conversation_id, role, content) VALUES (?, 'user', 'msg-reseed')").run(convA1);
     db.pragma('wal_checkpoint(FULL)');
     const before = countMessages(convA1);

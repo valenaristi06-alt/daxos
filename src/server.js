@@ -62,7 +62,9 @@ const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserByI
   createDemo, getDemo, patchDemo, incrementDemoMsgCount,
   getDemoDailyCountByIp, getDemoDailyCountByPhone, getDemoDailyGlobalCount,
   logDemoCost, getDemoFlowSession, upsertDemoFlowSession, deleteDemoFlowSession,
-  getDemosForFollowup, getUserByPhone } = require('./db');
+  getDemosForFollowup, getUserByPhone,
+  normalizeContactPhone, isPhoneExcluded, addExcludedContact, removeExcludedContact,
+  getExcludedContacts, bulkAddExcludedContacts } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -874,7 +876,11 @@ app.get('/api/conversations/:id/messages', requireAuth, (req, res) => {
   }
   const messages = getConversationHistory(conv.id, 200);
   const business = getBusinessById(user.business_id);
-  res.json({ conversation: conv, messages, wa_connected: !!business?.phone_number_id, owner_phone: user?.phone || null });
+
+  const normCustomer = normalizeContactPhone(conv.customer_id);
+  const is_excluded = normCustomer ? isPhoneExcluded(user.business_id, normCustomer) : false;
+  res.json({ conversation: conv, messages, wa_connected: !!business?.phone_number_id, owner_phone: user?.phone || null, is_excluded });
+
 });
 
 app.get('/api/stats', requireAuth, (req, res) => {
@@ -1006,6 +1012,53 @@ app.post('/api/conversations/:id/reset', requireAuth, (req, res) => {
   } catch {
     return res.status(404).json({ error: 'Conversación no encontrada.' });
   }
+  res.json({ ok: true });
+});
+
+// ── Excluded contacts ──────────────────────────────────────────────────────
+
+app.get('/api/excluded-contacts', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.json([]);
+  res.json(getExcludedContacts(user.business_id));
+});
+
+app.post('/api/excluded-contacts', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+  const { phones } = req.body;
+  if (!phones || typeof phones !== 'string') return res.status(400).json({ error: 'phones requerido.' });
+  const lines = phones.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+  if (!lines.length) return res.status(400).json({ error: 'Sin números.' });
+  const result = bulkAddExcludedContacts(user.business_id, lines, 'bulk');
+  res.json(result);
+});
+
+app.delete('/api/excluded-contacts/:phone', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+  const result = removeExcludedContact(user.business_id, req.params.phone, 'panel');
+  if (!result.ok) return res.status(result.error === 'not_found' ? 404 : 400).json({ error: result.error });
+  res.json({ ok: true });
+});
+
+app.post('/api/conversations/:id/exclude', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+  const conv = getConversationById(parseInt(req.params.id));
+  if (!conv || conv.business_id !== user.business_id) return res.status(404).json({ error: 'Conversación no encontrada.' });
+  const result = addExcludedContact(user.business_id, conv.customer_id, 'panel');
+  if (!result.ok) return res.status(400).json({ error: result.error });
+  res.json({ ok: true, phone: normalizeContactPhone(conv.customer_id) });
+});
+
+app.delete('/api/conversations/:id/exclude', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+  const conv = getConversationById(parseInt(req.params.id));
+  if (!conv || conv.business_id !== user.business_id) return res.status(404).json({ error: 'Conversación no encontrada.' });
+  const result = removeExcludedContact(user.business_id, conv.customer_id, 'panel');
+  if (!result.ok) return res.status(result.error === 'not_found' ? 404 : 400).json({ error: result.error });
   res.json({ ok: true });
 });
 
@@ -1590,6 +1643,19 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
       setConversationSilent(conv.id, 1);
       logError('silent-window', {
         message: `business_id=${business.id} msgId=${msgId} msgTimestamp=${msgTimestamp} field=${msgTimestampField || 'unknown'} silent_until=${business.silent_until}`,
+        stack: '',
+      });
+      return;
+    }
+  }
+  // ── Excluded contacts ─────────────────────────────────────────────────────
+  {
+    const normPhone = normalizeContactPhone(customerPhone);
+    if (normPhone && isPhoneExcluded(business.id, normPhone)) {
+      const conv = getOrCreateConversation(business.id, customerPhone);
+      addMessage(conv.id, 'user', text);
+      logError('excluded-contact', {
+        message: `business_id=${business.id} phone=${normPhone} msgId=${msgId}`,
         stack: '',
       });
       return;
@@ -2250,6 +2316,22 @@ app.post('/webhook', async (req, res) => {
 
           // Meta sends timestamp as a Unix epoch string
           const msgTimestamp = msg.timestamp ? parseInt(msg.timestamp, 10) || null : null;
+
+          // ── Excluded contacts: save message, no reply, no notify, no transcription ──
+          {
+            const normPhone = normalizeContactPhone(customerPhone);
+            if (normPhone && isPhoneExcluded(business.id, normPhone)) {
+              const excConv = getOrCreateConversation(business.id, customerPhone);
+              const excContent = msgType === 'text'
+                ? (msg.text?.body || '[texto]')
+                : msgType === 'audio' ? '[audio]'
+                : msgType === 'image' ? (msg.image?.caption ? `[imagen] ${msg.image.caption}` : '[imagen]')
+                : `[media:${msgType}]`;
+              addMessage(excConv.id, 'user', excContent);
+              logError('excluded-contact', { message: `source=webhook business_id=${business.id} phone=${normPhone} msgId=${msg.id || 'none'} type=${msgType}`, stack: '' });
+              continue;
+            }
+          }
 
           // ── Image → try vision; fallback to fixed reply if download/validation fails ──
           if (msgType === 'image') {

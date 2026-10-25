@@ -488,6 +488,32 @@ db.exec(`
     console.log('[migration 011] password_reset_tokens');
   }
 
+  if (!applied('012_excluded_contacts')) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS excluded_contacts (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        business_id INTEGER NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+        phone       TEXT NOT NULL,
+        source      TEXT,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(business_id, phone)
+      )
+    `);
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS excluded_contacts_audit (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        business_id INTEGER NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+        phone       TEXT NOT NULL,
+        action      TEXT NOT NULL CHECK(action IN ('add', 'remove')),
+        source      TEXT,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_excluded_biz_phone ON excluded_contacts (business_id, phone)');
+    db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('012_excluded_contacts');
+    console.log('[migration 012] excluded_contacts tables created');
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -1457,6 +1483,100 @@ function setConversationSilent(conversationId, val) {
   db.prepare('UPDATE conversations SET silent = ? WHERE id = ?').run(val ? 1 : 0, conversationId);
 }
 
+// --- excluded contacts ---
+
+const EXCLUDED_CONTACTS_LIMIT = 500;
+
+function normalizeContactPhone(phone) {
+  if (!phone) return null;
+  let digits = String(phone).replace(/\D/g, '');
+  // Uruguay local format: starts with 0, 9 digits total (e.g. 098323308 → 59898323308)
+  if (digits.startsWith('0') && digits.length === 9) {
+    digits = '598' + digits.slice(1);
+  }
+  return digits || null;
+}
+
+function isPhoneExcluded(businessId, normalizedPhone) {
+  return !!db.prepare(
+    'SELECT 1 FROM excluded_contacts WHERE business_id = ? AND phone = ? LIMIT 1'
+  ).get(businessId, normalizedPhone);
+}
+
+function addExcludedContact(businessId, rawPhone, source) {
+  const phone = normalizeContactPhone(rawPhone);
+  if (!phone) return { ok: false, error: 'phone_invalid' };
+  const existing = db.prepare(
+    'SELECT 1 FROM excluded_contacts WHERE business_id = ? AND phone = ? LIMIT 1'
+  ).get(businessId, phone);
+  if (existing) return { ok: true, duplicate: true };
+  const count = db.prepare(
+    'SELECT COUNT(*) as n FROM excluded_contacts WHERE business_id = ?'
+  ).get(businessId).n;
+  if (count >= EXCLUDED_CONTACTS_LIMIT) return { ok: false, error: 'limit_reached' };
+  db.transaction(() => {
+    db.prepare(
+      'INSERT OR IGNORE INTO excluded_contacts (business_id, phone, source) VALUES (?, ?, ?)'
+    ).run(businessId, phone, source || null);
+    db.prepare(
+      'INSERT INTO excluded_contacts_audit (business_id, phone, action, source) VALUES (?, ?, ?, ?)'
+    ).run(businessId, phone, 'add', source || null);
+  })();
+  return { ok: true };
+}
+
+function removeExcludedContact(businessId, rawPhone, source) {
+  const phone = normalizeContactPhone(rawPhone);
+  if (!phone) return { ok: false, error: 'phone_invalid' };
+  const row = db.prepare(
+    'SELECT 1 FROM excluded_contacts WHERE business_id = ? AND phone = ?'
+  ).get(businessId, phone);
+  if (!row) return { ok: false, error: 'not_found' };
+  db.transaction(() => {
+    db.prepare(
+      'DELETE FROM excluded_contacts WHERE business_id = ? AND phone = ?'
+    ).run(businessId, phone);
+    db.prepare(
+      'INSERT INTO excluded_contacts_audit (business_id, phone, action, source) VALUES (?, ?, ?, ?)'
+    ).run(businessId, phone, 'remove', source || null);
+  })();
+  return { ok: true };
+}
+
+function getExcludedContacts(businessId) {
+  return db.prepare(
+    'SELECT id, phone, source, created_at FROM excluded_contacts WHERE business_id = ? ORDER BY created_at DESC'
+  ).all(businessId);
+}
+
+function bulkAddExcludedContacts(businessId, rawPhones, source) {
+  let added = 0, duplicates = 0, invalid = 0, limitReached = false;
+  const currentCount = db.prepare(
+    'SELECT COUNT(*) as n FROM excluded_contacts WHERE business_id = ?'
+  ).get(businessId).n;
+  let available = EXCLUDED_CONTACTS_LIMIT - currentCount;
+  for (const raw of rawPhones) {
+    if (available <= 0) { limitReached = true; break; }
+    const phone = normalizeContactPhone(raw);
+    if (!phone) { invalid++; continue; }
+    const existing = db.prepare(
+      'SELECT 1 FROM excluded_contacts WHERE business_id = ? AND phone = ? LIMIT 1'
+    ).get(businessId, phone);
+    if (existing) { duplicates++; continue; }
+    db.transaction(() => {
+      db.prepare(
+        'INSERT OR IGNORE INTO excluded_contacts (business_id, phone, source) VALUES (?, ?, ?)'
+      ).run(businessId, phone, source || null);
+      db.prepare(
+        'INSERT INTO excluded_contacts_audit (business_id, phone, action, source) VALUES (?, ?, ?, ?)'
+      ).run(businessId, phone, 'add', source || null);
+    })();
+    added++;
+    available--;
+  }
+  return { added, duplicates, invalid, limitReached };
+}
+
 module.exports = {
   setUserPhone,
   setStyleProfile,
@@ -1568,6 +1688,12 @@ module.exports = {
   setSilentUntil,
   clearSilentUntil,
   setConversationSilent,
+  normalizeContactPhone,
+  isPhoneExcluded,
+  addExcludedContact,
+  removeExcludedContact,
+  getExcludedContacts,
+  bulkAddExcludedContacts,
   logClaudeUsage,
   setClaudeUsageTtsChars,
   getClaudeUsageDailySummary,

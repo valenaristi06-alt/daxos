@@ -114,6 +114,24 @@
       white-space: nowrap;
     }
     .btn-reset-conv:hover { border-color: #ef4444; color: #ef4444; }
+    .btn-exclude-toggle {
+      font-size: 12px;
+      font-family: var(--mono, monospace);
+      padding: 4px 10px;
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--muted, #888);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn-exclude-toggle:hover { border-color: #f97316; color: #f97316; }
+    .btn-exclude-toggle--active {
+      border-color: #f97316;
+      color: #f97316;
+      background: rgba(249,115,22,0.08);
+    }
+    .btn-exclude-toggle--active:hover { background: transparent; }
     #reset-modal-overlay {
       display: none;
       position: fixed; inset: 0;
@@ -365,7 +383,7 @@
         document.getElementById('thread-messages').innerHTML = `<p class="no-msgs">${msg}</p>`;
         return;
       }
-      const { conversation, messages, wa_connected, owner_phone } = await res.json();
+      const { conversation, messages, wa_connected, owner_phone, is_excluded } = await res.json();
 
       const isPaused    = !!conversation.needs_attention;
       const needsHuman  = !!conversation.needs_human;
@@ -400,6 +418,9 @@
               <option value="no_interesado" ${conversation.label === 'no_interesado' ? 'selected' : ''}>No interesado</option>
             </select>
             ${!isPaused ? `<button class="btn-pause-toggle" onclick="pauseConv(${id})">Pausar bot</button>` : ''}
+            ${is_excluded
+              ? `<button class="btn-exclude-toggle btn-exclude-toggle--active" onclick="unexcludeContact(${id})">✕ Excluido del bot</button>`
+              : `<button class="btn-exclude-toggle" onclick="excludeContact(${id})">No automatizar</button>`}
             ${isOwnerConv ? `<button class="btn-reset-conv" onclick="showResetModal(${id})">Reiniciar</button>` : ''}
           </div>
         </div>
@@ -745,6 +766,30 @@
         dropdown.style.display = 'none';
       }
     });
+
+    // ── Excluded contacts ──
+    async function excludeContact(convId) {
+      const res = await fetch(`/api/conversations/${convId}/exclude`, { method: 'POST' });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        if (d.error === 'limit_reached') alert('Límite de 500 contactos excluidos alcanzado. Quitá alguno desde Configuración antes de agregar más.');
+        else alert(d.error || 'No se pudo excluir el contacto.');
+        return;
+      }
+      const btn = document.querySelector(`.conv-item[data-id="${convId}"]`);
+      if (btn) openConv(convId, btn);
+    }
+
+    async function unexcludeContact(convId) {
+      const res = await fetch(`/api/conversations/${convId}/exclude`, { method: 'DELETE' });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || 'No se pudo reincluir el contacto.');
+        return;
+      }
+      const btn = document.querySelector(`.conv-item[data-id="${convId}"]`);
+      if (btn) openConv(convId, btn);
+    }
 
     loadTags();
     loadList().then(() => {
