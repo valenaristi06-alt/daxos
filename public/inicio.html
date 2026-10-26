@@ -58,6 +58,11 @@
 
     <div id="trial-banner" style="display:none"></div>
 
+    <div id="bot-active-banner" style="display:none;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.18);border-radius:8px;margin-bottom:16px;flex-wrap:wrap;">
+      <span style="font-size:13px;color:#86efac;">● Tu asistente está activo y respondiendo.</span>
+      <a href="/dashboard.html#section-prueba" style="font-size:13px;color:var(--accent);text-decoration:none;white-space:nowrap;">Probalo →</a>
+    </div>
+
     <!-- 3 tarjetas superiores -->
     <div class="inicio-grid" id="inicio-grid">
 
@@ -118,7 +123,7 @@
 
     </div>
 
-    <div class="shortcut-grid">
+    <div class="shortcut-grid" id="shortcut-grid">
       <a href="/dashboard.html" class="shortcut-btn">
         <span class="shortcut-btn-tag">01</span>
         <span class="shortcut-btn-title">Configurar mi negocio</span>
@@ -128,6 +133,11 @@
         <span class="shortcut-btn-tag">02</span>
         <span class="shortcut-btn-title">Ver conversaciones</span>
         <span class="shortcut-btn-sub">Revisá los chats que tuvo tu asistente.</span>
+      </a>
+      <a href="/dashboard.html#section-prueba" class="shortcut-btn" id="shortcut-prueba" style="display:none">
+        <span class="shortcut-btn-tag">03</span>
+        <span class="shortcut-btn-title">Probá tu asistente</span>
+        <span class="shortcut-btn-sub">Escribí como un cliente y mirá cómo responde.</span>
       </a>
     </div>
 
@@ -186,6 +196,36 @@
           ];
       document.getElementById('greeting-sub').textContent =
         greetingSubs[Math.floor(Math.random() * greetingSubs.length)];
+
+      // Determina si la suscripción/trial permite que el bot responda ahora
+      function isBotActive(biz) {
+        if (!biz) return false;
+        if (biz.plan !== 'arranque') {
+          if (biz.subscription_status === 'cancelled' || biz.subscription_status === 'paused') {
+            const expiry = biz.plan_expires_at || biz.trial_ends_at;
+            if (!expiry || new Date(expiry) < new Date()) return false;
+          }
+          return true;
+        }
+        if (biz.plan_paid_at) return true;
+        if (!biz.trial_starts_at) return false;
+        if (biz.trial_grace_started_at) return false;
+        const endStr = biz.trial_ends_at;
+        const trialOver = (endStr && new Date(endStr.endsWith('Z') ? endStr : endStr + 'Z') < new Date())
+          || (biz.trial_conv_count ?? 0) >= (biz.trial_conv_limit ?? 150);
+        return !trialOver;
+      }
+
+      // Banner bot activo: solo si WA + datos + suscripción vigente
+      if (b?.name && b?.business_context && b?.phone_number_id && isBotActive(b)) {
+        const activeBanner = document.getElementById('bot-active-banner');
+        if (activeBanner) activeBanner.style.display = 'flex';
+      }
+      // Shortcut 03: visible siempre que WA esté conectado (aunque haya vencido)
+      if (b?.phone_number_id) {
+        const sc = document.getElementById('shortcut-prueba');
+        if (sc) sc.style.display = '';
+      }
 
       // Trial banner
       const banner = document.getElementById('trial-banner');
