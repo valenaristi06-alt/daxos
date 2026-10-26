@@ -1057,6 +1057,7 @@ app.post('/api/excluded-contacts/batch', requireAuth, (req, res) => {
   if (conversationIds.length > 100)
     return res.status(400).json({ error: 'Máximo 100 por lote.' });
   let processed = 0;
+  const changed_ids = [];
   const errors = [];
   for (const rawId of conversationIds) {
     const id = parseInt(rawId, 10);
@@ -1069,9 +1070,9 @@ app.post('/api/excluded-contacts/batch', requireAuth, (req, res) => {
     const result = action === 'add'
       ? addExcludedContact(user.business_id, conv.customer_id, 'batch')
       : removeExcludedContact(user.business_id, conv.customer_id, 'batch');
-    if (result.ok && !result.duplicate) processed++;
+    if (result.ok && !result.duplicate) { processed++; changed_ids.push(id); }
   }
-  res.json({ processed, ...(errors.length ? { errors } : {}) });
+  res.json({ processed, changed_ids, ...(errors.length ? { errors } : {}) });
 });
 
 app.post('/api/conversations/:id/exclude', requireAuth, (req, res) => {

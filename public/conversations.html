@@ -559,11 +559,19 @@
     async function applyBatch(action) {
       const ids = [...selectedConvIds];
       if (!ids.length) return;
-      // Only the IDs that actually need to change state (pre-computed from cache)
-      const changedIds = ids.filter(id => {
+      // Pre-check from cache: is there anything to do?
+      const needsChange = ids.some(id => {
         const c = allConvs.find(c => c.id === id);
         return c && (action === 'add' ? !c.is_excluded : c.is_excluded);
       });
+      if (!needsChange) {
+        toggleSelectionMode();
+        showUndoToast(
+          action === 'add' ? 'Ya estaban marcados como "Atiendo yo".' : 'Ya estaban sin marcar.',
+          null
+        );
+        return;
+      }
       const res = await fetch('/api/excluded-contacts/batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -574,26 +582,28 @@
         alert(d.error || 'No se pudo aplicar el cambio.');
         return;
       }
-      const { processed } = await res.json();
-      // Update cache only for IDs that actually changed state
-      changedIds.forEach(id => {
+      const { processed, changed_ids } = await res.json();
+      // Update cache using the server's authoritative list
+      (changed_ids || []).forEach(id => {
         const c = allConvs.find(c => c.id === id);
         if (c) c.is_excluded = (action === 'add');
       });
-      toggleSelectionMode(); // exits selection, clears Set
+      toggleSelectionMode();
       renderConvList();
       const noun = processed === 1 ? 'contacto' : 'contactos';
+      const limitMsg = action === 'add' && processed < ids.length ? ' Límite de 500 alcanzado.' : '';
       const msg = action === 'add'
-        ? `${processed} ${noun} marcado${processed !== 1 ? 's' : ''}. El bot ya no les responde.`
-        : `${processed} ${noun} desmarcado${processed !== 1 ? 's' : ''}.`;
+        ? `${processed} ${noun} marcado${processed !== 1 ? 's' : ''}. El bot ya no les responde.${limitMsg}`
+        : `${processed} ${noun} desmarcado${processed !== 1 ? 's' : ''}.${limitMsg}`;
+      if (!changed_ids || !changed_ids.length) { showUndoToast(msg, null); return; }
       showUndoToast(msg, async () => {
         const rev = action === 'add' ? 'remove' : 'add';
         await fetch('/api/excluded-contacts/batch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: rev, conversationIds: changedIds }),
+          body: JSON.stringify({ action: rev, conversationIds: changed_ids }),
         });
-        changedIds.forEach(id => {
+        changed_ids.forEach(id => {
           const c = allConvs.find(c => c.id === id);
           if (c) c.is_excluded = (rev === 'add');
         });
@@ -608,7 +618,10 @@
       const msgEl  = document.getElementById('toast-msg');
       const undoBtn = document.getElementById('toast-undo');
       if (msgEl) msgEl.textContent = msg;
-      if (undoBtn) undoBtn.onclick = () => { clearTimeout(_toastTimeout); toast.classList.remove('active'); undoFn(); };
+      if (undoBtn) {
+        undoBtn.style.display = undoFn ? '' : 'none';
+        if (undoFn) undoBtn.onclick = () => { clearTimeout(_toastTimeout); toast.classList.remove('active'); undoFn(); };
+      }
       toast.classList.add('active');
       if (_toastTimeout) clearTimeout(_toastTimeout);
       _toastTimeout = setTimeout(() => toast.classList.remove('active'), 5000);

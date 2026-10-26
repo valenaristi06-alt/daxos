@@ -381,6 +381,47 @@ async function main() {
   }
   console.log();
 
+  // ── Suite 7: changed_ids contiene solo los IDs que realmente cambiaron ───
+  console.log('Suite 7: changed_ids — ID ya marcado en el medio + ID de otro negocio');
+  {
+    // convC1: will be added first (not yet excluded)
+    const convC1 = db.prepare(
+      'INSERT INTO conversations (business_id, customer_id) VALUES (?, ?)'
+    ).run(bizA, '59896000001').lastInsertRowid;
+    // convC2: will be pre-excluded (already marked before the batch)
+    const convC2 = db.prepare(
+      'INSERT INTO conversations (business_id, customer_id) VALUES (?, ?)'
+    ).run(bizA, '59896000002').lastInsertRowid;
+    // convC3: will be added last (not yet excluded)
+    const convC3 = db.prepare(
+      'INSERT INTO conversations (business_id, customer_id) VALUES (?, ?)'
+    ).run(bizA, '59896000003').lastInsertRowid;
+    // convB2: belongs to bizB — should be rejected
+    const convB2 = db.prepare(
+      'INSERT INTO conversations (business_id, customer_id) VALUES (?, ?)'
+    ).run(bizB, '59896000004').lastInsertRowid;
+    db.pragma('wal_checkpoint(FULL)');
+
+    // Pre-exclude convC2
+    await req('POST', `/api/conversations/${convC2}/exclude`, null, cookieA);
+
+    // Batch: [convC1, convC2 (already marked), convB2 (other biz), convC3]
+    const r1 = await req('POST', '/api/excluded-contacts/batch', {
+      action: 'add',
+      conversationIds: [convC1, convC2, convB2, convC3],
+    }, cookieA);
+
+    assert(r1.status === 200, '7.1 batch add devuelve 200', r1.status);
+    assert(r1.body?.processed === 2, '7.2 processed = 2 (solo C1 y C3)', JSON.stringify(r1.body));
+    assert(Array.isArray(r1.body?.changed_ids), '7.3 changed_ids es array', typeof r1.body?.changed_ids);
+    assert(r1.body?.changed_ids?.length === 2, '7.4 changed_ids tiene 2 elementos', r1.body?.changed_ids?.length);
+    assert(r1.body?.changed_ids?.includes(convC1), '7.5 changed_ids incluye convC1', r1.body?.changed_ids);
+    assert(r1.body?.changed_ids?.includes(convC3), '7.6 changed_ids incluye convC3', r1.body?.changed_ids);
+    assert(!r1.body?.changed_ids?.includes(convC2), '7.7 changed_ids NO incluye convC2 (ya estaba)', r1.body?.changed_ids);
+    assert(!r1.body?.changed_ids?.includes(convB2), '7.8 changed_ids NO incluye convB2 (otro negocio)', r1.body?.changed_ids);
+  }
+  console.log();
+
   // ── Results ──────────────────────────────────────────────────────────────
   console.log(`\n${'─'.repeat(50)}`);
   console.log(`Passed: ${passed}  Failed: ${failed}`);
