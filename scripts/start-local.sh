@@ -10,7 +10,7 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO"
 
 TEST_EMAIL="test@local.dev"
-TEST_PASS="Test1234!"
+TEST_PASS="prueba1234"
 
 export DB_DIR="$REPO/data-local-test"
 export NODE_ENV="development"
