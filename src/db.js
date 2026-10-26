@@ -949,7 +949,8 @@ function getUserByBusinessId(businessId) {
 
 const stmtGetConversationsByBusiness = db.prepare(`
   SELECT c.*,
-    (SELECT MAX(m.created_at) FROM messages m WHERE m.conversation_id = c.id) AS last_msg_at
+    (SELECT MAX(m.created_at) FROM messages m WHERE m.conversation_id = c.id) AS last_msg_at,
+    (SELECT m.content FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message
   FROM conversations c
   WHERE c.business_id = ?
   ORDER BY last_msg_at DESC, c.created_at DESC
