@@ -150,11 +150,8 @@
     }
     .conv-check {
       pointer-events: none;
-      accent-color: #555;
-      flex-shrink: 0;
-    }
-    .conv-check--excluded {
       accent-color: #f97316;
+      flex-shrink: 0;
     }
 
     /* "Atiendo yo" badge in conv list */
@@ -499,8 +496,8 @@
         <button class="conv-item${selectedConvIds.has(c.id) ? ' conv-item--selected' : ''}"
           data-id="${c.id}" onclick="openConv(${c.id}, this)">
           <span class="conv-check-wrap" onclick="event.stopPropagation(); toggleSelectConv(${c.id})">
-            <input type="checkbox" class="conv-check${c.is_excluded ? ' conv-check--excluded' : ''}" tabindex="-1"
-              ${c.is_excluded || selectedConvIds.has(c.id) ? 'checked' : ''} readonly>
+            <input type="checkbox" class="conv-check" tabindex="-1"
+              ${selectedConvIds.has(c.id) ? 'checked' : ''} readonly>
           </span>
           ${c.needs_attention ? '<span class="conv-attention-dot" title="Requiere atención"></span>' : ''}
           <span class="conv-number">${escapeHtml(formatPhone(c.customer_id))}</span>
@@ -533,40 +530,33 @@
       if (row) {
         row.classList.toggle('conv-item--selected', selectedConvIds.has(id));
         const chk = row.querySelector('.conv-check');
-        if (chk) {
-          const c = allConvs.find(c => c.id === id);
-          chk.checked = selectedConvIds.has(id) || !!(c && c.is_excluded);
-        }
+        if (chk) chk.checked = selectedConvIds.has(id);
       }
       updateSelectionBar();
     }
 
     function updateSelectionBar() {
       const n = selectedConvIds.size;
+      const bar = document.getElementById('selection-bar');
       const markBtn = document.getElementById('btn-sel-mark');
       const unmarkBtn = document.getElementById('btn-sel-unmark');
-      const bar = document.getElementById('selection-bar');
-      if (markBtn) { markBtn.textContent = `Atiendo yo (${n})`; markBtn.disabled = n === 0; }
-      if (unmarkBtn) { unmarkBtn.textContent = `Quitar (${n})`; unmarkBtn.disabled = n === 0; }
+      let toMark = 0, toUnmark = 0;
+      selectedConvIds.forEach(id => {
+        const c = allConvs.find(c => c.id === id);
+        if (!c) return;
+        if (c.is_excluded) toUnmark++; else toMark++;
+      });
+      if (markBtn) { markBtn.textContent = `Atiendo yo (${toMark})`; markBtn.disabled = toMark === 0; }
+      if (unmarkBtn) { unmarkBtn.textContent = `Quitar (${toUnmark})`; unmarkBtn.disabled = toUnmark === 0; }
       if (bar) bar.classList.toggle('active', n > 0);
     }
 
     async function applyBatch(action) {
-      const ids = [...selectedConvIds];
-      if (!ids.length) return;
-      // Pre-check from cache: is there anything to do?
-      const needsChange = ids.some(id => {
+      const ids = [...selectedConvIds].filter(id => {
         const c = allConvs.find(c => c.id === id);
         return c && (action === 'add' ? !c.is_excluded : c.is_excluded);
       });
-      if (!needsChange) {
-        clearSelection();
-        showUndoToast(
-          action === 'add' ? 'Ya estaban marcados como "Atiendo yo".' : 'Ya estaban sin marcar.',
-          null
-        );
-        return;
-      }
+      if (!ids.length) return;
       const res = await fetch('/api/excluded-contacts/batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
