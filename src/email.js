@@ -444,4 +444,41 @@ async function sendPasswordResetEmail({ to, resetUrl }) {
   if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
 }
 
-module.exports = { sendPauseEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail };
+async function sendUrgentAlertEmail({ to, businessName, contactId, messageText, conversationId, convUrl, now }) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    console.warn('[resend] RESEND_API_KEY not set, skipping urgent alert email');
+    return;
+  }
+  const preview = messageText ? messageText.slice(0, 200) + (messageText.length > 200 ? '…' : '') : '';
+  const timeStr = now ? now.toLocaleString('es-UY', { timeZone: 'America/Montevideo', hour12: false }) : '';
+  const linkHtml = convUrl
+    ? `<p><a href="${convUrl}" style="background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:8px">Abrir la conversación</a></p>`
+    : '';
+  const body = {
+    from: 'Daxos <notificaciones@daxos.lat>',
+    to: [to],
+    subject: `🚨 URGENTE – ${businessName}`,
+    html: `
+      <p>Hola,</p>
+      <p>Un cliente indicó algo urgente en <strong>${escapeHtml(businessName)}</strong>.</p>
+      <table style="border-collapse:collapse;margin:16px 0">
+        <tr><td style="padding:4px 12px 4px 0;color:#666">Teléfono</td><td>${escapeHtml(contactId)}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;color:#666">Mensaje</td><td style="max-width:400px">${escapeHtml(preview)}</td></tr>
+        ${timeStr ? `<tr><td style="padding:4px 12px 4px 0;color:#666">Hora</td><td>${escapeHtml(timeStr)}</td></tr>` : ''}
+      </table>
+      ${linkHtml}
+    `,
+  };
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Resend ${res.status}: ${text}`);
+  }
+}
+
+module.exports = { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail };

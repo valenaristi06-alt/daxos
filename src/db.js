@@ -514,6 +514,13 @@ db.exec(`
     console.log('[migration 012] excluded_contacts tables created');
   }
 
+  if (!applied('013_urgent_keywords')) {
+    db.exec(`ALTER TABLE businesses ADD COLUMN urgent_keywords TEXT`);
+    db.exec(`ALTER TABLE businesses ADD COLUMN urgent_alert_enabled INTEGER NOT NULL DEFAULT 0`);
+    db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('013_urgent_keywords');
+    console.log('[migration 013] urgent_keywords + urgent_alert_enabled added to businesses');
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -832,7 +839,7 @@ function autoResumeExpiredConversations() {
   return result.changes;
 }
 
-function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = null, survey_answers = null, business_context = null, website_url = null, response_mode = 'texto', pause_keywords = null, pause_reply_text = null, response_delay = 5, pricing_info = null }) {
+function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = null, survey_answers = null, business_context = null, website_url = null, response_mode = 'texto', pause_keywords = null, pause_reply_text = null, response_delay = 5, pricing_info = null, urgent_keywords = null, urgent_alert_enabled = 0 }) {
   const serialized = {
     name,
     whatsapp_number: whatsapp_number || null,
@@ -845,6 +852,8 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
     pause_reply_text: pause_reply_text || null,
     response_delay: Number(response_delay) || 5,
     pricing_info: pricing_info || null,
+    urgent_keywords: urgent_keywords || null,
+    urgent_alert_enabled: urgent_alert_enabled ? 1 : 0,
   };
 
   if (id) {
@@ -854,7 +863,8 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
         business_context=@business_context, website_url=@website_url,
         response_mode=@response_mode, pause_keywords=@pause_keywords,
         pause_reply_text=@pause_reply_text,
-        response_delay=@response_delay, pricing_info=@pricing_info
+        response_delay=@response_delay, pricing_info=@pricing_info,
+        urgent_keywords=@urgent_keywords, urgent_alert_enabled=@urgent_alert_enabled
       WHERE id=@id
     `).run({ ...serialized, id });
     return getBusinessById(id);

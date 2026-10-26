@@ -78,8 +78,25 @@ const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = 
 const { handleDemoFlow, processFollowups } = require('./demo-flow');
 const { sendWeeklySummaries } = require('./weekly');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
-const { sendPauseEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail } = require('./email');
+const { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail } = require('./email');
 const { runBackup, maybeScheduledBackup, maybeSilenceAlert, startupBackupCheck, getLatestBackupMeta, listAllBackups } = require('./backup');
+
+const urgentAlertThrottle = new Map(); // conversationId → ms timestamp, resets on server restart
+const urgentBizHourly = new Map(); // businessId → { count, windowStart }, resets on server restart
+
+function _urgentBizHourlyOk(bizId) {
+  const HOUR_MS = 60 * 60 * 1000;
+  const LIMIT = 10;
+  const now = Date.now();
+  const entry = urgentBizHourly.get(bizId);
+  if (!entry || now - entry.windowStart > HOUR_MS) {
+    urgentBizHourly.set(bizId, { count: 1, windowStart: now });
+    return true;
+  }
+  if (entry.count >= LIMIT) return false;
+  entry.count++;
+  return true;
+}
 
 if (!process.env.RESEND_API_KEY) {
   console.warn('[startup] RESEND_API_KEY not set — password reset emails will be silently skipped');
@@ -361,6 +378,7 @@ const OWNER_BUSINESS_FIELDS = new Set([
   'trial_conv_count', 'trial_conv_limit',
   'wa_provider', 'phone_number_id', 'waba_id', 'wa_payment_confirmed', 'wa_connected_at',
   'kapso_customer_id',
+  'urgent_keywords', 'urgent_alert_enabled',
   'booking_enabled', 'weekly_summary_enabled',
   'billing_requires_invoice', 'billing_legal_name', 'billing_rut', 'billing_address', 'billing_email', 'billing_updated_at',
 ]);
@@ -574,7 +592,7 @@ async function fetchAndSummarizeWebsite(rawUrl) {
 }
 
 app.put('/api/business', requireAuth, async (req, res) => {
-  const { name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, pause_reply_text, response_delay, pricing_info } = req.body;
+  const { name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, pause_reply_text, response_delay, pricing_info, urgent_keywords, urgent_alert_enabled } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'El nombre del negocio es requerido' });
 
   const prtClean = pause_reply_text != null ? String(pause_reply_text).trim() : null;
@@ -602,6 +620,8 @@ app.put('/api/business', requireAuth, async (req, res) => {
       pause_reply_text: prtClean || null,
       response_delay: response_delay != null ? Math.min(20, Math.max(0, parseInt(response_delay, 10) || 5)) : 5,
       pricing_info: pricing_info ? pricing_info.trim() : null,
+      urgent_keywords: urgent_keywords ? urgent_keywords.trim() : null,
+      urgent_alert_enabled: urgent_alert_enabled ? 1 : 0,
     });
     console.log('[PUT /api/business] upsertBusiness result id:', business?.id ?? 'null');
     if (!user.business_id) {
@@ -1538,6 +1558,47 @@ async function notifyOwnerOfPause({ business, owner, contactId, messageText, con
   }
 }
 
+// Returns true if email was sent successfully.
+async function notifyOwnerUrgent({ business, owner, contactId, messageText, conversationId, waCredentials, now }) {
+  const convUrl = `${process.env.APP_URL || 'https://daxos.lat'}/conversations.html?conv=${conversationId}`;
+
+  if (!owner) {
+    logError('urgent-alert', { message: `conv ${conversationId} biz=${business.id}: no owner — skip`, stack: '' });
+    return false;
+  }
+
+  // Email — canal principal, timeout 5s; no bloquea la respuesta al cliente
+  let emailOk = false;
+  try {
+    await Promise.race([
+      sendUrgentAlertEmail({ to: owner.email, businessName: business.name, contactId, messageText, conversationId, convUrl, now }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('email timeout 5000ms')), 5000)),
+    ]);
+    emailOk = true;
+    logError('urgent-alert', { message: `conv ${conversationId} email ok to owner`, stack: '' });
+  } catch (err) {
+    logError('urgent-alert', { message: `conv ${conversationId} email failed: ${err.message}`, stack: '' });
+  }
+
+  // WhatsApp — best-effort
+  const normPhone    = normalizeUruguayPhone(owner.phone);
+  const normBizPhone = normalizeUruguayPhone(business.whatsapp_number);
+  if (!normPhone) {
+    logError('urgent-alert', { message: `conv ${conversationId}: skip WA — owner no phone`, stack: '' });
+  } else if (!waCredentials) {
+    logError('urgent-alert', { message: `conv ${conversationId}: skip WA — no credentials`, stack: '' });
+  } else if (normPhone === normBizPhone) {
+    logError('urgent-alert', { message: `conv ${conversationId}: skip WA — same as business number`, stack: '' });
+  } else {
+    const waMsg = `🚨 URGENTE — ${business.name}\nCliente: ${contactId}\nMensaje: ${messageText}\nAbrir: ${convUrl}`;
+    sendWhatsAppMessage(normPhone, waMsg, waCredentials)
+      .then(() => logError('urgent-alert', { message: `conv ${conversationId} WA ok to ****${normPhone.slice(-4)}`, stack: '' }))
+      .catch(err => logError('urgent-alert', { message: `conv ${conversationId} WA failed to ****${normPhone.slice(-4)}: ${err.message}`, stack: '' }));
+  }
+
+  return emailOk;
+}
+
 function normalizeUruguayPhone(phone) {
   if (!phone) return null;
   let digits = String(phone).replace(/\D/g, '');
@@ -1862,6 +1923,49 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   const conversation = getOrCreateConversation(business.id, customerPhone);
   const history = getConversationHistory(conversation.id, 60);
 
+  // ── Urgent keyword check (runs even when conversation is paused/derived) ──
+  if (business.urgent_alert_enabled && business.urgent_keywords) {
+    const urgentKws = business.urgent_keywords
+      .split(',')
+      .map(k => normalizePauseText(k))
+      .filter(Boolean);
+    if (urgentKws.length > 0) {
+      const normText = normalizePauseText(text);
+      const NEGATION_RE = /\b(no|sin|nada|ningun|ninguna)\b/;
+      const matchedKw = urgentKws.find(kw => {
+        const re = new RegExp(`\\b${kw.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}\\b`);
+        const m = re.exec(normText);
+        if (!m) return false;
+        const wordsBefore = normText.slice(0, m.index).trim().split(/\s+/).slice(-3).join(' ');
+        return !NEGATION_RE.test(wordsBefore);
+      });
+      if (matchedKw) {
+        const now = Date.now();
+        const lastAlert = urgentAlertThrottle.get(conversation.id);
+        const THROTTLE_MS = 30 * 60 * 1000;
+        if (lastAlert && now - lastAlert <= THROTTLE_MS) {
+          logError('urgent-alert', { message: `conv ${conversation.id} keyword="${matchedKw}" throttled (last ${Math.round((now - lastAlert) / 60000)}m ago)`, stack: '' });
+        } else if (!_urgentBizHourlyOk(business.id)) {
+          logError('urgent-alert', { message: `conv ${conversation.id} biz=${business.id} hourly limit reached`, stack: '' });
+        } else {
+          urgentAlertThrottle.set(conversation.id, now); // set optimistically: blocks [URGENTE] dedup within same message
+          logError('urgent-alert', { message: `conv ${conversation.id} keyword="${matchedKw}" — alerting owner`, stack: '' });
+          const urgOwner = getUserByBusinessId(business.id);
+          notifyOwnerUrgent({
+            business, owner: urgOwner, contactId: customerPhone,
+            messageText: text, conversationId: conversation.id, waCredentials, now: new Date(now),
+          }).then(emailOk => {
+            if (!emailOk) urgentAlertThrottle.delete(conversation.id); // allow retry on next message
+          }).catch(err => {
+            urgentAlertThrottle.delete(conversation.id);
+            logError('urgent-alert', { message: `notifyOwnerUrgent (keyword) threw: ${err.message}`, stack: '' });
+          });
+        }
+      }
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   // Conversation paused — record message so owner sees it, but no AI reply
   if (conversation.needs_attention) {
     addMessage(conversation.id, 'user', text);
@@ -1998,10 +2102,15 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
 
   let sendDoc = false;
   let needsHuman = false;
+  let isUrgente = false;
   let reply = rawReply;
   if (/\[NEEDS_HUMAN\]/.test(reply)) {
     needsHuman = true;
     reply = reply.replace(/\[NEEDS_HUMAN\]\n?/g, '');
+  }
+  if (/\[URGENTE\]/.test(reply)) {
+    isUrgente = true;
+    reply = reply.replace(/\[URGENTE\]\n?/g, '');
   }
   if (reply.startsWith('[SEND_DOC]')) {
     sendDoc = true;
@@ -2208,6 +2317,30 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
       business, owner, channel: 'whatsapp', contactId: customerPhone,
       messageText: text, conversationId: conversation.id, waCredentials,
     }).catch(err => console.error('[notify-human]', err.message));
+  }
+
+  if (isUrgente && business.urgent_alert_enabled) {
+    const now = Date.now();
+    const lastAlert = urgentAlertThrottle.get(conversation.id);
+    const THROTTLE_MS = 30 * 60 * 1000;
+    if (lastAlert && now - lastAlert <= THROTTLE_MS) {
+      logError('urgent-alert', { message: `conv ${conversation.id} [URGENTE] marker throttled (last ${Math.round((now - lastAlert) / 60000)}m ago)`, stack: '' });
+    } else if (!_urgentBizHourlyOk(business.id)) {
+      logError('urgent-alert', { message: `conv ${conversation.id} biz=${business.id} hourly limit reached ([URGENTE])`, stack: '' });
+    } else {
+      urgentAlertThrottle.set(conversation.id, now);
+      logError('urgent-alert', { message: `conv ${conversation.id} [URGENTE] marker — alerting owner`, stack: '' });
+      const owner = getUserByBusinessId(business.id);
+      notifyOwnerUrgent({
+        business, owner, contactId: customerPhone,
+        messageText: text, conversationId: conversation.id, waCredentials, now: new Date(now),
+      }).then(emailOk => {
+        if (!emailOk) urgentAlertThrottle.delete(conversation.id);
+      }).catch(err => {
+        urgentAlertThrottle.delete(conversation.id);
+        logError('urgent-alert', { message: `notifyOwnerUrgent ([URGENTE] marker) threw: ${err.message}`, stack: '' });
+      });
+    }
   }
 }
 
