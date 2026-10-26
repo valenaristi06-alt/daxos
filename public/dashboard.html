@@ -418,9 +418,9 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         </div>
 
         <div class="field subsection">
-          <label class="field-label" for="pause_keywords">¿Cuándo querés que te avise? <span class="tag-optional">Opcional</span></label>
-          <span class="field-hint">Si un cliente escribe alguna de estas palabras, tu asistente para y te manda un aviso por WhatsApp. Escribilas separadas con comas.</span>
-          <input id="pause_keywords" type="text" placeholder="Ej: hablar con una persona, urgente, cancelar" />
+          <label class="field-label" for="pause_keywords">Pasar la conversación a una persona <span class="tag-optional">Opcional</span></label>
+          <span class="field-hint">Si el cliente escribe alguna de estas palabras, el bot se pausa y te avisamos para que sigas vos. Ej: hablar con una persona, reclamo.</span>
+          <input id="pause_keywords" type="text" placeholder="Ej: hablar con una persona, reclamo, cancelar" />
         </div>
 
         <div class="field subsection">
@@ -432,13 +432,13 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
 
         <div class="field subsection">
           <label class="field-label">Avisos de urgencia <span class="tag-optional">Opcional</span></label>
-          <span class="field-hint">Si un cliente escribe alguna de estas palabras, te avisamos al instante. El bot sigue respondiendo normalmente. Te avisamos por mail al instante. El aviso por WhatsApp puede no llegar si no hablaste con tu número de negocio en las últimas 24 horas.</span>
+          <span class="field-hint">Si el cliente escribe alguna de estas palabras, te avisamos por mail, pero el bot sigue respondiendo. Ej: sangra, urgente. No repitas las palabras de la otra lista.</span>
           <div style="display:flex;align-items:center;gap:10px;margin:8px 0">
-            <label class="toggle-wrap" style="margin:0">
+            <label class="bh-day-label" style="min-width:unset;margin:0">
               <input type="checkbox" id="urgent_alert_enabled" />
-              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              <span class="bh-day-sw"></span>
             </label>
-            <span id="urgent-alert-label" style="font-size:14px;color:#374151">Apagado</span>
+            <span id="urgent-alert-label" style="font-size:13px;color:var(--muted)">Apagado</span>
           </div>
           <input id="urgent_keywords" type="text" placeholder="Ej: emergencia, urgente, necesito ayuda ya" />
         </div>
