@@ -236,31 +236,28 @@
       flex-shrink: 0;
     }
 
-    /* One-time feature hint */
-    #atiendo-yo-hint {
-      display: none;
-      align-items: flex-start;
-      gap: 8px;
-      padding: 9px 12px;
-      background: rgba(249,115,22,0.06);
-      border-bottom: 1px solid rgba(249,115,22,0.15);
-      font-size: 12px;
-      color: #999;
+    /* Permanent instruction bar above conv list */
+    .conv-list-instruction {
+      padding: 7px 12px;
+      border-bottom: 1px solid #1e1e1e;
+      font-size: 11px;
+      color: #666;
       line-height: 1.45;
     }
-    #atiendo-yo-hint.active { display: flex; }
-    .btn-hint-dismiss {
+
+    /* Excluded contact banner in thread header */
+    .excluded-contact-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 16px;
+      background: rgba(249,115,22,0.07);
+      border-top: 1px solid rgba(249,115,22,0.18);
       font-size: 13px;
-      color: #555;
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 0;
-      flex-shrink: 0;
-      margin-left: auto;
-      line-height: 1;
+      color: #f97316;
+      flex-wrap: wrap;
     }
-    .btn-hint-dismiss:hover { color: #888; }
 
     #reset-modal-overlay {
       display: none;
@@ -353,11 +350,7 @@
             <h1 class="conv-list-title" style="margin:0;">Chats</h1>
           </div>
         </div>
-        <!-- One-time hint for "Atiendo yo" feature -->
-        <div id="atiendo-yo-hint">
-          <span style="flex:1;">Podés marcar contactos como <strong style="color:#f97316;">Atiendo yo</strong> para que el bot no les responda. Sus mensajes siguen guardándose.</span>
-          <button class="btn-hint-dismiss" onclick="dismissHint()" title="Cerrar">✕</button>
-        </div>
+        <div class="conv-list-instruction">Tildá los chats que querés atender vos y el bot no les responde.</div>
         <div id="tag-filter-bar" style="padding:8px 12px 4px; border-bottom:1px solid #1e1e1e; overflow-x:auto; white-space:nowrap;">
           <button class="tag-filter-chip tag-filter-chip--active" style="margin-right:4px;" onclick="setFilter(null,false)">Todos</button>
         </div>
@@ -612,15 +605,6 @@
       _toastTimeout = setTimeout(() => toast.classList.remove('active'), 5000);
     }
 
-    // ── Feature hint ──
-    function dismissHint() {
-      document.getElementById('atiendo-yo-hint').classList.remove('active');
-      try { localStorage.setItem('daxos_atiendo_yo_hint_seen', '1'); } catch {}
-    }
-    function checkAndShowHint() {
-      try { if (!localStorage.getItem('daxos_atiendo_yo_hint_seen')) document.getElementById('atiendo-yo-hint').classList.add('active'); } catch {}
-    }
-
     // ── Back to list (mobile) ──
     function backToList() {
       document.getElementById('thread').style.display = 'none';
@@ -662,7 +646,7 @@
             <div style="position:relative;display:inline-block;">
               <div id="conv-tag-chips" style="display:inline-flex;gap:4px;align-items:center;flex-wrap:wrap;">
                 ${convTags.map(t => `<span class="conv-tag-chip" style="background:${t.color}20;color:${t.color};border:1px solid ${t.color}40;">${escapeHtml(t.name)}</span>`).join('')}
-                <button id="btn-tag-selector" class="btn-pause-toggle" onclick="toggleTagSelector(${id})" title="Editar etiquetas">＋ Etiquetas</button>
+                <button id="btn-tag-selector" class="btn-pause-toggle" onclick="toggleTagSelector(${id})" title="Editar etiquetas">Etiquetas (para ordenar)</button>
               </div>
               <div id="tag-selector-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:200;background:#161616;border:1px solid #2a2a2a;border-radius:6px;padding:10px;min-width:220px;box-shadow:0 8px 24px rgba(0,0,0,0.6);">
                 <p style="font-size:11px;color:#666;margin:0 0 8px;text-transform:uppercase;letter-spacing:.05em;">Etiquetas</p>
@@ -682,12 +666,14 @@
               <option value="no_interesado" ${conversation.label === 'no_interesado' ? 'selected' : ''}>No interesado</option>
             </select>
             ${!isPaused ? `<button class="btn-pause-toggle" onclick="pauseConv(${id})">Pausar esta conversación</button>` : ''}
-            ${is_excluded
-              ? `<button class="btn-exclude-toggle btn-exclude-toggle--active" onclick="unexcludeContact(${id})" title="El bot no responde a este contacto. Sus mensajes se guardan.">✓ Atiendo yo</button>`
-              : `<button class="btn-exclude-toggle" onclick="excludeContact(${id})" title="Marcar para atender este contacto sin que el bot intervenga">Atiendo yo</button>`}
             ${isOwnerConv ? `<button class="btn-reset-conv" onclick="showResetModal(${id})">Reiniciar</button>` : ''}
           </div>
         </div>
+        ${is_excluded ? `
+        <div class="excluded-contact-banner">
+          <span>El bot no responde a este contacto</span>
+          <button class="btn-pause-toggle" onclick="unexcludeContact(${id})" style="color:#f97316;border-color:rgba(249,115,22,0.4);">Quitar</button>
+        </div>` : ''}
         ${needsHuman && !isPaused ? `
         <div class="needs-human-banner" id="needs-human-banner">
           <span>ℹ️ El asistente notificó al equipo — sigue respondiendo automáticamente</span>
@@ -1070,7 +1056,6 @@
 
     loadTags();
     loadList().then(() => {
-      checkAndShowHint();
       const convParam = new URLSearchParams(window.location.search).get('conv');
       const convId = convParam && /^\d+$/.test(convParam) ? parseInt(convParam, 10) : 0;
       if (convId > 0) openConvById(convId);
