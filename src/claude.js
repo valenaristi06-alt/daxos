@@ -155,6 +155,36 @@ CÓMO HACERLO BIEN:
     dynamicLines.push(`Ahora es ${timeStr} (hora de Uruguay).`);
   }
 
+  if (runtimeCtx?.isOpenResult) {
+    const { open, closesAt, nextOpen } = runtimeCtx.isOpenResult;
+    const DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+    if (open === true) {
+      dynamicLines.push(`AHORA: ABIERTO${closesAt ? `, cierra a las ${closesAt}` : ''}.`);
+    } else if (open === false) {
+      let nextStr = '';
+      if (nextOpen) {
+        if (nextOpen.today) {
+          nextStr = `, abre más tarde hoy a las ${nextOpen.time}`;
+        } else {
+          const todayDay = runtimeCtx.now ? runtimeCtx.now.getUTCDay() : new Date().getUTCDay();
+          const nextDayLabel = nextOpen.day === (todayDay + 1) % 7 ? 'mañana' : `el ${DIAS[nextOpen.day]}`;
+          nextStr = `, abre ${nextDayLabel} a las ${nextOpen.time}`;
+        }
+      }
+      dynamicLines.push(`AHORA: CERRADO${nextStr}.`);
+      if (runtimeCtx.afterHoursInstructions) {
+        dynamicLines.push(`Instrucciones fuera de horario del negocio: ${runtimeCtx.afterHoursInstructions}`);
+      }
+      if (runtimeCtx.urgentPhone) {
+        dynamicLines.push(`Teléfono de urgencias: ${runtimeCtx.urgentPhone}`);
+      }
+      const urgentLine = runtimeCtx.urgentPhone
+        ? `Si el cliente tiene una urgencia que no puede esperar, indicá que llame al ${runtimeCtx.urgentPhone}.`
+        : `Si el cliente tiene una urgencia real, explicá que el negocio está cerrado y que se comunicarán al abrir.`;
+      dynamicLines.push(`FUERA DE HORARIO — reglas: No prometás atención inmediata. No uses frases como "te atiendo ahora", "vení ya" o cualquier expresión que implique atención en el momento. ${urgentLine} Usá solo lo que dicen las instrucciones fuera de horario y el teléfono de urgencias, tal cual. No agregues qué es ese número, ni si otro lugar está abierto, ni sus horarios, si no está escrito. Si no hay instrucciones fuera de horario cargadas, no inventes qué pasa (respetá COHERENCIA CON LO CARGADO).`);
+    }
+  }
+
   // Active booking step instructions — change as the conversation progresses
   if (bookingContext?.enabled && bookingContext.state) {
     const state = bookingContext.state;

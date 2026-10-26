@@ -379,6 +379,7 @@ const OWNER_BUSINESS_FIELDS = new Set([
   'wa_provider', 'phone_number_id', 'waba_id', 'wa_payment_confirmed', 'wa_connected_at',
   'kapso_customer_id',
   'urgent_keywords', 'urgent_alert_enabled',
+  'business_hours', 'after_hours_instructions', 'urgent_phone',
   'booking_enabled', 'weekly_summary_enabled',
   'billing_requires_invoice', 'billing_legal_name', 'billing_rut', 'billing_address', 'billing_email', 'billing_updated_at',
 ]);
@@ -592,12 +593,18 @@ async function fetchAndSummarizeWebsite(rawUrl) {
 }
 
 app.put('/api/business', requireAuth, async (req, res) => {
-  const { name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, pause_reply_text, response_delay, pricing_info, urgent_keywords, urgent_alert_enabled } = req.body;
+  const { name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, pause_reply_text, response_delay, pricing_info, urgent_keywords, urgent_alert_enabled, business_hours, after_hours_instructions, urgent_phone } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'El nombre del negocio es requerido' });
 
   const prtClean = pause_reply_text != null ? String(pause_reply_text).trim() : null;
   if (prtClean && prtClean.length > 300) {
     return res.status(400).json({ error: 'El mensaje al cliente es muy largo (máx 300 caracteres).', field: 'pause_reply_text' });
+  }
+
+  const bhClean = business_hours != null && business_hours !== '' ? String(business_hours).trim() : null;
+  if (bhClean) {
+    const bhErr = _validateBusinessHoursJSON(bhClean);
+    if (bhErr) return res.status(400).json({ error: bhErr, field: 'business_hours' });
   }
 
   try {
@@ -622,6 +629,9 @@ app.put('/api/business', requireAuth, async (req, res) => {
       pricing_info: pricing_info ? pricing_info.trim() : null,
       urgent_keywords: urgent_keywords ? urgent_keywords.trim() : null,
       urgent_alert_enabled: urgent_alert_enabled ? 1 : 0,
+      business_hours: bhClean || null,
+      after_hours_instructions: after_hours_instructions ? String(after_hours_instructions).trim() : null,
+      urgent_phone: urgent_phone ? String(urgent_phone).trim() : null,
     });
     console.log('[PUT /api/business] upsertBusiness result id:', business?.id ?? 'null');
     if (!user.business_id) {
@@ -1640,13 +1650,114 @@ function getMvdDate() {
   return new Date(Date.now() - 3 * 60 * 60 * 1000);
 }
 
-function isWithinBusinessHours(business) {
-  if (!business.business_hours_start || !business.business_hours_end) return true;
-  const mvd = getMvdDate();
+function _validateBusinessHoursJSON(raw) {
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch { return 'business_hours: JSON inválido.'; }
+  if (typeof parsed !== 'object' || Array.isArray(parsed)) return 'business_hours: debe ser un objeto.';
+  const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+  for (const [dayStr, slots] of Object.entries(parsed)) {
+    const day = parseInt(dayStr, 10);
+    if (isNaN(day) || day < 0 || day > 6) return `business_hours: día inválido "${dayStr}" (use 0=dom … 6=sáb).`;
+    if (!Array.isArray(slots)) return `business_hours: día ${dayStr}: los tramos deben ser un array.`;
+    if (slots.length > 3) return `business_hours: día ${dayStr}: máximo 3 tramos.`;
+    for (const slot of slots) {
+      if (!Array.isArray(slot) || slot.length !== 2) return `business_hours: día ${dayStr}: tramo inválido (use ["HH:MM","HH:MM"]).`;
+      const [s, e] = slot;
+      if (!HHMM_RE.test(s)) return `business_hours: día ${dayStr}: hora inválida "${s}" (use HH:MM).`;
+      if (!HHMM_RE.test(e)) return `business_hours: día ${dayStr}: hora inválida "${e}" (use HH:MM).`;
+      if (s === e) return `business_hours: día ${dayStr}: inicio y fin no pueden ser iguales.`;
+    }
+  }
+  return null;
+}
+
+function _HHMMtoMin(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function _minToHHMM(min) {
+  const h = Math.floor(min / 60) % 24;
+  const m = min % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function _resolveBusinessHours(business) {
+  if (business.business_hours) {
+    try {
+      const raw = typeof business.business_hours === 'string'
+        ? JSON.parse(business.business_hours)
+        : business.business_hours;
+      const result = {};
+      for (const [dayStr, slots] of Object.entries(raw)) {
+        const day = parseInt(dayStr, 10);
+        if (day < 0 || day > 6) continue;
+        result[day] = slots.map(([s, e]) => [_HHMMtoMin(s), _HHMMtoMin(e)]);
+      }
+      return result;
+    } catch {
+      return null;
+    }
+  }
+  if (business.business_hours_start && business.business_hours_end) {
+    const s = _HHMMtoMin(business.business_hours_start);
+    const e = _HHMMtoMin(business.business_hours_end);
+    const result = {};
+    for (let d = 0; d <= 6; d++) result[d] = [[s, e]];
+    return result;
+  }
+  return null;
+}
+
+// Returns { open: bool|null, closesAt: string|null, nextOpen: {day, time, today}|null }
+// open=null means no hours configured.
+// Supports midnight-crossing slots (end < start) and the fallback business_hours_start/end.
+function isOpenNow(business, date) {
+  const mvd = date || getMvdDate();
+  const dayIdx = mvd.getUTCDay();
   const nowMin = mvd.getUTCHours() * 60 + mvd.getUTCMinutes();
-  const [sh, sm] = business.business_hours_start.split(':').map(Number);
-  const [eh, em] = business.business_hours_end.split(':').map(Number);
-  return !(nowMin < sh * 60 + sm || nowMin >= eh * 60 + em);
+
+  const parsed = _resolveBusinessHours(business);
+  if (!parsed) return { open: null, closesAt: null, nextOpen: null };
+
+  // Check today's normal slots (end > start: doesn't cross midnight)
+  for (const [s, e] of (parsed[dayIdx] || [])) {
+    if (e > s && nowMin >= s && nowMin < e) {
+      return { open: true, closesAt: _minToHHMM(e), nextOpen: null };
+    }
+    // Midnight-crossing: first half (today, nowMin >= start)
+    if (e <= s && nowMin >= s) {
+      return { open: true, closesAt: _minToHHMM(e), nextOpen: null };
+    }
+  }
+  // Check previous day's midnight-crossing slots (second half: nowMin < end)
+  const prevDay = (dayIdx + 6) % 7;
+  for (const [s, e] of (parsed[prevDay] || [])) {
+    if (e <= s && nowMin < e) {
+      return { open: true, closesAt: _minToHHMM(e), nextOpen: null };
+    }
+  }
+
+  // Closed — find next opening
+  const laterToday = (parsed[dayIdx] || [])
+    .filter(([s, e]) => e > s && s > nowMin)
+    .sort((a, b) => a[0] - b[0]);
+  if (laterToday.length > 0) {
+    return { open: false, closesAt: null, nextOpen: { day: dayIdx, time: _minToHHMM(laterToday[0][0]), today: true } };
+  }
+  for (let offset = 1; offset <= 6; offset++) {
+    const d = (dayIdx + offset) % 7;
+    const slots = parsed[d] || [];
+    if (slots.length > 0) {
+      const earliest = slots.reduce((a, b) => a[0] <= b[0] ? a : b);
+      return { open: false, closesAt: null, nextOpen: { day: d, time: _minToHHMM(earliest[0]), today: false } };
+    }
+  }
+  return { open: false, closesAt: null, nextOpen: null };
+}
+
+function isWithinBusinessHours(business) {
+  return isOpenNow(business).open !== false;
 }
 
 function getDefaultPauseReplyText(business) {
@@ -2068,7 +2179,16 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   const currentBookingState = business.booking_enabled ? getBookingState(conversation.id) : null;
   const businessImages = getBusinessImages(business.id);
   const businessDocs   = getBusinessDocumentTexts(business.id);
-  const runtimeCtx = { now: getMvdDate(), needsHuman: !!conversation.needs_human, images: businessImages, documents: businessDocs };
+  const _hoursResult = isOpenNow(business);
+  const runtimeCtx = {
+    now: getMvdDate(),
+    needsHuman: !!conversation.needs_human,
+    images: businessImages,
+    documents: businessDocs,
+    isOpenResult: _hoursResult,
+    afterHoursInstructions: _hoursResult.open === false ? (business.after_hours_instructions || null) : null,
+    urgentPhone: _hoursResult.open === false ? (business.urgent_phone || null) : null,
+  };
   logError('webhook-claude-call', {
     message: `business_id=${business.id} customer=****${customerPhone.slice(-4)}`,
     stack: '',
@@ -4204,20 +4324,18 @@ function resumeHumanTimedOut() {
   if (!convs.length) return;
 
   const nowSec = Math.floor(Date.now() / 1000);
-  const mvd    = getMvdDate();
-  const nowMin = mvd.getUTCHours() * 60 + mvd.getUTCMinutes(); // minutes since midnight in Montevideo
   let resumed  = 0;
 
   for (const conv of convs) {
     const timeout = typeof conv.human_resume_timeout === 'number' ? conv.human_resume_timeout : 7200;
     const timeoutExpired = nowSec - conv.human_paused_at >= timeout;
 
-    let outsideHours = false;
-    if (conv.business_hours_start && conv.business_hours_end) {
-      const [sh, sm] = conv.business_hours_start.split(':').map(Number);
-      const [eh, em] = conv.business_hours_end.split(':').map(Number);
-      outsideHours = nowMin < sh * 60 + sm || nowMin >= eh * 60 + em;
-    }
+    const hoursResult = isOpenNow({
+      business_hours: conv.business_hours,
+      business_hours_start: conv.business_hours_start,
+      business_hours_end: conv.business_hours_end,
+    });
+    const outsideHours = hoursResult.open === false;
 
     if (timeoutExpired || outsideHours) {
       clearHumanPause(conv.id);

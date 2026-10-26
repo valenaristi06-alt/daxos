@@ -521,6 +521,14 @@ db.exec(`
     console.log('[migration 013] urgent_keywords + urgent_alert_enabled added to businesses');
   }
 
+  if (!applied('014_business_hours')) {
+    db.exec(`ALTER TABLE businesses ADD COLUMN business_hours TEXT`);
+    db.exec(`ALTER TABLE businesses ADD COLUMN after_hours_instructions TEXT`);
+    db.exec(`ALTER TABLE businesses ADD COLUMN urgent_phone TEXT`);
+    db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('014_business_hours');
+    console.log('[migration 014] business_hours + after_hours_instructions + urgent_phone added to businesses');
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -792,7 +800,7 @@ function clearHumanPause(conversationId) {
 
 function getConversationsNeedingHumanResume() {
   return db.prepare(`
-    SELECT c.id, c.human_paused_at, b.human_resume_timeout, b.business_hours_start, b.business_hours_end
+    SELECT c.id, c.human_paused_at, b.human_resume_timeout, b.business_hours_start, b.business_hours_end, b.business_hours
     FROM conversations c
     JOIN businesses b ON b.id = c.business_id
     WHERE c.needs_attention = 1 AND c.human_paused_at IS NOT NULL
@@ -839,7 +847,7 @@ function autoResumeExpiredConversations() {
   return result.changes;
 }
 
-function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = null, survey_answers = null, business_context = null, website_url = null, response_mode = 'texto', pause_keywords = null, pause_reply_text = null, response_delay = 5, pricing_info = null, urgent_keywords = null, urgent_alert_enabled = 0 }) {
+function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = null, survey_answers = null, business_context = null, website_url = null, response_mode = 'texto', pause_keywords = null, pause_reply_text = null, response_delay = 5, pricing_info = null, urgent_keywords = null, urgent_alert_enabled = 0, business_hours = null, after_hours_instructions = null, urgent_phone = null }) {
   const serialized = {
     name,
     whatsapp_number: whatsapp_number || null,
@@ -854,6 +862,9 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
     pricing_info: pricing_info || null,
     urgent_keywords: urgent_keywords || null,
     urgent_alert_enabled: urgent_alert_enabled ? 1 : 0,
+    business_hours: business_hours || null,
+    after_hours_instructions: after_hours_instructions || null,
+    urgent_phone: urgent_phone || null,
   };
 
   if (id) {
@@ -864,7 +875,9 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
         response_mode=@response_mode, pause_keywords=@pause_keywords,
         pause_reply_text=@pause_reply_text,
         response_delay=@response_delay, pricing_info=@pricing_info,
-        urgent_keywords=@urgent_keywords, urgent_alert_enabled=@urgent_alert_enabled
+        urgent_keywords=@urgent_keywords, urgent_alert_enabled=@urgent_alert_enabled,
+        business_hours=@business_hours, after_hours_instructions=@after_hours_instructions,
+        urgent_phone=@urgent_phone
       WHERE id=@id
     `).run({ ...serialized, id });
     return getBusinessById(id);
