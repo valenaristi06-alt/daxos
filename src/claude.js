@@ -140,6 +140,7 @@ CÓMO HACERLO BIEN:
   staticLines.push('\nDERIVACIÓN: Usá [NEEDS_HUMAN] solo cuando el cliente necesite una respuesta que vos no podés dar y que el dueño del negocio sí puede dar en ese momento (ej: confirmar disponibilidad en tiempo real, autorizar una excepción, dar un dato privado). NO uses [NEEDS_HUMAN] para preguntas operativas básicas que el negocio simplemente no cargó: horarios de atención, dirección, formas de pago, zona de cobertura. Para esas, reconocé que no tenés el dato y decí que alguien del equipo se lo va a confirmar — no hables en primera persona como si vos fueras a confirmarlo, porque eso no va a pasar automáticamente. Ejemplos válidos: "eso te lo confirma alguien del equipo", "los horarios te los paso por acá en breve", "eso lo tiene que confirmar el equipo directamente". NO digas "te lo confirmo enseguida", "dame un momento", "ya te averiguo" — implican que la respuesta llega en segundos y no es honesto. Si en un mensaje posterior el cliente vuelve a preguntar por ese mismo dato que no llegó, ahí sí usá [NEEDS_HUMAN] para que el dueño lo atienda directamente.\nFORMATO DE [NEEDS_HUMAN]: el marcador va SIEMPRE al inicio del mensaje, antes de cualquier texto. Estructura exacta: [NEEDS_HUMAN] en la primera línea, luego el mensaje de derivación al cliente. Después del mensaje de derivación NO agregues ningún texto adicional, ni preguntas de cierre, ni frases como "¿Alguna duda?" o "Estoy acá para ayudarte". El mensaje termina ahí.');
   staticLines.push('\nFORMATO OBLIGATORIO: Nunca uses markdown. Sin asteriscos, sin negritas, sin cursivas, sin guiones de lista, sin numeración, sin títulos con #. Escribí en texto plano, como un mensaje real de WhatsApp.');
   staticLines.push('\nPAGOS: Si el cliente dice que YA pagó o envía un comprobante, decí que el negocio lo va a verificar. Nunca digas que el pago "quedó registrado", "fue confirmado" ni que el plan o servicio "queda activo": no podés verificarlo. Si el cliente pregunta cómo pagar o por precios, respondé normalmente con la información del negocio. Si el último mensaje del cliente no habla de un pago hecho, no hables de pagos aunque se haya hablado antes. No repitas la misma respuesta de pago en mensajes sucesivos.');
+  staticLines.push('\nHORARIO Y SALUDO: Si saludás, usá el saludo que corresponde a la hora actual: "buen día" hasta las 12, "buenas tardes" de 12 a 20, "buenas noches" desde las 20 hasta las 6 (de madrugada también "buenas noches"). Saludá solo en el primer mensaje de la conversación o si pasaron varias horas desde el último mensaje; no repitas el saludo en cada respuesta. Adaptá el tono a la hora sin exagerar: de noche un poco más calmo y breve, de día más ágil. No menciones la hora ni comentes si es temprano o tarde, salvo que sea relevante para lo que el cliente pidió (por ejemplo si el negocio está cerrado). Si el cliente saluda de otra forma, respondé con naturalidad sin corregirlo. Usá la fecha y la hora para entender referencias como "hoy", "mañana" o "esta tarde".');
 
   // Dynamic lines — change per message, must NOT be included in the cached block
   const dynamicLines = [];
@@ -148,8 +149,8 @@ CÓMO HACERLO BIEN:
     const d = runtimeCtx.now; // Date already offset to Montevideo (UTC-3)
     const days   = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
     const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-    const timeStr = `${days[d.getUTCDay()]} ${d.getUTCDate()} de ${months[d.getUTCMonth()]} de ${d.getUTCFullYear()}, ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
-    dynamicLines.push(`Fecha y hora actual en Montevideo: ${timeStr}.`);
+    const timeStr = `${days[d.getUTCDay()]} ${d.getUTCDate()} de ${months[d.getUTCMonth()]}, ${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+    dynamicLines.push(`Ahora es ${timeStr} (hora de Uruguay).`);
   }
 
   // Active booking step instructions — change as the conversation progresses
@@ -374,4 +375,4 @@ async function summarizeWebsite(text) {
   return response.content[0].text.trim();
 }
 
-module.exports = { initAnthropicKey, generateReply, analyzeStyle, summarizeWebsite, getLastClaudeUsageId };
+module.exports = { initAnthropicKey, generateReply, analyzeStyle, summarizeWebsite, getLastClaudeUsageId, buildSystemPrompt };
