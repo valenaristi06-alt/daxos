@@ -114,6 +114,8 @@
       white-space: nowrap;
     }
     .btn-reset-conv:hover { border-color: #ef4444; color: #ef4444; }
+
+    /* Exclude toggle button (internal name unchanged, display label = "Atiendo yo") */
     .btn-exclude-toggle {
       font-size: 12px;
       font-family: var(--mono, monospace);
@@ -124,6 +126,7 @@
       color: var(--muted, #888);
       cursor: pointer;
       white-space: nowrap;
+      position: relative;
     }
     .btn-exclude-toggle:hover { border-color: #f97316; color: #f97316; }
     .btn-exclude-toggle--active {
@@ -131,7 +134,138 @@
       color: #f97316;
       background: rgba(249,115,22,0.08);
     }
-    .btn-exclude-toggle--active:hover { background: transparent; }
+    .btn-exclude-toggle--active:hover { opacity: 0.8; }
+
+    /* Selection mode */
+    .btn-select-mode {
+      font-size: 11px;
+      font-family: var(--mono, monospace);
+      padding: 3px 10px;
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+      background: transparent;
+      color: #888;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .btn-select-mode:hover { border-color: #888; color: #ccc; }
+    .conv-item--selected { background: rgba(249,115,22,0.07) !important; }
+    .conv-check {
+      pointer-events: none;
+      accent-color: #f97316;
+      flex-shrink: 0;
+      margin-right: 4px;
+    }
+
+    /* "Atiendo yo" badge in conv list */
+    .badge-atiendo-yo {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 10px;
+      border: 1px solid rgba(249,115,22,0.35);
+      background: rgba(249,115,22,0.08);
+      color: #f97316;
+      font-weight: 500;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* Selection action bar (bottom of conv list) */
+    #selection-bar {
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px 12px;
+      background: #161616;
+      border-top: 1px solid #2a2a2a;
+      flex-shrink: 0;
+    }
+    #selection-bar.active { display: flex; }
+    .btn-sel-action {
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 4px;
+      border: 1px solid rgba(249,115,22,0.5);
+      background: rgba(249,115,22,0.08);
+      color: #f97316;
+      cursor: pointer;
+      font-family: var(--mono, monospace);
+      width: 100%;
+      text-align: left;
+    }
+    .btn-sel-action:disabled { opacity: 0.4; cursor: default; }
+    .btn-sel-cancel {
+      font-size: 12px;
+      padding: 7px 12px;
+      border-radius: 4px;
+      border: 1px solid #3a3a3a;
+      background: transparent;
+      color: #888;
+      cursor: pointer;
+      font-family: var(--mono, monospace);
+      width: 100%;
+      text-align: left;
+    }
+
+    /* Undo toast */
+    #undo-toast {
+      display: none;
+      position: fixed;
+      bottom: 68px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #262626;
+      border: 1px solid #3a3a3a;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #f0ede8;
+      z-index: 600;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.55);
+      max-width: calc(100vw - 32px);
+    }
+    #undo-toast.active { display: flex; }
+    .btn-undo {
+      font-size: 12px;
+      color: #f97316;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      font-weight: 600;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* One-time feature hint */
+    #atiendo-yo-hint {
+      display: none;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 9px 12px;
+      background: rgba(249,115,22,0.06);
+      border-bottom: 1px solid rgba(249,115,22,0.15);
+      font-size: 12px;
+      color: #999;
+      line-height: 1.45;
+    }
+    #atiendo-yo-hint.active { display: flex; }
+    .btn-hint-dismiss {
+      font-size: 13px;
+      color: #555;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      flex-shrink: 0;
+      margin-left: auto;
+      line-height: 1;
+    }
+    .btn-hint-dismiss:hover { color: #888; }
+
     #reset-modal-overlay {
       display: none;
       position: fixed; inset: 0;
@@ -219,10 +353,18 @@
       <aside class="conv-list-panel">
         <div class="conv-list-header">
           <p class="page-terminal">&gt; conversaciones</p>
-          <h1 class="conv-list-title">Chats</h1>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <h1 class="conv-list-title" style="margin:0;">Chats</h1>
+            <button id="btn-select-mode" class="btn-select-mode" onclick="toggleSelectionMode()">Seleccionar</button>
+          </div>
         </div>
-        <div id="tag-filter-bar" style="display:none; padding:8px 12px 4px; border-bottom:1px solid #1e1e1e; overflow-x:auto; white-space:nowrap;">
-          <button class="tag-filter-chip tag-filter-chip--active" data-tag-id="" style="margin-right:4px;">Todos</button>
+        <!-- One-time hint for "Atiendo yo" feature -->
+        <div id="atiendo-yo-hint">
+          <span style="flex:1;">Podés marcar contactos como <strong style="color:#f97316;">Atiendo yo</strong> para que el bot no les responda. Sus mensajes siguen guardándose.</span>
+          <button class="btn-hint-dismiss" onclick="dismissHint()" title="Cerrar">✕</button>
+        </div>
+        <div id="tag-filter-bar" style="padding:8px 12px 4px; border-bottom:1px solid #1e1e1e; overflow-x:auto; white-space:nowrap;">
+          <button class="tag-filter-chip tag-filter-chip--active" style="margin-right:4px;" onclick="setFilter(null,false)">Todos</button>
         </div>
         <div class="conv-list" id="conv-list">
           <div id="conv-skeleton" style="padding:12px 16px;display:flex;flex-direction:column;gap:10px;">
@@ -230,6 +372,12 @@
             <div class="skeleton skeleton-line skeleton-line--full" style="height:42px;border-radius:4px"></div>
             <div class="skeleton skeleton-line skeleton-line--full" style="height:42px;border-radius:4px"></div>
           </div>
+        </div>
+        <!-- Selection action bar -->
+        <div id="selection-bar">
+          <button class="btn-sel-action" id="btn-sel-mark" onclick="applyBatch('add')" disabled>Atiendo yo (0)</button>
+          <button class="btn-sel-action" id="btn-sel-unmark" onclick="applyBatch('remove')" disabled>Quitar (0)</button>
+          <button class="btn-sel-cancel" onclick="toggleSelectionMode()">Cancelar</button>
         </div>
       </aside>
 
@@ -283,11 +431,15 @@
       document.getElementById('btn-logout-mobile').addEventListener('click', doLogout);
     });
 
-    // ── Tags state ──
+    // ── State ──
     let allTags = [];
     let allConvs = [];
     let activeFilterTagId = null;
+    let activeExcludedFilter = false;
+    let selectionMode = false;
+    let selectedConvIds = new Set();
 
+    // ── Tags ──
     async function loadTags() {
       const res = await fetch('/api/tags');
       allTags = res.ok ? await res.json() : [];
@@ -296,25 +448,30 @@
 
     function renderFilterBar() {
       const bar = document.getElementById('tag-filter-bar');
-      if (!allTags.length) { bar.style.display = 'none'; return; }
       bar.style.display = 'block';
+      const allActive = !activeFilterTagId && !activeExcludedFilter;
       bar.innerHTML = `
-        <button class="tag-filter-chip ${activeFilterTagId === null ? 'tag-filter-chip--active' : ''}" data-tag-id="" style="margin-right:4px;">Todos</button>
+        <button class="tag-filter-chip ${allActive ? 'tag-filter-chip--active' : ''}"
+          style="margin-right:4px;" onclick="setFilter(null,false)">Todos</button>
         ${allTags.map(t => `
           <button class="tag-filter-chip ${activeFilterTagId === t.id ? 'tag-filter-chip--active' : ''}"
-            data-tag-id="${t.id}"
+            onclick="setFilter(${t.id},false)"
             style="background:${activeFilterTagId === t.id ? t.color : 'transparent'};border-color:${t.color};color:${activeFilterTagId === t.id ? '#fff' : t.color};margin-right:4px;">
             ${escapeHtml(t.name)}
           </button>`).join('')}
+        <button class="tag-filter-chip ${activeExcludedFilter ? 'tag-filter-chip--active' : ''}"
+          onclick="setFilter(null,true)"
+          style="border-color:#f97316;color:${activeExcludedFilter ? '#fff' : '#f97316'};background:${activeExcludedFilter ? '#f97316' : 'transparent'};">
+          Atiendo yo
+        </button>
       `;
-      bar.querySelectorAll('.tag-filter-chip').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const tid = btn.dataset.tagId ? Number(btn.dataset.tagId) : null;
-          activeFilterTagId = tid;
-          renderConvList();
-          renderFilterBar();
-        });
-      });
+    }
+
+    function setFilter(tagId, excluded) {
+      activeFilterTagId = excluded ? null : tagId;
+      activeExcludedFilter = excluded;
+      renderConvList();
+      renderFilterBar();
     }
 
     function tagChips(tags) {
@@ -326,25 +483,30 @@
 
     function renderConvList() {
       const list = document.getElementById('conv-list');
-      const filtered = activeFilterTagId === null
-        ? allConvs
-        : allConvs.filter(c => c.tags?.some(t => t.id === activeFilterTagId));
+      let filtered = allConvs;
+      if (activeFilterTagId !== null)
+        filtered = filtered.filter(c => c.tags?.some(t => t.id === activeFilterTagId));
+      if (activeExcludedFilter)
+        filtered = filtered.filter(c => c.is_excluded);
 
       if (!filtered.length) {
         list.innerHTML = `
           <div class="no-convs">
-            <p class="no-convs-title">${activeFilterTagId ? 'Sin conversaciones con esa etiqueta.' : 'Todavía no hay conversaciones.'}</p>
-            ${!activeFilterTagId ? '<p class="no-convs-sub">Cuando tus clientes te escriban,<br>van a aparecer acá.</p>' : ''}
+            <p class="no-convs-title">${activeFilterTagId || activeExcludedFilter ? 'Sin conversaciones con ese filtro.' : 'Todavía no hay conversaciones.'}</p>
+            ${!activeFilterTagId && !activeExcludedFilter ? '<p class="no-convs-sub">Cuando tus clientes te escriban,<br>van a aparecer acá.</p>' : ''}
           </div>`;
         return;
       }
 
       list.innerHTML = filtered.map(c => `
-        <button class="conv-item" data-id="${c.id}" onclick="openConv(${c.id}, this)">
+        <button class="conv-item${selectionMode && selectedConvIds.has(c.id) ? ' conv-item--selected' : ''}"
+          data-id="${c.id}" onclick="openConv(${c.id}, this)">
+          ${selectionMode ? `<input type="checkbox" class="conv-check" tabindex="-1" ${selectedConvIds.has(c.id) ? 'checked' : ''}>` : ''}
           ${c.needs_attention ? '<span class="conv-attention-dot" title="Requiere atención"></span>' : ''}
           <span class="conv-number">${escapeHtml(formatPhone(c.customer_id))}</span>
           <span class="conv-date">${formatLastMsgDate(c.last_msg_at || c.created_at)}</span>
           ${tagChips(c.tags)}
+          ${c.is_excluded ? '<span class="badge-atiendo-yo">Atiendo yo</span>' : ''}
           ${labelBadge(c.label)}
         </button>
       `).join('');
@@ -357,6 +519,110 @@
       renderConvList();
     }
 
+    // ── Selection mode ──
+    function toggleSelectionMode() {
+      selectionMode = !selectionMode;
+      selectedConvIds.clear();
+      const btn = document.getElementById('btn-select-mode');
+      const bar = document.getElementById('selection-bar');
+      if (selectionMode) {
+        btn.style.display = 'none';
+        bar.classList.add('active');
+      } else {
+        btn.style.display = '';
+        bar.classList.remove('active');
+      }
+      updateSelectionBar();
+      renderConvList();
+    }
+
+    function toggleSelectConv(id) {
+      if (selectedConvIds.has(id)) selectedConvIds.delete(id);
+      else selectedConvIds.add(id);
+      const btn = document.querySelector(`.conv-item[data-id="${id}"]`);
+      if (btn) {
+        btn.classList.toggle('conv-item--selected', selectedConvIds.has(id));
+        const chk = btn.querySelector('.conv-check');
+        if (chk) chk.checked = selectedConvIds.has(id);
+      }
+      updateSelectionBar();
+    }
+
+    function updateSelectionBar() {
+      const n = selectedConvIds.size;
+      const markBtn = document.getElementById('btn-sel-mark');
+      const unmarkBtn = document.getElementById('btn-sel-unmark');
+      if (markBtn) { markBtn.textContent = `Atiendo yo (${n})`; markBtn.disabled = n === 0; }
+      if (unmarkBtn) { unmarkBtn.textContent = `Quitar (${n})`; unmarkBtn.disabled = n === 0; }
+    }
+
+    async function applyBatch(action) {
+      const ids = [...selectedConvIds];
+      if (!ids.length) return;
+      // Only the IDs that actually need to change state (pre-computed from cache)
+      const changedIds = ids.filter(id => {
+        const c = allConvs.find(c => c.id === id);
+        return c && (action === 'add' ? !c.is_excluded : c.is_excluded);
+      });
+      const res = await fetch('/api/excluded-contacts/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, conversationIds: ids }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || 'No se pudo aplicar el cambio.');
+        return;
+      }
+      const { processed } = await res.json();
+      // Update cache only for IDs that actually changed state
+      changedIds.forEach(id => {
+        const c = allConvs.find(c => c.id === id);
+        if (c) c.is_excluded = (action === 'add');
+      });
+      toggleSelectionMode(); // exits selection, clears Set
+      renderConvList();
+      const noun = processed === 1 ? 'contacto' : 'contactos';
+      const msg = action === 'add'
+        ? `${processed} ${noun} marcado${processed !== 1 ? 's' : ''}. El bot ya no les responde.`
+        : `${processed} ${noun} desmarcado${processed !== 1 ? 's' : ''}.`;
+      showUndoToast(msg, async () => {
+        const rev = action === 'add' ? 'remove' : 'add';
+        await fetch('/api/excluded-contacts/batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: rev, conversationIds: changedIds }),
+        });
+        changedIds.forEach(id => {
+          const c = allConvs.find(c => c.id === id);
+          if (c) c.is_excluded = (rev === 'add');
+        });
+        renderConvList();
+      });
+    }
+
+    // ── Undo toast ──
+    let _toastTimeout = null;
+    function showUndoToast(msg, undoFn) {
+      const toast = document.getElementById('undo-toast');
+      const msgEl  = document.getElementById('toast-msg');
+      const undoBtn = document.getElementById('toast-undo');
+      if (msgEl) msgEl.textContent = msg;
+      if (undoBtn) undoBtn.onclick = () => { clearTimeout(_toastTimeout); toast.classList.remove('active'); undoFn(); };
+      toast.classList.add('active');
+      if (_toastTimeout) clearTimeout(_toastTimeout);
+      _toastTimeout = setTimeout(() => toast.classList.remove('active'), 5000);
+    }
+
+    // ── Feature hint ──
+    function dismissHint() {
+      document.getElementById('atiendo-yo-hint').classList.remove('active');
+      try { localStorage.setItem('daxos_atiendo_yo_hint_seen', '1'); } catch {}
+    }
+    function checkAndShowHint() {
+      try { if (!localStorage.getItem('daxos_atiendo_yo_hint_seen')) document.getElementById('atiendo-yo-hint').classList.add('active'); } catch {}
+    }
+
     // ── Back to list (mobile) ──
     function backToList() {
       document.getElementById('thread').style.display = 'none';
@@ -367,6 +633,12 @@
 
     // ── Open a conversation ──
     async function openConv(id, el) {
+      // In selection mode: toggle selection, don't open thread
+      if (selectionMode) {
+        toggleSelectConv(id);
+        return;
+      }
+
       document.querySelectorAll('.conv-item').forEach(b => b.classList.remove('active'));
       el.classList.add('active');
 
@@ -417,10 +689,10 @@
               <option value="prospecto"     ${conversation.label === 'prospecto'     ? 'selected' : ''}>Prospecto</option>
               <option value="no_interesado" ${conversation.label === 'no_interesado' ? 'selected' : ''}>No interesado</option>
             </select>
-            ${!isPaused ? `<button class="btn-pause-toggle" onclick="pauseConv(${id})">Pausar bot</button>` : ''}
+            ${!isPaused ? `<button class="btn-pause-toggle" onclick="pauseConv(${id})">Pausar esta conversación</button>` : ''}
             ${is_excluded
-              ? `<button class="btn-exclude-toggle btn-exclude-toggle--active" onclick="unexcludeContact(${id})">✕ Excluido del bot</button>`
-              : `<button class="btn-exclude-toggle" onclick="excludeContact(${id})">No automatizar</button>`}
+              ? `<button class="btn-exclude-toggle btn-exclude-toggle--active" onclick="unexcludeContact(${id})" title="El bot no responde a este contacto. Sus mensajes se guardan.">✓ Atiendo yo</button>`
+              : `<button class="btn-exclude-toggle" onclick="excludeContact(${id})" title="Marcar para atender este contacto sin que el bot intervenga">Atiendo yo</button>`}
             ${isOwnerConv ? `<button class="btn-reset-conv" onclick="showResetModal(${id})">Reiniciar</button>` : ''}
           </div>
         </div>
@@ -487,11 +759,10 @@
       if (convItem) openConv(id, convItem);
     }
 
-    // ── Pause conversation (manual) ──
+    // ── Pause conversation ──
     async function pauseConv(id) {
       const res = await fetch(`/api/conversations/${id}/pause`, { method: 'PATCH' });
       if (!res.ok) return;
-      // Reload thread to show reply box
       const btn = document.querySelector(`.conv-item[data-id="${id}"]`);
       if (btn) openConv(id, btn);
     }
@@ -524,7 +795,6 @@
         return;
       }
 
-      // Append message to thread
       const msgList = document.getElementById('thread-messages');
       const row = document.createElement('div');
       row.className = 'bubble-row row-ai';
@@ -574,7 +844,6 @@
       return new Date(s.includes('T') || s.endsWith('Z') ? s : s.replace(' ', 'T') + 'Z');
     }
 
-    // YYYY-MM-DD in America/Montevideo timezone
     function uyDateStr(d) {
       return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Montevideo' }).format(d);
     }
@@ -601,7 +870,6 @@
     }
 
     function formatDate(dt) {
-      // Used only for the "iniciado" header — keep original short format
       if (!dt) return '';
       const d = toUtcDate(dt);
       if (!d || isNaN(d)) return '';
@@ -697,7 +965,6 @@
       });
       if (!res.ok) return;
       const { tags } = await res.json();
-      // Update chips in header
       const chipsEl = document.getElementById('conv-tag-chips');
       const btn = document.getElementById('btn-tag-selector');
       if (chipsEl) {
@@ -705,7 +972,6 @@
           `<span class="conv-tag-chip" style="background:${t.color}20;color:${t.color};border:1px solid ${t.color}40;">${escapeHtml(t.name)}</span>`
         ).join('') + (btn ? btn.outerHTML : '');
       }
-      // Update allConvs cache and re-render list
       const conv = allConvs.find(c => c.id === convId);
       if (conv) { conv.tags = tags; renderConvList(); }
     }
@@ -725,7 +991,6 @@
       }
       const newTag = await res.json();
       allTags.push(newTag);
-      // Check the new tag and apply
       const checkboxes = document.querySelectorAll('#tag-selector-list input[type=checkbox]');
       const tagIds = Array.from(checkboxes).filter(c => c.checked).map(c => Number(c.dataset.tagId));
       tagIds.push(newTag.id);
@@ -750,7 +1015,6 @@
         return;
       }
       allTags = allTags.filter(t => t.id !== tagId);
-      // Remove from allConvs cache
       allConvs.forEach(c => { if (c.tags) c.tags = c.tags.filter(t => t.id !== tagId); });
       if (activeFilterTagId === tagId) { activeFilterTagId = null; }
       renderTagSelectorList(convId);
@@ -758,7 +1022,6 @@
       renderConvList();
     }
 
-    // Close dropdown on outside click
     document.addEventListener('click', (e) => {
       const dropdown = document.getElementById('tag-selector-dropdown');
       if (!dropdown || dropdown.style.display === 'none') return;
@@ -767,32 +1030,55 @@
       }
     });
 
-    // ── Excluded contacts ──
+    // ── Excluded contacts (internal names unchanged) ──
     async function excludeContact(convId) {
       const res = await fetch(`/api/conversations/${convId}/exclude`, { method: 'POST' });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        if (d.error === 'limit_reached') alert('Límite de 500 contactos excluidos alcanzado. Quitá alguno desde Configuración antes de agregar más.');
-        else alert(d.error || 'No se pudo excluir el contacto.');
+        if (d.error === 'limit_reached') alert('Límite de 500 contactos alcanzado. Quitá alguno desde Configuración.');
+        else alert(d.error || 'No se pudo marcar el contacto.');
         return;
       }
+      const c = allConvs.find(c => c.id === convId);
+      if (c) c.is_excluded = true;
+      renderConvList();
       const btn = document.querySelector(`.conv-item[data-id="${convId}"]`);
       if (btn) openConv(convId, btn);
+      showUndoToast('Contacto marcado. El bot ya no le responde.', async () => {
+        await fetch(`/api/conversations/${convId}/exclude`, { method: 'DELETE' });
+        const c2 = allConvs.find(c => c.id === convId);
+        if (c2) c2.is_excluded = false;
+        renderConvList();
+        const btn2 = document.querySelector(`.conv-item[data-id="${convId}"]`);
+        if (btn2) openConv(convId, btn2);
+      });
     }
 
     async function unexcludeContact(convId) {
       const res = await fetch(`/api/conversations/${convId}/exclude`, { method: 'DELETE' });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        alert(d.error || 'No se pudo reincluir el contacto.');
+        alert(d.error || 'No se pudo quitar la marca.');
         return;
       }
+      const c = allConvs.find(c => c.id === convId);
+      if (c) c.is_excluded = false;
+      renderConvList();
       const btn = document.querySelector(`.conv-item[data-id="${convId}"]`);
       if (btn) openConv(convId, btn);
+      showUndoToast('Marca quitada. El bot vuelve a responder.', async () => {
+        await fetch(`/api/conversations/${convId}/exclude`, { method: 'POST' });
+        const c2 = allConvs.find(c => c.id === convId);
+        if (c2) c2.is_excluded = true;
+        renderConvList();
+        const btn2 = document.querySelector(`.conv-item[data-id="${convId}"]`);
+        if (btn2) openConv(convId, btn2);
+      });
     }
 
     loadTags();
     loadList().then(() => {
+      checkAndShowHint();
       const convParam = new URLSearchParams(window.location.search).get('conv');
       const convId = convParam && /^\d+$/.test(convParam) ? parseInt(convParam, 10) : 0;
       if (convId > 0) openConvById(convId);
@@ -836,20 +1122,17 @@
         alert('No se pudo reiniciar la conversación.');
         return;
       }
-      // Reload thread to show empty state
       const btn2 = document.querySelector(`.conv-item[data-id="${id}"]`);
       if (btn2) openConv(id, btn2);
     }
 
     async function openConvById(id) {
-      // Clear tag filter so conv is visible in list even if filtered out
       activeFilterTagId = null;
+      activeExcludedFilter = false;
       renderConvList();
       renderFilterBar();
-      // Find button in rendered list; if conv isn't in allConvs it may not exist
       let btn = document.querySelector(`.conv-item[data-id="${id}"]`);
       if (!btn) {
-        // Conv not in list — open thread area directly so error shows there
         document.getElementById('conv-panels').classList.add('thread-open');
         document.getElementById('empty-state').style.display = 'none';
         document.getElementById('thread').style.display = 'flex';
@@ -877,6 +1160,12 @@
         <button id="btn-reset-confirm" class="btn-reset-confirm" disabled onclick="confirmReset()">Confirmar</button>
       </div>
     </div>
+  </div>
+
+  <!-- Undo toast -->
+  <div id="undo-toast" role="status" aria-live="polite">
+    <span id="toast-msg"></span>
+    <button class="btn-undo" id="toast-undo">Deshacer</button>
   </div>
 
   <nav class="mobile-nav" aria-label="Navegación principal">

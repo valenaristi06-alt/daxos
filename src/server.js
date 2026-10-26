@@ -865,7 +865,11 @@ app.get('/api/conversations', requireAuth, (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user.business_id) return res.json([]);
   const convs = getConversationsByBusinessId(user.business_id);
-  res.json(convs);
+  const excludedPhones = new Set(getExcludedContacts(user.business_id).map(c => c.phone));
+  res.json(convs.map(c => {
+    const norm = normalizeContactPhone(c.customer_id);
+    return { ...c, is_excluded: norm ? excludedPhones.has(norm) : false };
+  }));
 });
 
 app.get('/api/conversations/:id/messages', requireAuth, (req, res) => {
@@ -1040,6 +1044,34 @@ app.delete('/api/excluded-contacts/:phone', requireAuth, (req, res) => {
   const result = removeExcludedContact(user.business_id, req.params.phone, 'panel');
   if (!result.ok) return res.status(result.error === 'not_found' ? 404 : 400).json({ error: result.error });
   res.json({ ok: true });
+});
+
+app.post('/api/excluded-contacts/batch', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+  const { action, conversationIds } = req.body;
+  if (!action || !['add', 'remove'].includes(action))
+    return res.status(400).json({ error: 'action debe ser add o remove.' });
+  if (!Array.isArray(conversationIds) || !conversationIds.length)
+    return res.status(400).json({ error: 'conversationIds requerido.' });
+  if (conversationIds.length > 100)
+    return res.status(400).json({ error: 'Máximo 100 por lote.' });
+  let processed = 0;
+  const errors = [];
+  for (const rawId of conversationIds) {
+    const id = parseInt(rawId, 10);
+    if (!id) { errors.push({ id: rawId, error: 'invalid_id' }); continue; }
+    const conv = getConversationById(id);
+    if (!conv || conv.business_id !== user.business_id) {
+      errors.push({ id, error: 'not_found' });
+      continue;
+    }
+    const result = action === 'add'
+      ? addExcludedContact(user.business_id, conv.customer_id, 'batch')
+      : removeExcludedContact(user.business_id, conv.customer_id, 'batch');
+    if (result.ok && !result.duplicate) processed++;
+  }
+  res.json({ processed, ...(errors.length ? { errors } : {}) });
 });
 
 app.post('/api/conversations/:id/exclude', requireAuth, (req, res) => {

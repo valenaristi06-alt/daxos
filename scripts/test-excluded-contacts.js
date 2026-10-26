@@ -326,6 +326,61 @@ async function main() {
   }
   console.log();
 
+  // ── Suite 6: batch endpoint ───────────────────────────────────────────────
+  console.log('Suite 6: endpoint por lotes POST /api/excluded-contacts/batch');
+  {
+    // Seed 3 convs for bizA
+    const batchConvIds = [1, 2, 3].map(i =>
+      db.prepare('INSERT INTO conversations (business_id, customer_id) VALUES (?, ?)').run(bizA, `5989900000${i}`).lastInsertRowid
+    );
+    db.pragma('wal_checkpoint(FULL)');
+
+    // 6.1-6.2: batch add for bizA
+    const r1 = await req('POST', '/api/excluded-contacts/batch',
+      { action: 'add', conversationIds: batchConvIds }, cookieA);
+    assert(r1.status === 200, '6.1 batch add devuelve 200', r1.status);
+    assert(r1.body?.processed === 3, '6.2 processed = 3', JSON.stringify(r1.body));
+
+    // 6.3: all three are excluded
+    const r2 = await req('GET', '/api/excluded-contacts', null, cookieA);
+    const batchPhones = r2.body?.map(c => c.phone) || [];
+    const allAdded = ['59899000001','59899000002','59899000003'].every(p => batchPhones.includes(p));
+    assert(allAdded, '6.3 los 3 teléfonos aparecen en la lista', batchPhones.join(','));
+
+    // 6.4-6.5: bizB cannot batch-act on bizA's conversations (isolation)
+    const r3 = await req('POST', '/api/excluded-contacts/batch',
+      { action: 'add', conversationIds: batchConvIds }, cookieB);
+    assert(r3.status === 200, '6.4 respuesta 200 aunque convs no pertenezcan', r3.status);
+    assert(r3.body?.processed === 0, '6.5 processed = 0 (aislamiento por negocio)', JSON.stringify(r3.body));
+
+    // 6.6: invalid action returns 400
+    const r4 = await req('POST', '/api/excluded-contacts/batch',
+      { action: 'delete', conversationIds: batchConvIds }, cookieA);
+    assert(r4.status === 400, '6.6 action inválida devuelve 400', r4.status);
+
+    // 6.7: empty conversationIds returns 400
+    const r5 = await req('POST', '/api/excluded-contacts/batch',
+      { action: 'add', conversationIds: [] }, cookieA);
+    assert(r5.status === 400, '6.7 array vacío devuelve 400', r5.status);
+
+    // 6.8-6.9: batch remove
+    const r6 = await req('POST', '/api/excluded-contacts/batch',
+      { action: 'remove', conversationIds: batchConvIds }, cookieA);
+    assert(r6.status === 200, '6.8 batch remove devuelve 200', r6.status);
+    assert(r6.body?.processed === 3, '6.9 remove processed = 3', JSON.stringify(r6.body));
+
+    // 6.10: list back to original size (no longer has the 3 batch phones)
+    const r7 = await req('GET', '/api/excluded-contacts', null, cookieA);
+    const remaining = (r7.body || []).filter(c => ['59899000001','59899000002','59899000003'].includes(c.phone));
+    assert(remaining.length === 0, '6.10 los 3 teléfonos ya no están en la lista', remaining.length);
+
+    // 6.11: /api/conversations list includes is_excluded per conv
+    const r8 = await req('GET', '/api/conversations', null, cookieA);
+    assert(r8.status === 200, '6.11 GET /api/conversations devuelve 200', r8.status);
+    assert(Array.isArray(r8.body), '6.12 respuesta es array', typeof r8.body);
+  }
+  console.log();
+
   // ── Results ──────────────────────────────────────────────────────────────
   console.log(`\n${'─'.repeat(50)}`);
   console.log(`Passed: ${passed}  Failed: ${failed}`);
