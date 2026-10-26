@@ -611,7 +611,8 @@ app.put('/api/business', requireAuth, async (req, res) => {
     const user = getUserById(req.session.userId);
     console.log('[PUT /api/business] sessionUserId:', req.session.userId, '| user:', user?.id ?? 'NOT FOUND', '| existing business_id:', user?.business_id ?? 'null');
 
-    const prevWebsiteUrl = user.business_id ? (getBusinessById(user.business_id)?.website_url ?? null) : null;
+    const currentBiz = user.business_id ? getBusinessById(user.business_id) : null;
+    const prevWebsiteUrl = currentBiz?.website_url ?? null;
     const newUrl = website_url ? website_url.trim() : null;
 
     const business = upsertBusiness({
@@ -627,11 +628,11 @@ app.put('/api/business', requireAuth, async (req, res) => {
       pause_reply_text: prtClean || null,
       response_delay: response_delay != null ? Math.min(20, Math.max(0, parseInt(response_delay, 10) || 5)) : 5,
       pricing_info: pricing_info ? pricing_info.trim() : null,
-      urgent_keywords: urgent_keywords ? urgent_keywords.trim() : null,
-      urgent_alert_enabled: urgent_alert_enabled ? 1 : 0,
-      business_hours: bhClean || null,
-      after_hours_instructions: after_hours_instructions ? String(after_hours_instructions).trim() : null,
-      urgent_phone: urgent_phone ? String(urgent_phone).trim() : null,
+      urgent_keywords:       'urgent_keywords'       in req.body ? (urgent_keywords ? urgent_keywords.trim() : null)            : (currentBiz?.urgent_keywords       ?? null),
+      urgent_alert_enabled:  'urgent_alert_enabled'  in req.body ? (urgent_alert_enabled ? 1 : 0)                               : (currentBiz?.urgent_alert_enabled  ?? 0),
+      business_hours:        'business_hours'        in req.body ? (bhClean || null)                                            : (currentBiz?.business_hours        ?? null),
+      after_hours_instructions: 'after_hours_instructions' in req.body ? (after_hours_instructions ? String(after_hours_instructions).trim() : null) : (currentBiz?.after_hours_instructions ?? null),
+      urgent_phone:          'urgent_phone'          in req.body ? (urgent_phone ? String(urgent_phone).trim() : null)          : (currentBiz?.urgent_phone          ?? null),
     });
     console.log('[PUT /api/business] upsertBusiness result id:', business?.id ?? 'null');
     if (!user.business_id) {

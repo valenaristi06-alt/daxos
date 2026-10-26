@@ -898,8 +898,8 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
   }
 
   const result = db.prepare(`
-    INSERT INTO businesses (name, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, pause_reply_text, response_delay, pricing_info)
-    VALUES (@name, @sales_examples, @survey_answers, @business_context, @website_url, @response_mode, @pause_keywords, @pause_reply_text, @response_delay, @pricing_info)
+    INSERT INTO businesses (name, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, pause_reply_text, response_delay, pricing_info, urgent_keywords, urgent_alert_enabled, business_hours, after_hours_instructions, urgent_phone)
+    VALUES (@name, @sales_examples, @survey_answers, @business_context, @website_url, @response_mode, @pause_keywords, @pause_reply_text, @response_delay, @pricing_info, @urgent_keywords, @urgent_alert_enabled, @business_hours, @after_hours_instructions, @urgent_phone)
   `).run(serialized);
   ensureDefaultTags(result.lastInsertRowid);
   return getBusinessById(result.lastInsertRowid);
