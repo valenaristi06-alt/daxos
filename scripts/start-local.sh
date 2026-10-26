@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Arranca el servidor local para revisar la rama design-polish.
+# Arranca el servidor local para revisar la rama design-polish (u otra).
 # Base de datos SEPARADA de producción (data-local-test/).
-# Sin credenciales de Meta/WhatsApp → el server no envía mensajes reales.
-# Uso: bash scripts/start-local.sh
-
+# Las credenciales de Meta / Kapso / Resend / R2 se vacían explícitamente
+# para que .env.local no pueda mandar mensajes reales ni emails.
+# Uso: npm run local-seguro
 set -e
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -12,10 +12,31 @@ cd "$REPO"
 TEST_EMAIL="test@local.dev"
 TEST_PASS="prueba1234"
 
+# ── Aislamiento de producción ─────────────────────────────────────────────────
+# Estas exportaciones ocurren ANTES de que node cargue .env.local,
+# entonces process.env ya tiene los valores y dotenv los respeta (no sobreescribe).
 export DB_DIR="$REPO/data-local-test"
 export NODE_ENV="development"
 export PORT="3001"
 export SESSION_SECRET="dev-only-not-for-prod-$(hostname)"
+
+# Silenciar todas las integraciones externas que podrían enviar mensajes reales
+export KAPSO_API_KEY=""
+export KAPSO_WEBHOOK_SECRET=""
+export KAPSO_PLATFORM_WEBHOOK_SECRET=""
+export RESEND_API_KEY=""
+export R2_ACCOUNT_ID=""
+export R2_BUCKET_NAME=""
+export R2_ACCESS_KEY_ID=""
+export R2_SECRET_ACCESS_KEY=""
+export META_SYSTEM_TOKEN=""
+export META_APP_SECRET=""
+export META_WEBHOOK_VERIFY_TOKEN=""
+export WHATSAPP_VERIFY_TOKEN=""
+export WA_HEALTH_ALERTS=""
+export MERCADOPAGO_ACCESS_TOKEN=""
+export MERCADOPAGO_WEBHOOK_SECRET=""
+export ELEVENLABS_API_KEY=""
 
 mkdir -p "$DB_DIR"
 
@@ -24,38 +45,61 @@ node src/server.js &
 SRV_PID=$!
 trap "kill $SRV_PID 2>/dev/null; exit" INT TERM EXIT
 
-# Espera a que el server esté listo
-for i in $(seq 1 20); do
-  if curl -sf "http://localhost:$PORT/auth/me" -o /dev/null 2>/dev/null; then break; fi
-  sleep 0.3
+# Espera a que el server esté listo (máx 12 segundos)
+# /auth/me devuelve 401 cuando no hay sesión — eso es "listo"
+READY=0
+for i in $(seq 1 30); do
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$PORT/auth/me" 2>/dev/null || true)
+  if [ "$STATUS" = "401" ] || [ "$STATUS" = "200" ]; then
+    READY=1; break
+  fi
+  sleep 0.4
 done
 
+if [ "$READY" -eq 0 ]; then
+  echo "ERROR: el servidor no respondió en 12 s. Revisá los logs arriba."
+  exit 1
+fi
+
 # ── Crea el usuario de prueba (silencioso si ya existe) ───────────────────────
-curl -sf -X POST "http://localhost:$PORT/auth/register" \
+curl -s -X POST "http://localhost:$PORT/auth/register" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"$TEST_EMAIL\",\"password\":\"$TEST_PASS\"}" \
   -c "$DB_DIR/cookie.txt" -o /dev/null 2>/dev/null || true
 
-# Si ya existía, loguea para obtener la cookie
-curl -sf -X POST "http://localhost:$PORT/auth/login" \
+# Login real — guarda cookie de sesión
+LOGIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+  -X POST "http://localhost:$PORT/auth/login" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"$TEST_EMAIL\",\"password\":\"$TEST_PASS\"}" \
-  -c "$DB_DIR/cookie.txt" -o /dev/null 2>/dev/null || true
+  -c "$DB_DIR/cookie.txt" 2>/dev/null || echo "000")
 
-BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$LOGIN_STATUS" != "200" ]; then
+  echo "ERROR: login falló (HTTP $LOGIN_STATUS). Eliminá data-local-test/ y volvé a intentar."
+  exit 1
+fi
+
+# ── Seed: 4 conversaciones de ejemplo ────────────────────────────────────────
+node scripts/seed-local.js
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")
 
 echo ""
-echo "  Rama:     $BRANCH"
-echo "  URL:      http://localhost:$PORT/dashboard.html"
-echo "  Email:    $TEST_EMAIL"
-echo "  Password: $TEST_PASS"
-echo "  DB local: $DB_DIR/daxos.db  (no es la de producción)"
-echo ""
-echo "  Para volver a main:  git checkout main"
-echo "  Para detener:        Ctrl+C"
+echo "  ┌─────────────────────────────────────────────┐"
+echo "  │  Daxos local — base SEPARADA de producción  │"
+echo "  ├─────────────────────────────────────────────┤"
+echo "  │  Rama:      $BRANCH"
+echo "  │  URL:       http://localhost:$PORT/inicio.html"
+echo "  │  Email:     $TEST_EMAIL"
+echo "  │  Password:  $TEST_PASS"
+echo "  │  DB:        data-local-test/daxos.db"
+echo "  │  Secrets:   Meta/Kapso/Resend/R2 = vacíos"
+echo "  ├─────────────────────────────────────────────┤"
+echo "  │  Para detener: Ctrl+C                       │"
+echo "  └─────────────────────────────────────────────┘"
 echo ""
 
-open "http://localhost:$PORT/login.html?next=/dashboard.html"
+open "http://localhost:$PORT/inicio.html" 2>/dev/null || true
 
 # Mantiene el server vivo (el trap lo mata al salir)
 wait $SRV_PID
