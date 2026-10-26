@@ -136,26 +136,25 @@
     }
     .btn-exclude-toggle--active:hover { opacity: 0.8; }
 
-    /* Selection mode */
-    .btn-select-mode {
-      font-size: 11px;
-      font-family: var(--mono, monospace);
-      padding: 3px 10px;
-      border: 1px solid #3a3a3a;
-      border-radius: 4px;
-      background: transparent;
-      color: #888;
-      cursor: pointer;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-    .btn-select-mode:hover { border-color: #888; color: #ccc; }
+    /* Selection checkboxes */
     .conv-item--selected { background: rgba(249,115,22,0.07) !important; }
+    .conv-check-wrap {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 40px;
+      min-height: 40px;
+      flex-shrink: 0;
+      cursor: pointer;
+      margin-right: 0;
+    }
     .conv-check {
       pointer-events: none;
-      accent-color: #f97316;
+      accent-color: #555;
       flex-shrink: 0;
-      margin-right: 4px;
+    }
+    .conv-check--excluded {
+      accent-color: #f97316;
     }
 
     /* "Atiendo yo" badge in conv list */
@@ -353,9 +352,8 @@
       <aside class="conv-list-panel">
         <div class="conv-list-header">
           <p class="page-terminal">&gt; conversaciones</p>
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;">
             <h1 class="conv-list-title" style="margin:0;">Chats</h1>
-            <button id="btn-select-mode" class="btn-select-mode" onclick="toggleSelectionMode()">Seleccionar</button>
           </div>
         </div>
         <!-- One-time hint for "Atiendo yo" feature -->
@@ -377,7 +375,7 @@
         <div id="selection-bar">
           <button class="btn-sel-action" id="btn-sel-mark" onclick="applyBatch('add')" disabled>Atiendo yo (0)</button>
           <button class="btn-sel-action" id="btn-sel-unmark" onclick="applyBatch('remove')" disabled>Quitar (0)</button>
-          <button class="btn-sel-cancel" onclick="toggleSelectionMode()">Cancelar</button>
+          <button class="btn-sel-cancel" onclick="clearSelection()">Cancelar</button>
         </div>
       </aside>
 
@@ -436,7 +434,6 @@
     let allConvs = [];
     let activeFilterTagId = null;
     let activeExcludedFilter = false;
-    let selectionMode = false;
     let selectedConvIds = new Set();
 
     // ── Tags ──
@@ -499,9 +496,12 @@
       }
 
       list.innerHTML = filtered.map(c => `
-        <button class="conv-item${selectionMode && selectedConvIds.has(c.id) ? ' conv-item--selected' : ''}"
+        <button class="conv-item${selectedConvIds.has(c.id) ? ' conv-item--selected' : ''}"
           data-id="${c.id}" onclick="openConv(${c.id}, this)">
-          ${selectionMode ? `<input type="checkbox" class="conv-check" tabindex="-1" ${selectedConvIds.has(c.id) ? 'checked' : ''}>` : ''}
+          <span class="conv-check-wrap" onclick="event.stopPropagation(); toggleSelectConv(${c.id})">
+            <input type="checkbox" class="conv-check${c.is_excluded ? ' conv-check--excluded' : ''}" tabindex="-1"
+              ${c.is_excluded || selectedConvIds.has(c.id) ? 'checked' : ''} readonly>
+          </span>
           ${c.needs_attention ? '<span class="conv-attention-dot" title="Requiere atención"></span>' : ''}
           <span class="conv-number">${escapeHtml(formatPhone(c.customer_id))}</span>
           <span class="conv-date">${formatLastMsgDate(c.last_msg_at || c.created_at)}</span>
@@ -519,19 +519,9 @@
       renderConvList();
     }
 
-    // ── Selection mode ──
-    function toggleSelectionMode() {
-      selectionMode = !selectionMode;
+    // ── Selection ──
+    function clearSelection() {
       selectedConvIds.clear();
-      const btn = document.getElementById('btn-select-mode');
-      const bar = document.getElementById('selection-bar');
-      if (selectionMode) {
-        btn.style.display = 'none';
-        bar.classList.add('active');
-      } else {
-        btn.style.display = '';
-        bar.classList.remove('active');
-      }
       updateSelectionBar();
       renderConvList();
     }
@@ -539,11 +529,14 @@
     function toggleSelectConv(id) {
       if (selectedConvIds.has(id)) selectedConvIds.delete(id);
       else selectedConvIds.add(id);
-      const btn = document.querySelector(`.conv-item[data-id="${id}"]`);
-      if (btn) {
-        btn.classList.toggle('conv-item--selected', selectedConvIds.has(id));
-        const chk = btn.querySelector('.conv-check');
-        if (chk) chk.checked = selectedConvIds.has(id);
+      const row = document.querySelector(`.conv-item[data-id="${id}"]`);
+      if (row) {
+        row.classList.toggle('conv-item--selected', selectedConvIds.has(id));
+        const chk = row.querySelector('.conv-check');
+        if (chk) {
+          const c = allConvs.find(c => c.id === id);
+          chk.checked = selectedConvIds.has(id) || !!(c && c.is_excluded);
+        }
       }
       updateSelectionBar();
     }
@@ -552,8 +545,10 @@
       const n = selectedConvIds.size;
       const markBtn = document.getElementById('btn-sel-mark');
       const unmarkBtn = document.getElementById('btn-sel-unmark');
+      const bar = document.getElementById('selection-bar');
       if (markBtn) { markBtn.textContent = `Atiendo yo (${n})`; markBtn.disabled = n === 0; }
       if (unmarkBtn) { unmarkBtn.textContent = `Quitar (${n})`; unmarkBtn.disabled = n === 0; }
+      if (bar) bar.classList.toggle('active', n > 0);
     }
 
     async function applyBatch(action) {
@@ -565,7 +560,7 @@
         return c && (action === 'add' ? !c.is_excluded : c.is_excluded);
       });
       if (!needsChange) {
-        toggleSelectionMode();
+        clearSelection();
         showUndoToast(
           action === 'add' ? 'Ya estaban marcados como "Atiendo yo".' : 'Ya estaban sin marcar.',
           null
@@ -588,7 +583,7 @@
         const c = allConvs.find(c => c.id === id);
         if (c) c.is_excluded = (action === 'add');
       });
-      toggleSelectionMode();
+      clearSelection();
       renderConvList();
       const noun = processed === 1 ? 'contacto' : 'contactos';
       const limitMsg = action === 'add' && processed < ids.length ? ' Límite de 500 alcanzado.' : '';
@@ -646,12 +641,6 @@
 
     // ── Open a conversation ──
     async function openConv(id, el) {
-      // In selection mode: toggle selection, don't open thread
-      if (selectionMode) {
-        toggleSelectConv(id);
-        return;
-      }
-
       document.querySelectorAll('.conv-item').forEach(b => b.classList.remove('active'));
       el.classList.add('active');
 
