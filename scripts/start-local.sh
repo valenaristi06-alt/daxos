@@ -1,13 +1,30 @@
 #!/usr/bin/env bash
-# Arranca el servidor local para revisar la rama design-polish (u otra).
-# Base de datos SEPARADA de producción (data-local-test/).
-# Las credenciales de Meta / Kapso / Resend / R2 se vacían explícitamente
-# para que .env.local no pueda mandar mensajes reales ni emails.
-# Uso: npm run local-seguro
+# Arranca Daxos en entorno local aislado (data-local-test/, sin secrets reales).
+#
+# Uso:
+#   npm run local-seguro                           # activo por defecto (4 convs, WA conectado)
+#   npm run local-seguro -- --estado=activo        # WA conectado, plan activo, 4 conversaciones de ejemplo
+#   npm run local-seguro -- --estado=vacio         # WA conectado, plan activo, sin conversaciones
+#   npm run local-seguro -- --estado=desconectado  # WA desconectado, plan activo, sin conversaciones
+#   npm run local-seguro -- --estado=prueba        # WA conectado, prueba terminada, sin conversaciones
 set -e
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO"
+
+# ── Parseo de --estado ────────────────────────────────────────────────────────
+ESTADO="activo"
+for arg in "$@"; do
+  case "$arg" in
+    --estado=*) ESTADO="${arg#--estado=}" ;;
+  esac
+done
+ESTADOS_VALIDOS="activo vacio desconectado prueba"
+if ! echo "$ESTADOS_VALIDOS" | grep -qw "$ESTADO"; then
+  echo "ERROR: --estado=\"$ESTADO\" no válido. Opciones: $ESTADOS_VALIDOS"
+  exit 1
+fi
+export SEED_ESTADO="$ESTADO"
 
 TEST_EMAIL="test@local.dev"
 TEST_PASS="prueba1234"
@@ -89,6 +106,7 @@ echo "  ┌───────────────────────
 echo "  │  Daxos local — base SEPARADA de producción  │"
 echo "  ├─────────────────────────────────────────────┤"
 echo "  │  Rama:      $BRANCH"
+echo "  │  Estado:    $ESTADO"
 echo "  │  URL:       http://localhost:$PORT/inicio.html"
 echo "  │  Email:     $TEST_EMAIL"
 echo "  │  Password:  $TEST_PASS"

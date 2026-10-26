@@ -3,6 +3,7 @@
  * Seed de datos de prueba para el entorno local (data-local-test/).
  * Idempotente: borra y recrea las conversaciones del negocio de prueba en cada ejecución.
  * Uso: node scripts/seed-local.js  (llamado desde start-local.sh)
+ * Env: SEED_ESTADO = activo | vacio | desconectado | prueba  (default: activo)
  */
 const path    = require('path');
 const bcrypt  = require('bcryptjs');
@@ -13,11 +14,33 @@ const DB_PATH = path.join(DB_DIR, 'daxos.db');
 const TEST_EMAIL = 'test@local.dev';
 const TEST_PASS  = 'prueba1234';
 
+// Validate --estado
+const ESTADO = process.env.SEED_ESTADO || 'activo';
+const ESTADOS_VALIDOS = ['activo', 'vacio', 'desconectado', 'prueba'];
+if (!ESTADOS_VALIDOS.includes(ESTADO)) {
+  console.error('  [seed] ERROR: SEED_ESTADO="' + ESTADO + '" no válido. Opciones: ' + ESTADOS_VALIDOS.join(', '));
+  process.exit(1);
+}
+
+// Config per estado:
+//   phone_number_id: non-null = WA "conectado" (fake ID, no toca Meta)
+//   planPaid: si poner plan_paid_at (true = sin banner de prueba)
+//   trialDaysAgo: cuándo empezó el trial (null = sin trial)
+//   trialEnded: si poner trial_ends_at 3 días atrás
+//   subscriptionStatus: valor de subscription_status
+//   seedConvs: si cargar las 4 conversaciones de ejemplo
+const ESTADO_CFG = {
+  activo:       { phone_number_id: 'pid-local-test', planPaid: true,  trialDaysAgo: null, trialEnded: false, subscriptionStatus: 'active',    seedConvs: true  },
+  vacio:        { phone_number_id: 'pid-local-test', planPaid: true,  trialDaysAgo: null, trialEnded: false, subscriptionStatus: 'active',    seedConvs: false },
+  desconectado: { phone_number_id: null,             planPaid: true,  trialDaysAgo: null, trialEnded: false, subscriptionStatus: 'active',    seedConvs: false },
+  prueba:       { phone_number_id: 'pid-local-test', planPaid: false, trialDaysAgo: 30,   trialEnded: true,  subscriptionStatus: 'cancelled', seedConvs: false },
+};
+const cfg = ESTADO_CFG[ESTADO];
+
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 
-// UTC-3 helpers (SQLite stores datetimes as UTC text without Z)
-function utcNow()       { return new Date().toISOString().replace('T', ' ').slice(0, 19); }
+// UTC helpers (SQLite stores datetimes as UTC text without Z)
 function utcMinsAgo(m)  { return new Date(Date.now() - m * 60000).toISOString().replace('T', ' ').slice(0, 19); }
 function utcDaysAgo(d)  { return new Date(Date.now() - d * 86400000).toISOString().replace('T', ' ').slice(0, 19); }
 
@@ -53,10 +76,26 @@ if (!biz) {
   console.log('  [seed] Negocio existente:', biz.name || biz.id);
 }
 
-// Activar trial (7 días atrás → día 8 de 14, activo)
+// Aplicar config de estado al negocio
 db.prepare(`
-  UPDATE businesses SET trial_starts_at = ? WHERE id = ?
-`).run(utcDaysAgo(7), biz.id);
+  UPDATE businesses
+  SET phone_number_id       = ?,
+      plan_paid_at          = ?,
+      trial_starts_at       = ?,
+      trial_ends_at         = ?,
+      trial_grace_started_at = NULL,
+      trial_warned_at       = NULL,
+      subscription_status   = ?
+  WHERE id = ?
+`).run(
+  cfg.phone_number_id,
+  cfg.planPaid ? utcMinsAgo(0) : null,
+  cfg.trialDaysAgo ? utcDaysAgo(cfg.trialDaysAgo) : null,
+  cfg.trialEnded   ? utcDaysAgo(3)                : null,
+  cfg.subscriptionStatus,
+  biz.id
+);
+console.log('  [seed] Estado: ' + ESTADO + ' | WA=' + (cfg.phone_number_id || 'null') + ' | plan_paid=' + cfg.planPaid + ' | trial_ends=' + (cfg.trialEnded ? '3d atrás' : 'null') + ' | sub=' + cfg.subscriptionStatus);
 
 const bizId = biz.id;
 
@@ -72,6 +111,11 @@ db.prepare('DELETE FROM excluded_contacts WHERE business_id = ?').run(bizId);
 console.log('  [seed] Datos anteriores limpiados');
 
 // ── 4. Conversaciones ─────────────────────────────────────────────────────────
+if (!cfg.seedConvs) {
+  db.close();
+  console.log('  [seed] Listo. 0 conversaciones (estado=' + ESTADO + ')\n');
+  process.exit(0);
+}
 
 // Conv A — 3 mensajes hoy, cliente+bot+cliente (la que aparece en la tarjeta de Inicio)
 const rA = db.prepare(`
@@ -89,10 +133,9 @@ const rB = db.prepare(`
   VALUES (?, '59899876543', 0, ?)
 `).run(bizId, utcDaysAgo(1));
 db.prepare(`INSERT INTO messages (conversation_id, role, content, silent, created_at) VALUES (?, 'user', ?, 0, ?)`).run(rB.lastInsertRowid, 'Soy el proveedor, paso a las 3.', utcDaysAgo(1));
-// excluded_contacts normaliza: strip non-digits → '59899876543'
 try {
   db.prepare('INSERT INTO excluded_contacts (business_id, phone, source) VALUES (?, ?, ?)').run(bizId, '59899876543', 'manual');
-} catch (_) { /* migration 012 may not exist — ignore */ }
+} catch (_) { /* migration 012 may not exist */ }
 console.log('  [seed] Conv B: +598 99 876 543 — excluida (Atiendo yo)');
 
 // Conv C — needs_attention=1 (paused), mensaje de hoy
