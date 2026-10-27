@@ -26,6 +26,10 @@
           <button type="button" class="pw-toggle" aria-label="Mostrar contraseña" onclick="togglePw('password',this)"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
         </div>
       </div>
+      <label class="remember-row">
+        <input type="checkbox" id="remember" checked />
+        <span>Recordar este dispositivo por 30 días</span>
+      </label>
       <button type="submit" id="btn">Iniciar sesión</button>
       <div class="error" id="error"></div>
     </form>
@@ -68,6 +72,7 @@
         body: JSON.stringify({
           email: document.getElementById('email').value.trim(),
           password: document.getElementById('password').value,
+          remember: document.getElementById('remember').checked,
         }),
       });
 

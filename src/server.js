@@ -429,7 +429,7 @@ app.post('/auth/register',
 app.post('/auth/login',
   rateLimit(req => `login:ip:${req.ip}`, req => `login:email:${(req.body?.email || '').toLowerCase().trim()}`),
   async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, remember } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' });
 
     const user = getUserByEmail(email);
@@ -439,6 +439,8 @@ app.post('/auth/login',
       const match = await bcrypt.compare(password, user.password_hash);
       if (!match) return res.status(401).json({ error: 'Credenciales incorrectas' });
       req.session.userId = user.id;
+      // remember=false → session cookie (se borra al cerrar el navegador)
+      if (remember === false) req.session.cookie.maxAge = null;
       res.json({ ok: true, email: user.email });
     } catch (err) {
       res.status(500).json({ error: err.message });
