@@ -536,18 +536,22 @@ db.exec(`
   }
 
   if (!applied('016_plan_cortesia_valentin_v2')) {
-    // Migration 003 ran when valentin@daxos.lat didn't exist yet (0 rows). Re-apply now.
-    const result = db.prepare(`
-      UPDATE businesses SET plan_cortesia = 1
-      WHERE id = (
-        SELECT b.id FROM businesses b
-        JOIN users u ON u.business_id = b.id
-        WHERE u.email = 'valentin@daxos.lat'
-        LIMIT 1
-      )
-    `).run();
-    db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('016_plan_cortesia_valentin_v2');
-    console.log('[migration 016] plan_cortesia v2 for valentin@daxos.lat:', result.changes, 'row(s)');
+    try {
+      // Migration 003 ran when valentin@daxos.lat didn't exist yet (0 rows). Re-apply now.
+      const result = db.prepare(`
+        UPDATE businesses SET plan_cortesia = 1
+        WHERE id = (
+          SELECT b.id FROM businesses b
+          JOIN users u ON u.business_id = b.id
+          WHERE u.email = 'valentin@daxos.lat'
+          LIMIT 1
+        )
+      `).run();
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('016_plan_cortesia_valentin_v2');
+      console.log('[migration 016] plan_cortesia v2 for valentin@daxos.lat:', result.changes, 'row(s)');
+    } catch (e) {
+      console.error('[migration 016] failed (non-fatal):', e.message);
+    }
   }
 
 })();
