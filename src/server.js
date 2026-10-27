@@ -276,12 +276,12 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'dev-secret-change-in-prod',
   resave: false,
   saveUninitialized: false,
-  rolling: true,
+  rolling: false,
   cookie: {
     httpOnly: true,
     secure: IS_PROD,
     sameSite: 'lax',
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 días, se renueva en cada request
+    // maxAge lo fija el handler de login según la casilla "Recordar este dispositivo"
   },
 }));
 
@@ -439,8 +439,11 @@ app.post('/auth/login',
       const match = await bcrypt.compare(password, user.password_hash);
       if (!match) return res.status(401).json({ error: 'Credenciales incorrectas' });
       req.session.userId = user.id;
-      // remember=false → session cookie (se borra al cerrar el navegador)
-      if (remember === false) req.session.cookie.maxAge = null;
+      if (remember !== false) {
+        req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000; // 30 días
+      } else {
+        req.session.cookie.expires = false; // session cookie — se borra al cerrar el navegador
+      }
       res.json({ ok: true, email: user.email });
     } catch (err) {
       res.status(500).json({ error: err.message });
