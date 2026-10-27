@@ -263,6 +263,7 @@
         <a class="cfg-chip" href="#card-negocio">Tu negocio</a>
         <a class="cfg-chip" href="#card-horarios">Horarios</a>
         <a class="cfg-chip" href="#card-habla">Cómo habla</a>
+        <a class="cfg-chip" href="#card-reglas">Reglas</a>
         <a class="cfg-chip" href="#card-actua">Cómo actúa</a>
         <a class="cfg-chip" href="#card-avisos">Cuándo avisarte</a>
         <a class="cfg-chip" href="#card-voz">Voz</a>
@@ -348,7 +349,7 @@ Turno con seña: $200 (se descuenta del total)"></textarea>
           </div>
           <div class="field">
             <label class="field-label">
-              Catálogo o PDF
+              PDF para enviar al cliente
               <span class="tag-optional">Opcional</span>
             </label>
             <span class="field-hint">Si tenés un catálogo, lista de precios o ficha técnica en PDF, cargalo acá. Cuando un cliente lo pida, tu asistente lo envía automáticamente. El PDF se guarda solo al subirlo — no necesitás apretar "Guardar todo".</span>
@@ -384,32 +385,6 @@ Turno con seña: $200 (se descuenta del total)"></textarea>
             </div>
             <p id="img-upload-error" style="display:none; color:#ef4444; font-size:12px; margin-top:6px;"></p>
             <p id="img-upload-ok" style="display:none; color:#22c55e; font-size:12px; margin-top:4px;"></p>
-          </div>
-          <div class="field" style="margin-top:32px;">
-            <label class="field-label">
-              Documentos de referencia
-              <span class="tag-optional">Opcional</span>
-            </label>
-            <span class="field-hint">Subí guiones de venta, instrucciones, respuestas a objeciones, etc. Tu asistente los lee como contexto — nunca los envía al cliente. Acepta .txt, .md, .pdf y .docx. Máximo 5 MB por archivo.</span>
-            <div style="margin:10px 0 14px;">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-                <span id="doc-cap-label" style="font-size:12px; color:#aaa;">0 / 8 pág usadas</span>
-                <span id="doc-cap-warn" style="display:none; font-size:12px; color:#f59e0b;">Espacio casi lleno</span>
-              </div>
-              <div style="height:5px; background:#1e1e1e; border-radius:3px; overflow:hidden;">
-                <div id="doc-cap-bar" style="height:100%; width:0%; background:#3b82f6; border-radius:3px; transition:width 0.3s;"></div>
-              </div>
-            </div>
-            <div id="docs-list" style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;"></div>
-            <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-top:4px;">
-              <label id="refdoc-upload-label" style="display:inline-flex; align-items:center; gap:6px; font-size:13px; padding:6px 12px; border:1px solid #2e2e2e; border-radius:4px; background:transparent; color:#ccc; cursor:pointer; white-space:nowrap;">
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1v10M4 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-                Subir documento
-                <input type="file" id="refdoc-file-input" accept=".txt,.md,.pdf,.docx" style="display:none">
-              </label>
-            </div>
-            <p id="doc-upload-error" style="display:none; color:#ef4444; font-size:12px; margin-top:6px;"></p>
-            <p id="doc-upload-ok" style="display:none; color:#22c55e; font-size:12px; margin-top:4px;"></p>
           </div>
         </div>
       </div>
@@ -535,7 +510,64 @@ El precio es $3.500. Si querés, coordinamos un horario para que lo veas."></tex
       </div>
 
       <!-- ══════════════════════════════════════
-           CARD 5 — Cómo actúa
+           CARD 5 — Reglas para tu asistente
+           ══════════════════════════════════════ -->
+      <div class="cfg-card" id="card-reglas">
+        <button class="cfg-card-header" type="button" aria-expanded="false" aria-controls="body-reglas">
+          <div class="cfg-card-title-row">
+            <span class="cfg-card-title">Reglas para tu asistente</span>
+            <span class="cfg-card-summary" id="sum-reglas">Sin reglas</span>
+          </div>
+          <svg class="cfg-card-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="cfg-card-body" id="body-reglas" hidden>
+          <div class="field">
+            <label class="field-label" for="owner_rules">
+              Instrucciones libres
+              <span class="tag-optional">Opcional</span>
+            </label>
+            <span class="field-hint">Escribí cualquier regla específica para tu negocio. El asistente las aplica en cada respuesta. Las reglas de seguridad del sistema siempre tienen más peso, pero con instrucciones bien redactadas podés moldear casi cualquier comportamiento. Máximo 3.000 caracteres.</span>
+            <textarea id="owner_rules" rows="8" maxlength="3000" placeholder="Veterinaria: Si el cliente menciona un animal en emergencia, priorizá siempre dar el teléfono de guardia antes de cualquier otra información.
+
+Salón de belleza: Nunca confirmes turnos directamente — siempre decí que el equipo va a confirmar.
+
+E-commerce: Si preguntan por demoras de envío, mencioná que los plazos son estimativos y pueden variar.
+
+Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempre derivá a la consulta."></textarea>
+            <p style="font-size:11px; color:#555; text-align:right; margin-top:4px;"><span id="owner-rules-count">0</span> / 3000</p>
+          </div>
+
+          <div class="field" style="margin-top:24px;">
+            <label class="field-label">
+              Documentos que el asistente lee
+              <span class="tag-optional">Opcional</span>
+            </label>
+            <span class="field-hint">Subí guiones de venta, instrucciones, respuestas a objeciones, etc. Tu asistente los lee como contexto — nunca los envía al cliente. Acepta .txt, .md, .pdf y .docx. Máximo 5 MB por archivo.</span>
+            <div style="margin:10px 0 14px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                <span id="doc-cap-label" style="font-size:12px; color:#aaa;">0 / 8 pág usadas</span>
+                <span id="doc-cap-warn" style="display:none; font-size:12px; color:#f59e0b;">Espacio casi lleno</span>
+              </div>
+              <div style="height:5px; background:#1e1e1e; border-radius:3px; overflow:hidden;">
+                <div id="doc-cap-bar" style="height:100%; width:0%; background:#3b82f6; border-radius:3px; transition:width 0.3s;"></div>
+              </div>
+            </div>
+            <div id="docs-list" style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;"></div>
+            <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-top:4px;">
+              <label id="refdoc-upload-label" style="display:inline-flex; align-items:center; gap:6px; font-size:13px; padding:6px 12px; border:1px solid #2e2e2e; border-radius:4px; background:transparent; color:#ccc; cursor:pointer; white-space:nowrap;">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1v10M4 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                Subir documento
+                <input type="file" id="refdoc-file-input" accept=".txt,.md,.pdf,.docx" style="display:none">
+              </label>
+            </div>
+            <p id="doc-upload-error" style="display:none; color:#ef4444; font-size:12px; margin-top:6px;"></p>
+            <p id="doc-upload-ok" style="display:none; color:#22c55e; font-size:12px; margin-top:4px;"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════
+           CARD 6 — Cómo actúa
            ══════════════════════════════════════ -->
       <div class="cfg-card" id="card-actua">
         <button class="cfg-card-header" type="button" aria-expanded="false" aria-controls="body-actua">
@@ -947,6 +979,10 @@ El precio es $3.500. Si querés, coordinamos un horario para que lo veas."></tex
       const largoLabel = largoMap[b && b.survey_answers && b.survey_answers.largo_mensajes] || '';
       set('sum-habla', hasMensajes ? (largoLabel ? 'Con mensajes · ' + largoLabel : 'Con mensajes') : 'Sin mensajes');
 
+      // Reglas para tu asistente
+      const hasReglas = b && b.owner_rules && b.owner_rules.trim().length > 0;
+      set('sum-reglas', hasReglas ? b.owner_rules.trim().slice(0, 60) + (b.owner_rules.trim().length > 60 ? '…' : '') : 'Sin reglas');
+
       // Cómo actúa
       const priorMap = { cerrar_rapido: 'Cierra rápido', generar_confianza: 'Genera confianza', equilibrado: 'Equilibrado' };
       const priorLabel = priorMap[b && b.survey_answers && b.survey_answers.prioridad] || '';
@@ -1225,6 +1261,9 @@ El precio es $3.500. Si querés, coordinamos un horario para que lo veas."></tex
       document.getElementById('name').value = b.name || '';
       document.getElementById('business_context').value = b.business_context || '';
       document.getElementById('pricing_info').value = b.pricing_info || '';
+      const ownerRulesEl = document.getElementById('owner_rules');
+      ownerRulesEl.value = b.owner_rules || '';
+      document.getElementById('owner-rules-count').textContent = ownerRulesEl.value.length;
       document.getElementById('website_url').value = b.website_url || '';
 
       if (Array.isArray(b.sales_examples)) {
@@ -1367,6 +1406,10 @@ El precio es $3.500. Si querés, coordinamos un horario para que lo veas."></tex
     document.getElementById('form').addEventListener('input', markDirty);
     document.getElementById('form').addEventListener('change', markDirty);
 
+    document.getElementById('owner_rules').addEventListener('input', function () {
+      document.getElementById('owner-rules-count').textContent = this.value.length;
+    });
+
     document.getElementById('billing_requires_invoice').addEventListener('change', function () {
       document.getElementById('billing-fields').style.display = this.checked ? '' : 'none';
     });
@@ -1451,6 +1494,7 @@ El precio es $3.500. Si querés, coordinamos un horario para que lo veas."></tex
         name: document.getElementById('name').value.trim(),
         business_context: document.getElementById('business_context').value.trim() || null,
         website_url: document.getElementById('website_url').value.trim() || null,
+        owner_rules: document.getElementById('owner_rules').value.trim() || null,
         sales_examples,
         survey_answers: {
           objeciones_precio: document.getElementById('objeciones_precio').value.trim(),
