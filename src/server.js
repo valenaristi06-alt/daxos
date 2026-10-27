@@ -285,6 +285,14 @@ app.use(session({
   },
 }));
 
+// Renueva sesiones persistentes en cada request autenticado (equivale a rolling solo para remember=true)
+app.use((req, res, next) => {
+  if (req.session?.userId && req.session.cookie.maxAge > 0) {
+    req.session.cookie.maxAge = 90 * 24 * 60 * 60 * 1000;
+  }
+  next();
+});
+
 // --- Rate limiter in-memory (5 intentos / 15 min por IP; y por email en login) ---
 // Active when IS_PROD=true OR ENABLE_RATE_LIMIT=true.
 // ENABLE_RATE_LIMIT allows integration tests to test the rate limiter without setting IS_PROD.
@@ -440,7 +448,7 @@ app.post('/auth/login',
       if (!match) return res.status(401).json({ error: 'Credenciales incorrectas' });
       req.session.userId = user.id;
       if (remember !== false) {
-        req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000; // 30 días
+        req.session.cookie.maxAge = 90 * 24 * 60 * 60 * 1000; // 90 días
       } else {
         req.session.cookie.expires = false; // session cookie — se borra al cerrar el navegador
       }
