@@ -5,7 +5,8 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "dev": "nodemon src/server.js",
+    "local-seguro": "bash scripts/start-local.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",
@@ -26,6 +27,7 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.10",
+    "playwright": "^1.64.1",
     "puppeteer": "^25.4.0"
   }
 }

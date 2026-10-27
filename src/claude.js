@@ -88,6 +88,10 @@ function buildSystemPrompt(business, label, bookingContext = null, runtimeCtx = 
     staticLines.push(`\nDocumento disponible: el negocio tiene un archivo "${business.document_name}" (catálogo / lista de precios / información del negocio). Si el cliente pide explícitamente ese documento, su catálogo, lista de precios o algo similar, iniciá tu respuesta con [SEND_DOC] en una línea separada y luego continuá con tu mensaje. Solo usá [SEND_DOC] cuando el pedido sea claro y directo — no lo uses por las dudas.`);
   }
 
+  if (business.owner_rules) {
+    staticLines.push(`\nREGLAS DEL NEGOCIO — instrucciones específicas del dueño. Seguí estas reglas al redactar cada respuesta:\n${business.owner_rules}`);
+  }
+
   staticLines.push('\nSé breve, amable y enfocado en ayudar al cliente a comprar o consultar.');
   staticLines.push('\nESTILO — reglas obligatorias:\n- Prohibido usar frases de relleno de IA: "Buena pregunta", "Excelente pregunta", "Claro que sí", "Por supuesto", "Con gusto", "Desde luego". Respondé directo.\n- No cierres siempre con la misma pregunta. Variá el cierre según el contexto: a veces cerrá con una pregunta relevante, a veces con información, a veces sin pregunta. Nunca uses el mismo cierre dos veces seguidas.');
 

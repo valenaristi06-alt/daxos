@@ -268,19 +268,20 @@ if (IS_PROD && !process.env.SESSION_SECRET) {
   process.exit(1);
 }
 
-const sessionsDb = new Database(path.join(__dirname, '../data/sessions.db'));
+const _dataDir = process.env.DB_DIR || path.join(__dirname, '../data');
+const sessionsDb = new Database(path.join(_dataDir, 'sessions.db'));
 
 app.use(session({
   store: new BetterSQLiteStore({ client: sessionsDb }),
   secret: process.env.SESSION_SECRET || 'dev-secret-change-in-prod',
   resave: false,
   saveUninitialized: false,
-  rolling: true,
+  rolling: false,
   cookie: {
     httpOnly: true,
     secure: IS_PROD,
     sameSite: 'lax',
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 días, se renueva en cada request
+    // maxAge lo fija el handler de login según la casilla "Recordar este dispositivo"
   },
 }));
 
@@ -379,7 +380,7 @@ const OWNER_BUSINESS_FIELDS = new Set([
   'wa_provider', 'phone_number_id', 'waba_id', 'wa_payment_confirmed', 'wa_connected_at',
   'kapso_customer_id',
   'urgent_keywords', 'urgent_alert_enabled',
-  'business_hours', 'after_hours_instructions', 'urgent_phone',
+  'business_hours', 'after_hours_instructions', 'urgent_phone', 'owner_rules',
   'booking_enabled', 'weekly_summary_enabled',
   'billing_requires_invoice', 'billing_legal_name', 'billing_rut', 'billing_address', 'billing_email', 'billing_updated_at',
 ]);
@@ -428,7 +429,7 @@ app.post('/auth/register',
 app.post('/auth/login',
   rateLimit(req => `login:ip:${req.ip}`, req => `login:email:${(req.body?.email || '').toLowerCase().trim()}`),
   async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, remember } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' });
 
     const user = getUserByEmail(email);
@@ -438,6 +439,11 @@ app.post('/auth/login',
       const match = await bcrypt.compare(password, user.password_hash);
       if (!match) return res.status(401).json({ error: 'Credenciales incorrectas' });
       req.session.userId = user.id;
+      if (remember !== false) {
+        req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000; // 30 días
+      } else {
+        req.session.cookie.expires = false; // session cookie — se borra al cerrar el navegador
+      }
       res.json({ ok: true, email: user.email });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -593,7 +599,7 @@ async function fetchAndSummarizeWebsite(rawUrl) {
 }
 
 app.put('/api/business', requireAuth, async (req, res) => {
-  const { name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, pause_reply_text, response_delay, pricing_info, urgent_keywords, urgent_alert_enabled, business_hours, after_hours_instructions, urgent_phone } = req.body;
+  const { name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, pause_reply_text, response_delay, pricing_info, urgent_keywords, urgent_alert_enabled, business_hours, after_hours_instructions, urgent_phone, owner_rules } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'El nombre del negocio es requerido' });
 
   const prtClean = pause_reply_text != null ? String(pause_reply_text).trim() : null;
@@ -633,6 +639,7 @@ app.put('/api/business', requireAuth, async (req, res) => {
       business_hours:        'business_hours'        in req.body ? (bhClean || null)                                            : (currentBiz?.business_hours        ?? null),
       after_hours_instructions: 'after_hours_instructions' in req.body ? (after_hours_instructions ? String(after_hours_instructions).trim() : null) : (currentBiz?.after_hours_instructions ?? null),
       urgent_phone:          'urgent_phone'          in req.body ? (urgent_phone ? String(urgent_phone).trim() : null)          : (currentBiz?.urgent_phone          ?? null),
+      owner_rules:           'owner_rules'           in req.body ? (owner_rules ? String(owner_rules).slice(0, 3000).trim() : null) : (currentBiz?.owner_rules           ?? null),
     });
     console.log('[PUT /api/business] upsertBusiness result id:', business?.id ?? 'null');
     if (!user.business_id) {

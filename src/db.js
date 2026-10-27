@@ -529,6 +529,12 @@ db.exec(`
     console.log('[migration 014] business_hours + after_hours_instructions + urgent_phone added to businesses');
   }
 
+  if (!applied('015_owner_rules')) {
+    db.exec(`ALTER TABLE businesses ADD COLUMN owner_rules TEXT`);
+    db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('015_owner_rules');
+    console.log('[migration 015] owner_rules added to businesses');
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -847,7 +853,7 @@ function autoResumeExpiredConversations() {
   return result.changes;
 }
 
-function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = null, survey_answers = null, business_context = null, website_url = null, response_mode = 'texto', pause_keywords = null, pause_reply_text = null, response_delay = 5, pricing_info = null, urgent_keywords = null, urgent_alert_enabled = 0, business_hours = null, after_hours_instructions = null, urgent_phone = null }) {
+function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = null, survey_answers = null, business_context = null, website_url = null, response_mode = 'texto', pause_keywords = null, pause_reply_text = null, response_delay = 5, pricing_info = null, urgent_keywords = null, urgent_alert_enabled = 0, business_hours = null, after_hours_instructions = null, urgent_phone = null, owner_rules = null }) {
   const serialized = {
     name,
     whatsapp_number: whatsapp_number || null,
@@ -865,6 +871,7 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
     business_hours: business_hours || null,
     after_hours_instructions: after_hours_instructions || null,
     urgent_phone: urgent_phone || null,
+    owner_rules: owner_rules || null,
   };
 
   if (id) {
@@ -877,7 +884,7 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
         response_delay=@response_delay, pricing_info=@pricing_info,
         urgent_keywords=@urgent_keywords, urgent_alert_enabled=@urgent_alert_enabled,
         business_hours=@business_hours, after_hours_instructions=@after_hours_instructions,
-        urgent_phone=@urgent_phone
+        urgent_phone=@urgent_phone, owner_rules=@owner_rules
       WHERE id=@id
     `).run({ ...serialized, id });
     return getBusinessById(id);
@@ -898,8 +905,8 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
   }
 
   const result = db.prepare(`
-    INSERT INTO businesses (name, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, pause_reply_text, response_delay, pricing_info, urgent_keywords, urgent_alert_enabled, business_hours, after_hours_instructions, urgent_phone)
-    VALUES (@name, @sales_examples, @survey_answers, @business_context, @website_url, @response_mode, @pause_keywords, @pause_reply_text, @response_delay, @pricing_info, @urgent_keywords, @urgent_alert_enabled, @business_hours, @after_hours_instructions, @urgent_phone)
+    INSERT INTO businesses (name, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, pause_reply_text, response_delay, pricing_info, urgent_keywords, urgent_alert_enabled, business_hours, after_hours_instructions, urgent_phone, owner_rules)
+    VALUES (@name, @sales_examples, @survey_answers, @business_context, @website_url, @response_mode, @pause_keywords, @pause_reply_text, @response_delay, @pricing_info, @urgent_keywords, @urgent_alert_enabled, @business_hours, @after_hours_instructions, @urgent_phone, @owner_rules)
   `).run(serialized);
   ensureDefaultTags(result.lastInsertRowid);
   return getBusinessById(result.lastInsertRowid);
@@ -949,7 +956,8 @@ function getUserByBusinessId(businessId) {
 
 const stmtGetConversationsByBusiness = db.prepare(`
   SELECT c.*,
-    (SELECT MAX(m.created_at) FROM messages m WHERE m.conversation_id = c.id) AS last_msg_at
+    (SELECT MAX(m.created_at) FROM messages m WHERE m.conversation_id = c.id) AS last_msg_at,
+    (SELECT m.content FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message
   FROM conversations c
   WHERE c.business_id = ?
   ORDER BY last_msg_at DESC, c.created_at DESC

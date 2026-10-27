@@ -168,3 +168,30 @@ button[type="submit"]:disabled { opacity: 0.4; cursor: not-allowed; }
   transition: color 0.15s;
 }
 .pw-toggle:hover { color: var(--text); opacity: 1; }
+
+.remember-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  cursor: pointer;
+  width: fit-content;
+}
+.remember-row input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  min-width: 15px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--text);
+  cursor: pointer;
+  border-radius: 3px;
+}
+.remember-row span {
+  font-size: 13px;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  user-select: none;
+}

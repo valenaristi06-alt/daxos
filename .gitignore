@@ -4,6 +4,9 @@
 !.env.example
 node_modules/
 data/
+data-local-test/
+tmp-audit-screenshots/
+tmp-bh-screenshot.png
 __pycache__/
 *.pyc
 .venv/

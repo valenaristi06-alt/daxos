@@ -78,6 +78,105 @@
       .bh-row { flex-direction: column; gap: 6px; }
       .bh-day-label { min-width: unset; }
     }
+
+    /* ── Section index (chips) ── */
+    .cfg-index {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: var(--bg, #0d0d0d);
+      display: flex;
+      gap: 6px;
+      padding: 10px 0 12px;
+      margin: 0 0 12px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .cfg-index::-webkit-scrollbar { display: none; }
+    .cfg-chip {
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 14px;
+      min-height: 36px;
+      font-size: 12px;
+      line-height: 1;
+      border: 1px solid var(--border-2, #2e2e2e);
+      border-radius: 20px;
+      color: var(--muted, #777);
+      text-decoration: none;
+      white-space: nowrap;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      cursor: pointer;
+    }
+    .cfg-chip:hover, .cfg-chip.active {
+      color: var(--text, #f0ede8);
+      border-color: var(--text, #f0ede8);
+      background: var(--surface, #1a1a1a);
+    }
+    .cfg-chip:focus-visible {
+      outline: 2px solid var(--accent, #e07b39);
+      outline-offset: 2px;
+    }
+
+    /* ── Accordion cards ── */
+    .cfg-card {
+      border: 1px solid var(--border, #1e1e1e);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .cfg-card-header {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 20px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      text-align: left;
+      min-height: 44px;
+      color: var(--text, #f0ede8);
+    }
+    .cfg-card-header:hover { background: var(--surface, #1a1a1a); }
+    .cfg-card-header:focus-visible {
+      outline: 2px solid var(--accent, #e07b39);
+      outline-offset: -2px;
+    }
+    .cfg-card-title-row { flex: 1; min-width: 0; }
+    .cfg-card-title {
+      font-size: 14px;
+      font-weight: 500;
+      display: block;
+      margin-bottom: 2px;
+    }
+    .cfg-card-summary {
+      font-size: 12px;
+      color: var(--muted, #777);
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .cfg-card-summary--error { color: #ef4444; }
+    .cfg-card-chevron {
+      flex-shrink: 0;
+      color: var(--muted, #777);
+      transition: transform 0.2s ease;
+    }
+    .cfg-card-header[aria-expanded="true"] .cfg-card-chevron { transform: rotate(90deg); }
+    .cfg-card-body {
+      padding: 4px 20px 24px;
+      border-top: 1px solid var(--border, #1e1e1e);
+    }
+    .cfg-card-body[hidden] { display: none; }
+    @media (max-width: 480px) {
+      .cfg-card-header { padding: 14px 16px; }
+      .cfg-card-body   { padding: 4px 16px 20px; }
+    }
   </style>
   <!-- Meta SDK: fbAsyncInit debe estar definido ANTES que el script cargue -->
   <script>
@@ -158,419 +257,585 @@
 
     <form id="form" novalidate style="display:none">
 
-      <!-- Tu negocio -->
-      <section class="section">
-        <div class="section-label">
-          <svg class="section-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <rect x="1" y="3" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.4"/>
-            <circle cx="5" cy="8.5" r="2" stroke="currentColor" stroke-width="1.4"/>
-            <line x1="9" y1="7.5" x2="14" y2="7.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-            <line x1="9" y1="10.5" x2="13" y2="10.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-          <span>Tu negocio</span>
-        </div>
+      <!-- ── Índice de secciones ── -->
+      <nav class="cfg-index" aria-label="Secciones de configuración">
+        <a class="cfg-chip" href="#card-whatsapp">WhatsApp</a>
+        <a class="cfg-chip" href="#card-negocio">Tu negocio</a>
+        <a class="cfg-chip" href="#card-horarios">Horarios</a>
+        <a class="cfg-chip" href="#card-habla">Cómo habla</a>
+        <a class="cfg-chip" href="#card-reglas">Reglas</a>
+        <a class="cfg-chip" href="#card-actua">Cómo actúa</a>
+        <a class="cfg-chip" href="#card-avisos">Cuándo avisarte</a>
+        <a class="cfg-chip" href="#card-voz">Voz</a>
+        <a class="cfg-chip" href="#card-plan">Plan y facturación</a>
+        <a class="cfg-chip" href="#section-prueba">Probar</a>
+      </nav>
 
-        <div class="field">
-          <label class="field-label" for="name">Nombre del negocio</label>
-          <input id="name" type="text" placeholder="Ej: Clínica Dental San Martín" required />
+      <!-- ══════════════════════════════════════
+           CARD 1 — WhatsApp
+           ══════════════════════════════════════ -->
+      <div class="cfg-card" id="card-whatsapp">
+        <button class="cfg-card-header" type="button" aria-expanded="true" aria-controls="body-whatsapp">
+          <div class="cfg-card-title-row">
+            <span class="cfg-card-title">WhatsApp</span>
+            <span class="cfg-card-summary cfg-card-summary--error" id="sum-whatsapp">Sin conectar</span>
+          </div>
+          <svg class="cfg-card-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="cfg-card-body" id="body-whatsapp">
+          <div class="field">
+            <label class="field-label">WhatsApp Business</label>
+            <span class="field-hint">Conectá tu número de WhatsApp Business. Esta conexión se guarda automáticamente al terminar — no necesitás apretar "Guardar todo".</span>
+            <div id="wa-connect-status" style="display:none; align-items:center; gap:10px; margin-top:6px;">
+              <span style="color:#22c55e; font-size:13px;">✓ Conectado</span>
+              <span id="wa-connected-number" style="color:#888; font-size:13px;"></span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap;">
+              <button id="btn-wa-connect" type="button" class="btn-wa-connect">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex-shrink:0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.855L.057 23.886a.5.5 0 0 0 .608.617l6.224-1.633A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.686-.528-5.208-1.44l-.374-.22-3.894 1.022 1.001-3.804-.242-.392A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+                Conectar WhatsApp Business
+              </button>
+            </div>
+            <div style="margin-top:14px; padding:14px 16px; background:#111; border:1px solid #222; border-radius:6px; font-size:13px; color:#aaa; line-height:1.7;">
+              <span id="wa-pre-connect-links"><a href="/antes-de-conectar.html" target="_blank" style="color:var(--accent); text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">Antes de conectar, revisá estos 6 puntos</a><br>
+              <a href="/ayuda/conectar-whatsapp" target="_blank" style="color:var(--accent); text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">¿Te apareció un error al conectar?</a><br></span>
+              <span id="wa-tip-weekly" style="color:#888; display:none;">Para que la conexión no se corte, abrí WhatsApp Business en tu celular y usalo al menos una vez por semana.</span>
+            </div>
+            <p id="wa-connect-error" style="display:none; color:#ef4444; font-size:12px; margin-top:6px;"></p>
+            <p id="wa-step" style="display:none; color:#888; font-size:12px; margin-top:4px;"></p>
+          </div>
         </div>
+      </div>
 
-        <div class="field">
-          <label class="field-label" for="business_context">¿Qué hacés o vendés?</label>
-          <span class="field-hint">Describí tu negocio con tus palabras. Tu asistente lo usa para responder preguntas de clientes sobre qué ofrecés.</span>
-          <textarea id="business_context" rows="3" placeholder="Ej: Vendemos departamentos en alquiler y venta en Montevideo, especializados en zona Pocitos y Punta Carretas."></textarea>
-        </div>
-
-        <div class="field">
-          <label class="field-label" for="website_url">
-            Sitio web
-            <span class="tag-optional">Opcional</span>
-          </label>
-          <span class="field-hint">Si tenés sitio web, lo analizamos automáticamente para darle más contexto al asistente.</span>
-          <input id="website_url" type="url" placeholder="https://tuempresa.com" />
-        </div>
-
-        <div class="field">
-          <label class="field-label" for="pricing_info">
-            Tus precios y servicios
-            <span class="tag-optional">Opcional</span>
-          </label>
-          <span class="field-hint">Escribí lo que cobrás. Cuando un cliente pregunte por precio, tu asistente responde directamente con esta información.</span>
-          <textarea id="pricing_info" rows="5" placeholder="Ej:
+      <!-- ══════════════════════════════════════
+           CARD 2 — Tu negocio
+           ══════════════════════════════════════ -->
+      <div class="cfg-card" id="card-negocio">
+        <button class="cfg-card-header" type="button" aria-expanded="false" aria-controls="body-negocio">
+          <div class="cfg-card-title-row">
+            <span class="cfg-card-title">Tu negocio</span>
+            <span class="cfg-card-summary" id="sum-negocio">Sin cargar</span>
+          </div>
+          <svg class="cfg-card-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="cfg-card-body" id="body-negocio" hidden>
+          <div class="field">
+            <label class="field-label" for="name">Nombre del negocio</label>
+            <input id="name" type="text" placeholder="Ej: Clínica Dental San Martín" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="business_context">¿Qué hacés o vendés?</label>
+            <textarea id="business_context" rows="3" placeholder="Ej: Vendemos departamentos en alquiler y venta en Montevideo, especializados en zona Pocitos y Punta Carretas."></textarea>
+          </div>
+          <div class="field">
+            <label class="field-label" for="website_url">
+              Sitio web
+              <span class="tag-optional">Opcional</span>
+            </label>
+            <span class="field-hint">Si tenés sitio web, lo analizamos automáticamente para darle más contexto al asistente.</span>
+            <input id="website_url" type="url" placeholder="https://tuempresa.com" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="pricing_info">
+              Tus precios y servicios
+              <span class="tag-optional">Opcional</span>
+            </label>
+            <span class="field-hint">Escribí lo que cobrás. Cuando un cliente pregunte por precio, tu asistente responde directamente con esta información.</span>
+            <textarea id="pricing_info" rows="5" placeholder="Ej:
 Corte de pelo: $350
 Corte + barba: $500
 Coloración: desde $800 según largo
 Turno con seña: $200 (se descuenta del total)"></textarea>
-        </div>
-
-        <div class="field">
-          <label class="field-label">WhatsApp Business</label>
-          <span class="field-hint">Conectá tu número de WhatsApp Business. Esta conexión se guarda automáticamente al terminar — no necesitás apretar "Guardar todo".</span>
-          <div id="wa-connect-status" style="display:none; align-items:center; gap:10px; margin-top:6px;">
-            <span style="color:#22c55e; font-size:13px;">✓ Conectado</span>
-            <span id="wa-connected-number" style="color:#888; font-size:13px;"></span>
           </div>
-          <div style="display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap;">
-            <button id="btn-wa-connect" type="button" class="btn-wa-connect">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex-shrink:0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.855L.057 23.886a.5.5 0 0 0 .608.617l6.224-1.633A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.686-.528-5.208-1.44l-.374-.22-3.894 1.022 1.001-3.804-.242-.392A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
-              Conectar WhatsApp Business
-            </button>
-          </div>
-
-          <div style="margin-top:14px; padding:14px 16px; background:#111; border:1px solid #222; border-radius:6px; font-size:13px; color:#aaa; line-height:1.7;">
-            <span id="wa-pre-connect-links"><a href="/antes-de-conectar.html" target="_blank" style="color:var(--accent); text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">Antes de conectar, revisá estos 6 puntos</a><br>
-            <a href="/ayuda/conectar-whatsapp" target="_blank" style="color:var(--accent); text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">¿Te apareció un error al conectar?</a><br></span>
-            <span id="wa-tip-weekly" style="color:#888; display:none;">Para que la conexión no se corte, abrí WhatsApp Business en tu celular y usalo al menos una vez por semana.</span>
-          </div>
-
-          <p id="wa-connect-error" style="display:none; color:#ef4444; font-size:12px; margin-top:6px;"></p>
-          <p id="wa-step" style="display:none; color:#888; font-size:12px; margin-top:4px;"></p>
-        </div>
-
-        <div class="field">
-          <label class="field-label">
-            Catálogo o PDF
-            <span class="tag-optional">Opcional</span>
-          </label>
-          <span class="field-hint">Si tenés un catálogo, lista de precios o ficha técnica en PDF, cargalo acá. Cuando un cliente lo pida, tu asistente lo envía automáticamente. El PDF se guarda solo al subirlo — no necesitás apretar "Guardar todo".</span>
-          <div class="doc-upload-area" id="doc-upload-area">
-            <div id="doc-current" style="display:none" class="doc-current">
-              <span class="doc-current-name" id="doc-name"></span>
-              <span class="doc-saved-badge">✓ Guardado</span>
-              <button class="doc-delete-btn" id="doc-delete-btn" title="Eliminar documento">✕</button>
-            </div>
-            <label class="doc-upload-label" id="doc-upload-label">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1v10M4 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-              Subir PDF
-              <input type="file" id="doc-file-input" accept=".pdf,application/pdf" style="display:none">
+          <div class="field">
+            <label class="field-label">
+              PDF para enviar al cliente
+              <span class="tag-optional">Opcional</span>
             </label>
-          </div>
-        </div>
-
-        <div class="field" style="margin-top:32px;">
-          <label class="field-label">
-            Imágenes para enviar
-            <span class="tag-optional">Opcional</span>
-          </label>
-          <span class="field-hint">Subí fotos del local, productos, o personas del equipo. Tu asistente las puede enviar cuando el cliente las pida o cuando ayude a la venta. Máximo 20 imágenes.</span>
-
-          <div id="images-list" style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px;"></div>
-
-          <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-top:4px;">
-            <div style="display:flex; flex-direction:column; gap:4px; flex:1; min-width:160px;">
-              <input id="img-label-input" type="text" placeholder="Ej: Foto del local" maxlength="80" style="font-size:13px; padding:6px 8px; background:#1a1a1a; border:1px solid #2a2a2a; border-radius:4px; color:#f0ede8;" />
+            <span class="field-hint">Si tenés un catálogo, lista de precios o ficha técnica en PDF, cargalo acá. Cuando un cliente lo pida, tu asistente lo envía automáticamente. El PDF se guarda solo al subirlo — no necesitás apretar "Guardar todo".</span>
+            <div class="doc-upload-area" id="doc-upload-area">
+              <div id="doc-current" style="display:none" class="doc-current">
+                <span class="doc-current-name" id="doc-name"></span>
+                <span class="doc-saved-badge">✓ Guardado</span>
+                <button class="doc-delete-btn" id="doc-delete-btn" title="Eliminar documento">✕</button>
+              </div>
+              <label class="doc-upload-label" id="doc-upload-label">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1v10M4 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                Subir PDF
+                <input type="file" id="doc-file-input" accept=".pdf,application/pdf" style="display:none">
+              </label>
             </div>
-            <label id="img-upload-label" style="display:inline-flex; align-items:center; gap:6px; font-size:13px; padding:6px 12px; border:1px solid #2e2e2e; border-radius:4px; background:transparent; color:#ccc; cursor:pointer; white-space:nowrap;">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1v10M4 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-              Subir imagen
-              <input type="file" id="img-file-input" accept="image/jpeg,image/png" style="display:none">
+          </div>
+          <div class="field" style="margin-top:32px;">
+            <label class="field-label">
+              Imágenes para enviar
+              <span class="tag-optional">Opcional</span>
             </label>
-          </div>
-          <p id="img-upload-error" style="display:none; color:#ef4444; font-size:12px; margin-top:6px;"></p>
-          <p id="img-upload-ok" style="display:none; color:#22c55e; font-size:12px; margin-top:4px;"></p>
-        </div>
-
-        <div class="field" style="margin-top:32px;">
-          <label class="field-label">
-            Documentos de referencia
-            <span class="tag-optional">Opcional</span>
-          </label>
-          <span class="field-hint">Subí guiones de venta, instrucciones, respuestas a objeciones, etc. Tu asistente los lee como contexto — nunca los envía al cliente. Acepta .txt, .md, .pdf y .docx. Máximo 5 MB por archivo.</span>
-
-          <!-- Capacity bar -->
-          <div style="margin:10px 0 14px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-              <span id="doc-cap-label" style="font-size:12px; color:#aaa;">0 / 8 pág usadas</span>
-              <span id="doc-cap-warn" style="display:none; font-size:12px; color:#f59e0b;">Espacio casi lleno</span>
+            <span class="field-hint">Subí fotos del local, productos, o personas del equipo. Tu asistente las puede enviar cuando el cliente las pida o cuando ayude a la venta. Máximo 20 imágenes.</span>
+            <div id="images-list" style="display:flex; flex-direction:column; gap:8px; margin-bottom:10px;"></div>
+            <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-top:4px;">
+              <div style="display:flex; flex-direction:column; gap:4px; flex:1; min-width:160px;">
+                <input id="img-label-input" type="text" placeholder="Ej: Foto del local" maxlength="80" style="font-size:13px; padding:6px 8px; background:#1a1a1a; border:1px solid #2a2a2a; border-radius:4px; color:#f0ede8;" />
+              </div>
+              <label id="img-upload-label" style="display:inline-flex; align-items:center; gap:6px; font-size:13px; padding:6px 12px; border:1px solid #2e2e2e; border-radius:4px; background:transparent; color:#ccc; cursor:pointer; white-space:nowrap;">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1v10M4 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                Subir imagen
+                <input type="file" id="img-file-input" accept="image/jpeg,image/png" style="display:none">
+              </label>
             </div>
-            <div style="height:5px; background:#1e1e1e; border-radius:3px; overflow:hidden;">
-              <div id="doc-cap-bar" style="height:100%; width:0%; background:#3b82f6; border-radius:3px; transition:width 0.3s;"></div>
-            </div>
+            <p id="img-upload-error" style="display:none; color:#ef4444; font-size:12px; margin-top:6px;"></p>
+            <p id="img-upload-ok" style="display:none; color:#22c55e; font-size:12px; margin-top:4px;"></p>
           </div>
-
-          <div id="docs-list" style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;"></div>
-
-          <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-top:4px;">
-            <label id="refdoc-upload-label" style="display:inline-flex; align-items:center; gap:6px; font-size:13px; padding:6px 12px; border:1px solid #2e2e2e; border-radius:4px; background:transparent; color:#ccc; cursor:pointer; white-space:nowrap;">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1v10M4 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-              Subir documento
-              <input type="file" id="refdoc-file-input" accept=".txt,.md,.pdf,.docx" style="display:none">
-            </label>
-          </div>
-          <p id="doc-upload-error" style="display:none; color:#ef4444; font-size:12px; margin-top:6px;"></p>
-          <p id="doc-upload-ok" style="display:none; color:#22c55e; font-size:12px; margin-top:4px;"></p>
         </div>
-
-        <div class="field" style="margin-top: 44px;">
-          <label class="field-label" for="owner_phone">
-            Tu número personal, para avisos
-            <span class="tag-optional">Opcional</span>
-          </label>
-          <span class="field-hint">Es tu celular, no el del negocio. Acá te avisamos si hace falta que atiendas vos.</span>
-          <input id="owner_phone" type="tel" placeholder="+598912345678" />
-        </div>
-      </section>
-
-      <hr class="divider" />
-
-      <!-- Cómo habla tu asistente -->
-      <section class="section">
-        <div class="section-label">
-          <svg class="section-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M2 3C2 2 3 1 4 1H12C13 1 14 2 14 3V9C14 10 13 11 12 11H7L4 14V11C3 11 2 10 2 9V3Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
-          </svg>
-          <span>Cómo habla tu asistente</span>
-        </div>
-
-        <div class="field">
-          <label class="field-label" for="sales_examples">Mensajes tuyos reales</label>
-          <span class="field-hint">Pegá acá mensajes que ya usás con tus clientes — como si hablaras por WhatsApp. Separá cada ejemplo con una línea en blanco. Tu asistente va a escribir igual que vos.</span>
-          <textarea id="sales_examples" rows="8" placeholder="Ej:
-
-¡Hola! Gracias por escribirnos. ¿En qué te puedo ayudar hoy?
-
-Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></textarea>
-        </div>
-      </section>
-
-      <!-- Style profile card (shown after save/analyze) -->
-      <div class="style-card" id="style-card" style="display:none">
-        <div class="style-card-header">
-          <div>
-            <p class="style-card-title">Así hablás</p>
-          </div>
-          <button type="button" class="btn-reanalyze" id="btn-reanalyze">Volver a analizar</button>
-        </div>
-        <div class="style-grid" id="style-grid"></div>
       </div>
 
-      <hr class="divider" />
-
-      <!-- Cómo actúa tu asistente -->
-      <section class="section">
-        <div class="section-label">
-          <svg class="section-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <line x1="2" y1="4" x2="14" y2="4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-            <line x1="2" y1="8" x2="14" y2="8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-            <line x1="2" y1="12" x2="14" y2="12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-            <circle cx="5" cy="4" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
-            <circle cx="10" cy="8" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
-            <circle cx="6" cy="12" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
-          </svg>
-          <span>Cómo actúa tu asistente</span>
-        </div>
-
-        <div class="field">
-          <label class="field-label" for="objeciones_precio">¿Qué decís cuando te dicen que es caro? <span class="tag-optional">Opcional</span></label>
-          <textarea id="objeciones_precio" rows="3" placeholder="Ej: Explicamos el valor del servicio y ofrecemos cuotas sin interés si es necesario."></textarea>
-        </div>
-
-        <div class="field subsection">
-          <label class="field-label">Cuando alguien escribe, ¿qué hace primero?</label>
-          <div class="radio-group" id="prioridad-group">
-            <label class="radio-option" data-value="cerrar_rapido">
-              <input type="radio" name="prioridad" value="cerrar_rapido" />
-              <span class="radio-label">Cerrar rápido</span>
-              <span class="radio-desc">Ir directo al precio y agendar</span>
-            </label>
-            <label class="radio-option" data-value="generar_confianza">
-              <input type="radio" name="prioridad" value="generar_confianza" />
-              <span class="radio-label">Generar confianza primero</span>
-              <span class="radio-desc">Contestar dudas antes de ofrecer</span>
-            </label>
-            <label class="radio-option" data-value="equilibrado">
-              <input type="radio" name="prioridad" value="equilibrado" />
-              <span class="radio-label">Equilibrado</span>
-              <span class="radio-desc">Según cómo fluya la conversación</span>
-            </label>
+      <!-- ══════════════════════════════════════
+           CARD 3 — Horarios
+           ══════════════════════════════════════ -->
+      <div class="cfg-card" id="card-horarios">
+        <button class="cfg-card-header" type="button" aria-expanded="false" aria-controls="body-horarios">
+          <div class="cfg-card-title-row">
+            <span class="cfg-card-title">Horarios</span>
+            <span class="cfg-card-summary" id="sum-horarios">Sin configurar</span>
           </div>
-        </div>
-
-        <div class="field subsection">
-          <label class="field-label" for="sin_respuesta">¿Qué hace si alguien no te responde?</label>
-          <select id="sin_respuesta">
-            <option value="">Seleccioná una opción</option>
-            <option value="no_hacer_nada">No hacer nada, esperar</option>
-            <option value="recordatorio_24h">Mandar un recordatorio a las 24 hs</option>
-            <option value="dos_recordatorios">Dos recordatorios y cerrar</option>
-            <option value="seguir_insistiendo">Seguir insistiendo hasta recibir respuesta</option>
-          </select>
-        </div>
-
-        <div class="field subsection">
-          <label class="field-label">¿Qué tan largos son los mensajes?</label>
-          <div class="radio-group" id="largo-group">
-            <label class="radio-option" data-value="corto">
-              <input type="radio" name="largo_mensajes" value="corto" />
-              <span class="radio-label">Corto</span>
-              <span class="radio-desc">1–2 líneas por mensaje</span>
-            </label>
-            <label class="radio-option" data-value="medio">
-              <input type="radio" name="largo_mensajes" value="medio" />
-              <span class="radio-label">Medio</span>
-              <span class="radio-desc">3–5 líneas</span>
-            </label>
-            <label class="radio-option" data-value="largo">
-              <input type="radio" name="largo_mensajes" value="largo" />
-              <span class="radio-label">Largo</span>
-              <span class="radio-desc">Párrafos completos con detalle</span>
-            </label>
-          </div>
-        </div>
-
-        <div class="field subsection">
-          <label class="field-label" for="pause_keywords">Pasar la conversación a una persona <span class="tag-optional">Opcional</span></label>
-          <span class="field-hint">Si el cliente escribe alguna de estas palabras, el bot se pausa y te avisamos para que sigas vos. Ej: hablar con una persona, reclamo.</span>
-          <input id="pause_keywords" type="text" placeholder="Ej: hablar con una persona, reclamo, cancelar" />
-        </div>
-
-        <div class="field subsection">
-          <label class="field-label" for="pause_reply_text">Mensaje al cliente cuando se pausa <span class="tag-optional">Opcional</span></label>
-          <span class="field-hint">Tu asistente envía este texto una vez cuando detecta una palabra clave. Máximo 300 caracteres.</span>
-          <textarea id="pause_reply_text" maxlength="300" rows="2" placeholder="Te paso con una persona del equipo, te escribe enseguida."></textarea>
-          <p id="err-pause-reply-text" style="display:none; color:#ef4444; font-size:12px; margin-top:4px;"></p>
-        </div>
-
-        <div class="field subsection">
-          <label class="field-label">Avisos de urgencia <span class="tag-optional">Opcional</span></label>
-          <span class="field-hint">Si el cliente escribe alguna de estas palabras, te avisamos por mail, pero el bot sigue respondiendo. Ej: sangra, urgente. No repitas las palabras de la otra lista.</span>
-          <div style="display:flex;align-items:center;gap:10px;margin:8px 0">
-            <label class="bh-day-label" style="min-width:unset;margin:0">
-              <input type="checkbox" id="urgent_alert_enabled" />
-              <span class="bh-day-sw"></span>
-            </label>
-            <span id="urgent-alert-label" style="font-size:13px;color:var(--muted)">Apagado</span>
-          </div>
-          <input id="urgent_keywords" type="text" placeholder="Ej: emergencia, urgente, necesito ayuda ya" />
-        </div>
-
-        <div class="field subsection">
-          <label class="field-label">Horario de atención <span class="tag-optional">Opcional</span></label>
-          <span class="field-hint">El bot avisará si está abierto o cerrado cuando el cliente escriba. Dejalo vacío si atendés siempre.</span>
-          <div id="bh-days"></div>
-          <p id="err-business-hours" style="display:none; color:#ef4444; font-size:12px; margin-top:4px;"></p>
-        </div>
-
-        <div class="field subsection">
-          <label class="field-label" for="after_hours_instructions">Qué hacer cuando estamos cerrados <span class="tag-optional">Opcional</span></label>
-          <span class="field-hint">El bot usa este texto cuando el cliente escribe fuera del horario configurado.</span>
-          <textarea id="after_hours_instructions" rows="2" style="min-height:64px" placeholder="Si es una urgencia, llamá al 099 000 000. Si no, te respondemos cuando abramos."></textarea>
-        </div>
-
-        <div class="field subsection">
-          <label class="field-label" for="urgent_phone">Teléfono de urgencias fuera de horario <span class="tag-optional">Opcional</span></label>
-          <span class="field-hint">Si el cliente tiene una urgencia fuera de horario, el bot indica este número.</span>
-          <input id="urgent_phone" type="tel" placeholder="Ej: 099 000 000" />
-        </div>
-
-        <div class="field subsection">
-          <label class="field-label">¿Cómo responde?</label>
-          <div class="radio-group" id="response-mode-group">
-            <label class="radio-option" id="rm-texto-option">
-              <input type="radio" name="response_mode" value="texto" />
-              <span class="radio-label">Solo texto</span>
-              <span class="radio-desc">Todos los mensajes en texto</span>
-            </label>
-            <label class="radio-option" id="rm-audio-key-option">
-              <input type="radio" name="response_mode" value="audio_key" />
-              <span class="radio-label">Audio en momentos clave</span>
-              <span class="radio-desc">Audio solo en el primer mensaje de cada conversación</span>
-            </label>
-            <label class="radio-option" id="rm-audio-option">
-              <input type="radio" name="response_mode" value="audio" />
-              <span class="radio-label">Audio siempre</span>
-              <span class="radio-desc">Todas las respuestas en audio</span>
-            </label>
-          </div>
-          <p class="field-hint" id="rm-hint" style="display:none; margin-top:6px;"></p>
-        </div>
-
-        <div class="field subsection">
-          <label class="field-label" for="response_delay">¿Qué tan rápido responde?</label>
-          <span class="field-hint">Cuántos segundos espera antes de responder. En 0 responde al instante; en 20 espera un momento, como haría una persona.</span>
-          <div class="delay-slider-wrap">
-            <span class="delay-label">Instantáneo</span>
-            <input type="range" id="response_delay" min="0" max="20" step="1" value="5" class="delay-slider" />
-            <span class="delay-label">Como una persona real</span>
-          </div>
-          <p class="delay-value-display">Espera: <strong id="delay-display">5</strong> segundos</p>
-        </div>
-
-        <div class="field">
-          <label class="field-label">¿Recibís pedidos de turno por WhatsApp?</label>
-          <span class="field-hint">Si lo activás, el asistente va a recolectar los datos del cliente y te va a avisar por WhatsApp para que confirmes vos. No agenda solo.</span>
-          <label class="toggle-row">
-            <input type="checkbox" id="booking_enabled" />
-            <span class="toggle-switch"></span>
-            <span class="toggle-label" id="booking-label">Apagado</span>
-          </label>
-        </div>
-
-        <div class="field">
-          <label class="field-label">Resumen semanal por WhatsApp</label>
-          <span class="field-hint">Cada lunes a las 9:00 te mandamos un resumen de la semana: consultas respondidas, derivaciones y tiempo de respuesta promedio. Solo se envía si hubo actividad.</span>
-          <label class="toggle-row">
-            <input type="checkbox" id="weekly_summary_enabled" />
-            <span class="toggle-switch"></span>
-            <span class="toggle-label" id="weekly-summary-label">Activado</span>
-          </label>
-        </div>
-
-      </section>
-
-      <hr class="divider" />
-
-      <!-- Datos para facturar -->
-      <section class="section">
-        <div class="section-label">
-          <svg class="section-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <rect x="2" y="3" width="12" height="10" rx="1" stroke="currentColor" stroke-width="1.4"/>
-            <line x1="5" y1="7" x2="11" y2="7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-            <line x1="5" y1="10" x2="8" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-          <span>Datos para facturar</span>
-        </div>
-
-        <div class="field">
-          <label class="toggle-row">
-            <input type="checkbox" id="billing_requires_invoice" />
-            <span class="toggle-switch"></span>
-            <span class="toggle-label">Soy empresa y necesito factura con IVA discriminado</span>
-          </label>
-        </div>
-
-        <div id="billing-fields" style="display:none">
+          <svg class="cfg-card-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="cfg-card-body" id="body-horarios" hidden>
           <div class="field">
-            <label class="field-label" for="billing_legal_name">Razón social</label>
-            <input id="billing_legal_name" type="text" maxlength="200" placeholder="Ej: Mi Empresa S.A." />
-            <p id="billing-err-legal-name" style="display:none; color:#ef4444; font-size:12px; margin-top:4px;"></p>
+            <label class="field-label">Horario de atención <span class="tag-optional">Opcional</span></label>
+            <span class="field-hint">El bot avisará si está abierto o cerrado cuando el cliente escriba. Dejalo vacío si atendés siempre.</span>
+            <div id="bh-days"></div>
+            <p id="err-business-hours" style="display:none; color:#ef4444; font-size:12px; margin-top:4px;"></p>
           </div>
           <div class="field">
-            <label class="field-label" for="billing_rut">RUT</label>
-            <input id="billing_rut" type="text" maxlength="20" placeholder="12 dígitos (se limpian espacios y guiones)" />
-            <p id="billing-err-rut" style="display:none; color:#ef4444; font-size:12px; margin-top:4px;"></p>
+            <label class="field-label" for="after_hours_instructions">Qué hacer cuando estamos cerrados <span class="tag-optional">Opcional</span></label>
+            <span class="field-hint">El bot usa este texto cuando el cliente escribe fuera del horario configurado.</span>
+            <textarea id="after_hours_instructions" rows="2" style="min-height:64px" placeholder="Si es una urgencia, llamá al 099 000 000. Si no, te respondemos cuando abramos."></textarea>
           </div>
           <div class="field">
-            <label class="field-label" for="billing_address">Domicilio fiscal</label>
-            <input id="billing_address" type="text" maxlength="300" placeholder="Ej: 18 de Julio 1234, Montevideo" />
-            <p id="billing-err-address" style="display:none; color:#ef4444; font-size:12px; margin-top:4px;"></p>
+            <label class="field-label" for="urgent_phone">Teléfono de urgencias fuera de horario <span class="tag-optional">Opcional</span></label>
+            <span class="field-hint">Si el cliente tiene una urgencia fuera de horario, el bot indica este número.</span>
+            <input id="urgent_phone" type="tel" placeholder="Ej: 099 000 000" />
           </div>
-          <div class="field">
-            <label class="field-label" for="billing_email">Mail para recibir la factura</label>
-            <input id="billing_email" type="email" maxlength="254" placeholder="factura@miempresa.com" />
-            <p id="billing-err-email" style="display:none; color:#ef4444; font-size:12px; margin-top:4px;"></p>
-          </div>
-          <p class="field-hint">Usamos estos datos solo para emitirte la factura.</p>
         </div>
-      </section>
+      </div>
+
+      <!-- ══════════════════════════════════════
+           CARD 4 — Cómo habla
+           ══════════════════════════════════════ -->
+      <div class="cfg-card" id="card-habla">
+        <button class="cfg-card-header" type="button" aria-expanded="false" aria-controls="body-habla">
+          <div class="cfg-card-title-row">
+            <span class="cfg-card-title">Cómo habla</span>
+            <span class="cfg-card-summary" id="sum-habla">Sin mensajes</span>
+          </div>
+          <svg class="cfg-card-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="cfg-card-body" id="body-habla" hidden>
+          <div class="field">
+            <label class="field-label" for="sales_examples">Mensajes tuyos reales</label>
+            <span class="field-hint">Pegá acá mensajes que ya usás con tus clientes — como si hablaras por WhatsApp. Separá cada ejemplo con una línea en blanco. Tu asistente va a escribir igual que vos.</span>
+            <textarea id="sales_examples" rows="8" placeholder="Ej:
+Hola, ¿cómo estás? ¿En qué te puedo ayudar?
+
+Tenemos disponible para este fin de semana, ¿te interesa?
+
+El precio es $3.500. Si querés, coordinamos un horario para que lo veas."></textarea>
+          </div>
+
+          <!-- Style profile card (shown after save/analyze) -->
+          <div class="style-card" id="style-card" style="display:none">
+            <div class="style-card-header">
+              <div>
+                <p class="style-card-title">Así hablás</p>
+              </div>
+              <button type="button" class="btn-reanalyze" id="btn-reanalyze">Volver a analizar</button>
+            </div>
+            <div class="style-grid" id="style-grid"></div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">¿Qué tan largos son los mensajes?</label>
+            <div class="radio-group" id="largo-group">
+              <label class="radio-option" data-value="corto">
+                <input type="radio" name="largo_mensajes" value="corto" />
+                <span class="radio-label">Corto</span>
+                <span class="radio-desc">1–2 líneas por mensaje</span>
+              </label>
+              <label class="radio-option" data-value="medio">
+                <input type="radio" name="largo_mensajes" value="medio" />
+                <span class="radio-label">Medio</span>
+                <span class="radio-desc">3–5 líneas</span>
+              </label>
+              <label class="radio-option" data-value="largo">
+                <input type="radio" name="largo_mensajes" value="largo" />
+                <span class="radio-label">Largo</span>
+                <span class="radio-desc">Párrafos completos con detalle</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">¿Cómo responde?</label>
+            <div class="radio-group" id="response-mode-group">
+              <label class="radio-option" id="rm-texto-option">
+                <input type="radio" name="response_mode" value="texto" />
+                <span class="radio-label">Solo texto</span>
+              </label>
+              <label class="radio-option" id="rm-audio-key-option">
+                <input type="radio" name="response_mode" value="audio_key" />
+                <span class="radio-label">Audio en momentos clave</span>
+                <span class="radio-desc">Audio solo en el primer mensaje de cada conversación</span>
+              </label>
+              <label class="radio-option" id="rm-audio-option">
+                <input type="radio" name="response_mode" value="audio" />
+                <span class="radio-label">Audio siempre</span>
+                <span class="radio-desc">Todas las respuestas en audio</span>
+              </label>
+            </div>
+            <p class="field-hint" id="rm-hint" style="display:none; margin-top:6px;"></p>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="response_delay">¿Qué tan rápido responde?</label>
+            <span class="field-hint">Cuántos segundos espera antes de responder. En 0 responde al instante; en 20 espera un momento, como haría una persona.</span>
+            <div class="delay-slider-wrap">
+              <span class="delay-label">Instantáneo</span>
+              <input type="range" id="response_delay" min="0" max="20" step="1" value="5" class="delay-slider" />
+              <span class="delay-label">Como una persona real</span>
+            </div>
+            <p class="delay-value-display">Espera: <strong id="delay-display">5</strong> segundos</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════
+           CARD 5 — Reglas para tu asistente
+           ══════════════════════════════════════ -->
+      <div class="cfg-card" id="card-reglas">
+        <button class="cfg-card-header" type="button" aria-expanded="false" aria-controls="body-reglas">
+          <div class="cfg-card-title-row">
+            <span class="cfg-card-title">Reglas para tu asistente</span>
+            <span class="cfg-card-summary" id="sum-reglas">Sin reglas</span>
+          </div>
+          <svg class="cfg-card-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="cfg-card-body" id="body-reglas" hidden>
+          <div class="field">
+            <label class="field-label" for="owner_rules">
+              Instrucciones libres
+              <span class="tag-optional">Opcional</span>
+            </label>
+            <span class="field-hint">Escribí cualquier regla específica para tu negocio. El asistente las aplica en cada respuesta. Las reglas de seguridad del sistema siempre tienen más peso, pero con instrucciones bien redactadas podés moldear casi cualquier comportamiento. Máximo 3.000 caracteres.</span>
+            <textarea id="owner_rules" rows="8" maxlength="3000" placeholder="Veterinaria: Si el cliente menciona un animal en emergencia, priorizá siempre dar el teléfono de guardia antes de cualquier otra información.
+
+Salón de belleza: Nunca confirmes turnos directamente — siempre decí que el equipo va a confirmar.
+
+E-commerce: Si preguntan por demoras de envío, mencioná que los plazos son estimativos y pueden variar.
+
+Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempre derivá a la consulta."></textarea>
+            <p style="font-size:11px; color:#555; text-align:right; margin-top:4px;"><span id="owner-rules-count">0</span> / 3000</p>
+          </div>
+
+          <div class="field" style="margin-top:24px;">
+            <label class="field-label">
+              Documentos que el asistente lee
+              <span class="tag-optional">Opcional</span>
+            </label>
+            <span class="field-hint">Subí guiones de venta, instrucciones, respuestas a objeciones, etc. Tu asistente los lee como contexto — nunca los envía al cliente. Acepta .txt, .md, .pdf y .docx. Máximo 5 MB por archivo.</span>
+            <div style="margin:10px 0 14px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                <span id="doc-cap-label" style="font-size:12px; color:#aaa;">0 / 8 pág usadas</span>
+                <span id="doc-cap-warn" style="display:none; font-size:12px; color:#f59e0b;">Espacio casi lleno</span>
+              </div>
+              <div style="height:5px; background:#1e1e1e; border-radius:3px; overflow:hidden;">
+                <div id="doc-cap-bar" style="height:100%; width:0%; background:#3b82f6; border-radius:3px; transition:width 0.3s;"></div>
+              </div>
+            </div>
+            <div id="docs-list" style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;"></div>
+            <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-top:4px;">
+              <label id="refdoc-upload-label" style="display:inline-flex; align-items:center; gap:6px; font-size:13px; padding:6px 12px; border:1px solid #2e2e2e; border-radius:4px; background:transparent; color:#ccc; cursor:pointer; white-space:nowrap;">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1v10M4 5l4-4 4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                Subir documento
+                <input type="file" id="refdoc-file-input" accept=".txt,.md,.pdf,.docx" style="display:none">
+              </label>
+            </div>
+            <p id="doc-upload-error" style="display:none; color:#ef4444; font-size:12px; margin-top:6px;"></p>
+            <p id="doc-upload-ok" style="display:none; color:#22c55e; font-size:12px; margin-top:4px;"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════
+           CARD 6 — Cómo actúa
+           ══════════════════════════════════════ -->
+      <div class="cfg-card" id="card-actua">
+        <button class="cfg-card-header" type="button" aria-expanded="false" aria-controls="body-actua">
+          <div class="cfg-card-title-row">
+            <span class="cfg-card-title">Cómo actúa</span>
+            <span class="cfg-card-summary" id="sum-actua">Sin configurar</span>
+          </div>
+          <svg class="cfg-card-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="cfg-card-body" id="body-actua" hidden>
+          <div class="field">
+            <label class="field-label">Cuando alguien escribe, ¿qué hace primero?</label>
+            <div class="radio-group" id="prioridad-group">
+              <label class="radio-option" data-value="cerrar_rapido">
+                <input type="radio" name="prioridad" value="cerrar_rapido" />
+                <span class="radio-label">Cerrar rápido</span>
+              </label>
+              <label class="radio-option" data-value="generar_confianza">
+                <input type="radio" name="prioridad" value="generar_confianza" />
+                <span class="radio-label">Generar confianza primero</span>
+              </label>
+              <label class="radio-option" data-value="equilibrado">
+                <input type="radio" name="prioridad" value="equilibrado" />
+                <span class="radio-label">Equilibrado</span>
+              </label>
+            </div>
+          </div>
+          <div class="field">
+            <label class="field-label" for="objeciones_precio">¿Qué decís cuando te dicen que es caro? <span class="tag-optional">Opcional</span></label>
+            <textarea id="objeciones_precio" rows="3" placeholder="Ej: Explicamos el valor del servicio y ofrecemos cuotas sin interés si es necesario."></textarea>
+          </div>
+          <div class="field">
+            <label class="field-label">¿Recibís pedidos de turno por WhatsApp?</label>
+            <span class="field-hint">Si lo activás, el asistente va a recolectar los datos del cliente y te va a avisar por WhatsApp para que confirmes vos. No agenda solo.</span>
+            <label class="toggle-row">
+              <input type="checkbox" id="booking_enabled" />
+              <span class="toggle-switch"></span>
+              <span class="toggle-label" id="booking-label">Apagado</span>
+            </label>
+          </div>
+          <div class="field">
+            <label class="field-label" for="sin_respuesta">¿Qué hace si alguien no te responde?</label>
+            <select id="sin_respuesta">
+              <option value="">Seleccioná una opción</option>
+              <option value="no_hacer_nada">No hacer nada, esperar</option>
+              <option value="recordatorio_24h">Mandar un recordatorio a las 24 hs</option>
+              <option value="dos_recordatorios">Dos recordatorios y cerrar</option>
+              <option value="seguir_insistiendo">Seguir insistiendo hasta recibir respuesta</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════
+           CARD 6 — Cuándo avisarte
+           ══════════════════════════════════════ -->
+      <div class="cfg-card" id="card-avisos">
+        <button class="cfg-card-header" type="button" aria-expanded="false" aria-controls="body-avisos">
+          <div class="cfg-card-title-row">
+            <span class="cfg-card-title">Cuándo avisarte</span>
+            <span class="cfg-card-summary" id="sum-avisos">Sin configurar</span>
+          </div>
+          <svg class="cfg-card-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="cfg-card-body" id="body-avisos" hidden>
+          <div class="field">
+            <label class="field-label" for="owner_phone">
+              Tu número personal, para avisos
+              <span class="tag-optional">Opcional</span>
+            </label>
+            <span class="field-hint">Es tu celular, no el del negocio. Acá te avisamos si hace falta que atiendas vos.</span>
+            <input id="owner_phone" type="tel" placeholder="+598912345678" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="pause_keywords">Pasar la conversación a una persona <span class="tag-optional">Opcional</span></label>
+            <span class="field-hint">Si el cliente escribe alguna de estas palabras, el bot se pausa y te avisamos para que sigas vos. Ej: hablar con una persona, reclamo.</span>
+            <input id="pause_keywords" type="text" placeholder="Ej: hablar con una persona, reclamo, cancelar" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="pause_reply_text">Mensaje al cliente cuando se pausa <span class="tag-optional">Opcional</span></label>
+            <span class="field-hint">Tu asistente envía este texto una vez cuando detecta una palabra clave. Máximo 300 caracteres.</span>
+            <textarea id="pause_reply_text" maxlength="300" rows="2" placeholder="Te paso con una persona del equipo, te escribe enseguida."></textarea>
+            <p id="err-pause-reply-text" style="display:none; color:#ef4444; font-size:12px; margin-top:4px;"></p>
+          </div>
+          <div class="field">
+            <label class="field-label">Avisos de urgencia <span class="tag-optional">Opcional</span></label>
+            <span class="field-hint">Si el cliente escribe alguna de estas palabras, te avisamos por mail, pero el bot sigue respondiendo. Ej: sangra, urgente. No repitas las palabras de la otra lista.</span>
+            <div style="display:flex;align-items:center;gap:10px;margin:8px 0">
+              <label class="bh-day-label" style="min-width:unset;margin:0">
+                <input type="checkbox" id="urgent_alert_enabled" />
+                <span class="bh-day-sw"></span>
+              </label>
+              <span id="urgent-alert-label" style="font-size:13px;color:var(--muted)">Apagado</span>
+            </div>
+            <input id="urgent_keywords" type="text" placeholder="Ej: emergencia, urgente, necesito ayuda ya" />
+          </div>
+          <div class="field">
+            <label class="field-label">Resumen semanal por WhatsApp</label>
+            <span class="field-hint">Cada lunes a las 9:00 te mandamos un resumen de la semana: consultas respondidas, derivaciones y tiempo de respuesta promedio. Solo se envía si hubo actividad.</span>
+            <label class="toggle-row">
+              <input type="checkbox" id="weekly_summary_enabled" />
+              <span class="toggle-switch"></span>
+              <span class="toggle-label" id="weekly-summary-label">Activado</span>
+            </label>
+          </div>
+
+          <!-- Contactos que atendés vos -->
+          <div id="excluded-section" style="margin-top:32px;">
+            <p class="field-label" style="margin-bottom:4px;">Contactos que atendés vos</p>
+            <p class="field-hint" style="margin-bottom:12px;">Los números de esta lista los atendés vos: el bot no les responde, pero sus mensajes se guardan. También podés marcar chats desde Conversaciones, tildándolos y tocando "Atiendo yo".</p>
+            <div class="field">
+              <label class="field-label" for="excluded-phones-input">Agregar números</label>
+              <span class="field-hint">Uno por línea. Aceptamos +598 98 323 308, 098 323 308 o 59898323308.</span>
+              <textarea id="excluded-phones-input" rows="4" maxlength="5000"
+                placeholder="098 323 308&#10;+598 91 234 567&#10;59899112233"
+                style="width:100%;box-sizing:border-box;font-size:13px;padding:8px 10px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;color:#f0ede8;resize:vertical;margin-top:6px;"></textarea>
+              <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+                <button type="button" class="btn-save" id="btn-add-excluded" style="padding:7px 18px;font-size:13px;">Agregar</button>
+                <span id="excluded-add-status" style="font-size:12px;color:#888;"></span>
+              </div>
+              <p style="font-size:11px;color:#555;margin:6px 0 0;">Máximo 500 por negocio.</p>
+            </div>
+            <div style="margin-top:16px;">
+              <p style="font-size:11px;color:#555;margin:0 0 8px;text-transform:uppercase;letter-spacing:.05em;font-family:var(--mono);">Lista actual</p>
+              <div id="excluded-list" style="display:flex;flex-direction:column;gap:4px;">
+                <p id="excluded-empty" style="font-size:13px;color:#555;margin:0;">Sin contactos excluidos.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════
+           CARD 7 — Voz
+           ══════════════════════════════════════ -->
+      <div class="cfg-card" id="card-voz">
+        <button class="cfg-card-header" type="button" aria-expanded="false" aria-controls="body-voz">
+          <div class="cfg-card-title-row">
+            <span class="cfg-card-title">Voz</span>
+            <span class="cfg-card-summary" id="sum-voz">Sin clonar</span>
+          </div>
+          <svg class="cfg-card-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="cfg-card-body" id="body-voz" hidden>
+          <p class="voice-section-desc">Clonamos tu voz para que las respuestas por audio suenen como vos, no como un asistente genérico. Es opcional — si preferís, podés dejar todo en texto.</p>
+          <p class="voice-autosave-note">Tu voz se guarda automáticamente cuando confirmás la grabación. No necesitás apretar "Guardar todo".</p>
+
+          <div id="voice-plan-lock" style="display:none" class="voice-plan-lock">
+            <p class="voice-lock-msg" id="voice-lock-msg"></p>
+            <a href="#" target="_blank" rel="noopener" class="voice-lock-link" id="voice-lock-cta"></a>
+          </div>
+
+          <div id="voice-status-saved" style="display:none" class="voice-cloned-badge">
+            <span class="voice-cloned-dot"></span>
+            Voz clonada activa
+          </div>
+
+          <div id="voice-input">
+            <button type="button" class="btn-voice-cancel" id="btn-voice-cancel" style="display:none">← Volver a mi voz activa</button>
+            <div class="field">
+              <label class="consent-label">
+                <input type="checkbox" id="voice-consent" />
+                <span>Confirmo que esta es mi voz (o tengo autorización explícita de su dueño) y autorizo usarla para generar respuestas automáticas de este negocio.</span>
+              </label>
+            </div>
+
+            <p class="voice-tip"><span class="voice-tip-label">&gt; tip</span> 2–3 min, lugar silencioso, hablá natural — como le responderías a un cliente. Cuanto más variado, mejor resultado.</p>
+
+            <div class="voice-mode-tabs" id="voice-mode-tabs">
+              <button type="button" class="voice-tab active" data-mode="record">Grabar ahora</button>
+              <button type="button" class="voice-tab" data-mode="upload">Subir archivo</button>
+            </div>
+
+            <div class="voice-panel" id="panel-record">
+              <div class="record-idle" id="record-idle">
+                <p class="field-hint">Grabá entre 1 y 3 minutos hablando con naturalidad — como si le hablaras a un cliente.</p>
+                <button type="button" class="btn-record-start" id="btn-record-start">
+                  <span class="rec-dot"></span> Grabar
+                </button>
+              </div>
+              <div class="record-active" id="record-active" style="display:none">
+                <span class="rec-dot pulsing"></span>
+                <span class="rec-timer" id="rec-timer">0:00</span>
+                <button type="button" class="btn-record-stop" id="btn-record-stop">■ Detener</button>
+              </div>
+            </div>
+
+            <div class="voice-panel" id="panel-upload" style="display:none">
+              <div class="dropzone" id="dropzone">
+                <input type="file" id="voice-file" accept="audio/*" class="dropzone-input" />
+                <div class="dropzone-content" id="dropzone-content">
+                  <p class="dropzone-icon">↑</p>
+                  <p class="dropzone-text">Arrastrá tu archivo acá</p>
+                  <p class="dropzone-sub">o <label for="voice-file" class="dropzone-browse">explorá tu dispositivo</label></p>
+                  <p class="dropzone-hint">MP3, WAV, WebM · 1 a 3 min</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="voice-confirm" style="display:none">
+            <audio id="rec-playback" controls></audio>
+            <div class="voice-confirm-actions">
+              <button type="button" class="btn-retry" id="btn-retry">↺ Volver a intentar</button>
+              <button type="button" class="btn-voice-upload" id="btn-voice-upload">Confirmar y clonar voz</button>
+            </div>
+            <span class="voice-upload-status" id="voice-upload-status"></span>
+          </div>
+
+          <div class="voice-preview-area" id="voice-preview-area" style="display:none">
+            <button type="button" class="btn-voice-preview" id="btn-voice-preview">▶ Probar voz</button>
+            <button type="button" class="btn-recreate-voice" id="btn-recreate-voice">↺ Recrear voz</button>
+            <audio id="voice-audio" controls style="display:none"></audio>
+            <span class="voice-preview-status" id="voice-preview-status"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════
+           CARD 8 — Plan y facturación
+           ══════════════════════════════════════ -->
+      <div class="cfg-card" id="card-plan">
+        <button class="cfg-card-header" type="button" aria-expanded="false" aria-controls="body-plan">
+          <div class="cfg-card-title-row">
+            <span class="cfg-card-title">Plan y facturación</span>
+            <span class="cfg-card-summary" id="sum-plan">Sin plan</span>
+          </div>
+          <svg class="cfg-card-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="cfg-card-body" id="body-plan" hidden>
+          <div class="field">
+            <label class="toggle-row">
+              <input type="checkbox" id="billing_requires_invoice" />
+              <span class="toggle-switch"></span>
+              <span class="toggle-label">Soy empresa y necesito factura con IVA discriminado</span>
+            </label>
+          </div>
+          <div id="billing-fields" style="display:none">
+            <div class="field">
+              <label class="field-label" for="billing_legal_name">Razón social</label>
+              <input id="billing_legal_name" type="text" maxlength="200" placeholder="Ej: Mi Empresa S.A." />
+              <p id="billing-err-legal-name" style="display:none; color:#ef4444; font-size:12px; margin-top:4px;"></p>
+            </div>
+            <div class="field">
+              <label class="field-label" for="billing_rut">RUT</label>
+              <input id="billing_rut" type="text" maxlength="20" placeholder="12 dígitos (se limpian espacios y guiones)" />
+              <p id="billing-err-rut" style="display:none; color:#ef4444; font-size:12px; margin-top:4px;"></p>
+            </div>
+            <div class="field">
+              <label class="field-label" for="billing_address">Domicilio fiscal</label>
+              <input id="billing_address" type="text" maxlength="300" placeholder="Ej: 18 de Julio 1234, Montevideo" />
+              <p id="billing-err-address" style="display:none; color:#ef4444; font-size:12px; margin-top:4px;"></p>
+            </div>
+            <div class="field">
+              <label class="field-label" for="billing_email">Mail para recibir la factura</label>
+              <input id="billing_email" type="email" maxlength="254" placeholder="factura@miempresa.com" />
+              <p id="billing-err-email" style="display:none; color:#ef4444; font-size:12px; margin-top:4px;"></p>
+            </div>
+            <p class="field-hint">Usamos estos datos solo para emitirte la factura.</p>
+          </div>
+        </div>
+      </div>
 
       <div class="actions" id="actions-bar">
         <div id="save-success-banner" class="save-success-banner" style="display:none">✓ Todo guardado correctamente</div>
         <div id="save-error-banner" class="save-error-banner" style="display:none"></div>
         <button type="submit" class="btn-save" id="btn-save">Guardar todo</button>
       </div>
-
-      <hr class="divider" />
 
       <!-- Probá tu asistente -->
       <div class="preview-chat" id="section-prueba">
@@ -606,132 +871,6 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         </div>
       </div>
 
-      <hr class="divider" />
-
-      <!-- Contactos que atendés vos -->
-      <section class="section" id="excluded-section">
-        <div class="section-label">
-          <svg class="section-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/>
-            <line x1="5" y1="5" x2="11" y2="11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-          <span>Contactos que atendés vos</span>
-        </div>
-
-        <p class="field-hint" style="margin-bottom:12px;">Los números de esta lista los atendés vos: el bot no les responde, pero sus mensajes se guardan. También podés marcar chats desde Conversaciones, tildándolos y tocando "Atiendo yo".</p>
-
-        <div class="field">
-          <label class="field-label" for="excluded-phones-input">Agregar números</label>
-          <span class="field-hint">Uno por línea. Aceptamos +598 98 323 308, 098 323 308 o 59898323308.</span>
-          <textarea id="excluded-phones-input" rows="4" maxlength="5000"
-            placeholder="098 323 308&#10;+598 91 234 567&#10;59899112233"
-            style="width:100%;box-sizing:border-box;font-size:13px;padding:8px 10px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;color:#f0ede8;resize:vertical;margin-top:6px;"></textarea>
-          <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
-            <button type="button" class="btn-save" id="btn-add-excluded" style="padding:7px 18px;font-size:13px;">Agregar</button>
-            <span id="excluded-add-status" style="font-size:12px;color:#888;"></span>
-          </div>
-          <p style="font-size:11px;color:#555;margin:6px 0 0;">Máximo 500 por negocio.</p>
-        </div>
-
-        <div style="margin-top:16px;">
-          <p style="font-size:11px;color:#555;margin:0 0 8px;text-transform:uppercase;letter-spacing:.05em;font-family:var(--mono);">Lista actual</p>
-          <div id="excluded-list" style="display:flex;flex-direction:column;gap:4px;">
-            <p id="excluded-empty" style="font-size:13px;color:#555;margin:0;">Sin contactos excluidos.</p>
-          </div>
-        </div>
-      </section>
-
-      <hr class="divider" />
-
-      <!-- Voz -->
-      <section class="section" id="voice-section">
-        <div class="section-label">
-          <svg class="section-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <rect x="5" y="1" width="6" height="8" rx="3" stroke="currentColor" stroke-width="1.4"/>
-            <path d="M3 8C3 11.5 13 11.5 13 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-            <line x1="8" y1="11.5" x2="8" y2="14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-            <line x1="5.5" y1="14" x2="10.5" y2="14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-          <span>Voz</span>
-        </div>
-
-        <p class="voice-section-desc">Clonamos tu voz para que las respuestas por audio suenen como vos, no como un asistente genérico. Es opcional — si preferís, podés dejar todo en texto.</p>
-        <p class="voice-autosave-note">Tu voz se guarda automáticamente cuando confirmás la grabación. No necesitás apretar "Guardar todo".</p>
-
-        <!-- Upgrade de plan (arranque → crecimiento, crecimiento → a_medida) -->
-        <div id="voice-plan-lock" style="display:none" class="voice-plan-lock">
-          <p class="voice-lock-msg" id="voice-lock-msg"></p>
-          <a href="#" target="_blank" rel="noopener" class="voice-lock-link" id="voice-lock-cta"></a>
-        </div>
-
-        <div id="voice-status-saved" style="display:none" class="voice-cloned-badge">
-          <span class="voice-cloned-dot"></span>
-          Voz clonada activa
-        </div>
-
-        <!-- Paso 1: consentimiento + grabación o subida -->
-        <div id="voice-input">
-          <button type="button" class="btn-voice-cancel" id="btn-voice-cancel" style="display:none">← Volver a mi voz activa</button>
-          <div class="field">
-            <label class="consent-label">
-              <input type="checkbox" id="voice-consent" />
-              <span>Confirmo que esta es mi voz (o tengo autorización explícita de su dueño) y autorizo usarla para generar respuestas automáticas de este negocio.</span>
-            </label>
-          </div>
-
-          <p class="voice-tip"><span class="voice-tip-label">&gt; tip</span> 2–3 min, lugar silencioso, hablá natural — como le responderías a un cliente. Cuanto más variado, mejor resultado.</p>
-
-          <div class="voice-mode-tabs" id="voice-mode-tabs">
-            <button type="button" class="voice-tab active" data-mode="record">Grabar ahora</button>
-            <button type="button" class="voice-tab" data-mode="upload">Subir archivo</button>
-          </div>
-
-          <div class="voice-panel" id="panel-record">
-            <div class="record-idle" id="record-idle">
-              <p class="field-hint">Grabá entre 1 y 3 minutos hablando con naturalidad — como si le hablaras a un cliente.</p>
-              <button type="button" class="btn-record-start" id="btn-record-start">
-                <span class="rec-dot"></span> Grabar
-              </button>
-            </div>
-            <div class="record-active" id="record-active" style="display:none">
-              <span class="rec-dot pulsing"></span>
-              <span class="rec-timer" id="rec-timer">0:00</span>
-              <button type="button" class="btn-record-stop" id="btn-record-stop">■ Detener</button>
-            </div>
-          </div>
-
-          <div class="voice-panel" id="panel-upload" style="display:none">
-            <div class="dropzone" id="dropzone">
-              <input type="file" id="voice-file" accept="audio/*" class="dropzone-input" />
-              <div class="dropzone-content" id="dropzone-content">
-                <p class="dropzone-icon">↑</p>
-                <p class="dropzone-text">Arrastrá tu archivo acá</p>
-                <p class="dropzone-sub">o <label for="voice-file" class="dropzone-browse">explorá tu dispositivo</label></p>
-                <p class="dropzone-hint">MP3, WAV, WebM · 1 a 3 min</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Paso 2: escuchar y confirmar -->
-        <div id="voice-confirm" style="display:none">
-          <audio id="rec-playback" controls></audio>
-          <div class="voice-confirm-actions">
-            <button type="button" class="btn-retry" id="btn-retry">↺ Volver a intentar</button>
-            <button type="button" class="btn-voice-upload" id="btn-voice-upload">Confirmar y clonar voz</button>
-          </div>
-          <span class="voice-upload-status" id="voice-upload-status"></span>
-        </div>
-
-        <!-- Paso 3: probar la voz clonada (aparece solo tras clonar) -->
-        <div class="voice-preview-area" id="voice-preview-area" style="display:none">
-          <button type="button" class="btn-voice-preview" id="btn-voice-preview">▶ Probar voz</button>
-          <button type="button" class="btn-recreate-voice" id="btn-recreate-voice">↺ Recrear voz</button>
-          <audio id="voice-audio" controls style="display:none"></audio>
-          <span class="voice-preview-status" id="voice-preview-status"></span>
-        </div>
-      </section>
-
     </form>
 
   </main>
@@ -759,7 +898,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       <svg class="mobile-nav-icon" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <path d="M2 3C2 2 3 1 4 1H12C13 1 14 2 14 3V9C14 10 13 11 12 11H7L4 14V11C3 11 2 10 2 9V3Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
       </svg>
-      Chats
+      Conversaciones
     </a>
   </nav>
 
@@ -780,6 +919,88 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
   <script>
     let currentBusiness = null;
     let audioOptionsLocked = false;
+
+    // ── Accordion cards ──
+    function initAccordion() {
+      document.querySelectorAll('.cfg-card-header').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const expanded = btn.getAttribute('aria-expanded') === 'true';
+          const body = document.getElementById(btn.getAttribute('aria-controls'));
+          btn.setAttribute('aria-expanded', String(!expanded));
+          body.hidden = expanded;
+        });
+      });
+    }
+    initAccordion();
+
+    // ── Section chip active state ──
+    (function initChipObserver() {
+      const chips = document.querySelectorAll('.cfg-chip');
+      function setActive(href) {
+        chips.forEach(c => c.classList.toggle('active', c.getAttribute('href') === href));
+      }
+      const targets = Array.from(chips).map(c => document.querySelector(c.getAttribute('href'))).filter(Boolean);
+      if (!('IntersectionObserver' in window)) return;
+      const obs = new IntersectionObserver(entries => {
+        entries.forEach(entry => { if (entry.isIntersecting) setActive('#' + entry.target.id); });
+      }, { rootMargin: '-10% 0px -60% 0px', threshold: 0 });
+      targets.forEach(t => obs.observe(t));
+    })();
+
+    // ── Section summaries ──
+    function renderSummaries(b) {
+      function set(id, text, isError) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = text;
+        el.classList.toggle('cfg-card-summary--error', !!isError);
+      }
+
+      // WhatsApp
+      if (b && b.phone_number_id) {
+        set('sum-whatsapp', b.whatsapp_number ? 'Conectado: ' + b.whatsapp_number : 'Conectado', false);
+      } else {
+        set('sum-whatsapp', 'Sin conectar', true);
+      }
+
+      // Tu negocio
+      set('sum-negocio', (b && b.name) ? b.name : 'Sin cargar');
+
+      // Horarios
+      let bhDayCount = 0;
+      try { if (b && b.business_hours) bhDayCount = Object.keys(JSON.parse(b.business_hours)).length; } catch {}
+      set('sum-horarios', bhDayCount > 0
+        ? bhDayCount + ' día' + (bhDayCount !== 1 ? 's' : '') + ' configurado' + (bhDayCount !== 1 ? 's' : '')
+        : 'Sin configurar');
+
+      // Cómo habla
+      const hasMensajes = b && Array.isArray(b.sales_examples) && b.sales_examples.length > 0;
+      const largoMap = { corto: 'Cortos', medio: 'Medios', largo: 'Largos' };
+      const largoLabel = largoMap[b && b.survey_answers && b.survey_answers.largo_mensajes] || '';
+      set('sum-habla', hasMensajes ? (largoLabel ? 'Con mensajes · ' + largoLabel : 'Con mensajes') : 'Sin mensajes');
+
+      // Reglas para tu asistente
+      const hasReglas = b && b.owner_rules && b.owner_rules.trim().length > 0;
+      set('sum-reglas', hasReglas ? b.owner_rules.trim().slice(0, 60) + (b.owner_rules.trim().length > 60 ? '…' : '') : 'Sin reglas');
+
+      // Cómo actúa
+      const priorMap = { cerrar_rapido: 'Cierra rápido', generar_confianza: 'Genera confianza', equilibrado: 'Equilibrado' };
+      const priorLabel = priorMap[b && b.survey_answers && b.survey_answers.prioridad] || '';
+      set('sum-actua', priorLabel || 'Sin configurar');
+
+      // Cuándo avisarte
+      const parts = [];
+      if (b && b.pause_keywords) parts.push('Con derivación');
+      if (b && b.urgent_alert_enabled) parts.push('Urgencias activas');
+      set('sum-avisos', parts.length ? parts.join(' · ') : 'Sin configurar');
+
+      // Voz
+      set('sum-voz', (b && b.voice_id) ? 'Voz clonada activa' : 'Sin clonar');
+
+      // Plan y facturación
+      const planMap = { arranque: 'Arranque', crecimiento: 'Crecimiento', a_medida: 'Negocio' };
+      set('sum-plan', b ? (planMap[b.plan] || b.plan || 'Sin plan') : 'Sin plan');
+    }
 
     function escapeHtml(s) {
       return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -1040,6 +1261,9 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       document.getElementById('name').value = b.name || '';
       document.getElementById('business_context').value = b.business_context || '';
       document.getElementById('pricing_info').value = b.pricing_info || '';
+      const ownerRulesEl = document.getElementById('owner_rules');
+      ownerRulesEl.value = b.owner_rules || '';
+      document.getElementById('owner-rules-count').textContent = ownerRulesEl.value.length;
       document.getElementById('website_url').value = b.website_url || '';
 
       if (Array.isArray(b.sales_examples)) {
@@ -1075,6 +1299,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
       document.getElementById('delay-display').textContent = delayVal;
 
       renderStyleProfile(b.style_profile);
+      renderSummaries(b);
 
       if (b.document_name) {
         document.getElementById('doc-name').textContent = b.document_name;
@@ -1155,6 +1380,13 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
     // ── Load account (user phone) ──
     fetch('/auth/me').then(r => r.json()).then(u => {
       document.getElementById('owner_phone').value = u.phone || '';
+      if (u.phone) {
+        const el = document.getElementById('sum-avisos');
+        if (el && el.textContent === 'Sin configurar') {
+          el.textContent = u.phone;
+          el.classList.remove('cfg-card-summary--error');
+        }
+      }
     });
 
     // ── Dirty state ──
@@ -1173,6 +1405,10 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
     });
     document.getElementById('form').addEventListener('input', markDirty);
     document.getElementById('form').addEventListener('change', markDirty);
+
+    document.getElementById('owner_rules').addEventListener('input', function () {
+      document.getElementById('owner-rules-count').textContent = this.value.length;
+    });
 
     document.getElementById('billing_requires_invoice').addEventListener('change', function () {
       document.getElementById('billing-fields').style.display = this.checked ? '' : 'none';
@@ -1258,6 +1494,7 @@ Nuestras limpiezas dentales quedan desde $1.200. ¿Querés que te agendemos?"></
         name: document.getElementById('name').value.trim(),
         business_context: document.getElementById('business_context').value.trim() || null,
         website_url: document.getElementById('website_url').value.trim() || null,
+        owner_rules: document.getElementById('owner_rules').value.trim() || null,
         sales_examples,
         survey_answers: {
           objeciones_precio: document.getElementById('objeciones_precio').value.trim(),
