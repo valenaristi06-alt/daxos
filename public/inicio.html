@@ -310,7 +310,7 @@
             <a href="https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan" class="trial-action" target="_blank" rel="noopener">Quiero activar mi plan</a>`;
           banner.style.display = 'flex';
         }
-      } else if (b.plan === 'arranque' && !b.plan_paid_at) {
+      } else if (b.plan === 'arranque' && !b.plan_paid_at && !b.plan_cortesia) {
         if (!b.trial_starts_at) {
           banner.className = 'trial-banner trial-banner--active';
           banner.innerHTML = '<span class="trial-msg">Conectá tu WhatsApp para empezar tu prueba de 14 días.</span>';
