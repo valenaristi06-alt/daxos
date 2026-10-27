@@ -79,47 +79,6 @@
       .bh-day-label { min-width: unset; }
     }
 
-    /* ── Section index (chips) ── */
-    .cfg-index {
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      background: var(--bg, #0d0d0d);
-      display: flex;
-      gap: 6px;
-      padding: 10px 0 12px;
-      margin: 0 0 12px;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-    }
-    .cfg-index::-webkit-scrollbar { display: none; }
-    .cfg-chip {
-      flex-shrink: 0;
-      display: inline-flex;
-      align-items: center;
-      padding: 6px 14px;
-      min-height: 36px;
-      font-size: 12px;
-      line-height: 1;
-      border: 1px solid var(--border-2, #2e2e2e);
-      border-radius: 20px;
-      color: var(--muted, #777);
-      text-decoration: none;
-      white-space: nowrap;
-      transition: color 0.15s, border-color 0.15s, background 0.15s;
-      cursor: pointer;
-    }
-    .cfg-chip:hover, .cfg-chip.active {
-      color: var(--text, #f0ede8);
-      border-color: var(--text, #f0ede8);
-      background: var(--surface, #1a1a1a);
-    }
-    .cfg-chip:focus-visible {
-      outline: 2px solid var(--accent, #e07b39);
-      outline-offset: 2px;
-    }
-
     /* ── Accordion cards ── */
     .cfg-card {
       border: 1px solid var(--border, #1e1e1e);
@@ -256,20 +215,6 @@
     </div>
 
     <form id="form" novalidate style="display:none">
-
-      <!-- ── Índice de secciones ── -->
-      <nav class="cfg-index" aria-label="Secciones de configuración">
-        <a class="cfg-chip" href="#card-whatsapp">WhatsApp</a>
-        <a class="cfg-chip" href="#card-negocio">Tu negocio</a>
-        <a class="cfg-chip" href="#card-horarios">Horarios</a>
-        <a class="cfg-chip" href="#card-habla">Cómo habla</a>
-        <a class="cfg-chip" href="#card-reglas">Reglas</a>
-        <a class="cfg-chip" href="#card-actua">Cómo actúa</a>
-        <a class="cfg-chip" href="#card-avisos">Cuándo avisarte</a>
-        <a class="cfg-chip" href="#card-voz">Voz</a>
-        <a class="cfg-chip" href="#card-plan">Plan y facturación</a>
-        <a class="cfg-chip" href="#section-prueba">Probar</a>
-      </nav>
 
       <!-- ══════════════════════════════════════
            CARD 1 — WhatsApp
@@ -837,37 +782,42 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
         <button type="submit" class="btn-save" id="btn-save">Guardar todo</button>
       </div>
 
-      <!-- Probá tu asistente -->
-      <div class="preview-chat" id="section-prueba">
-        <div class="preview-chat-header">
-          <svg class="section-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M2 3C2 2 3 1 4 1H12C13 1 14 2 14 3V9C14 10 13 11 12 11H7L4 14V11C3 11 2 10 2 9V3Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
-          </svg>
-          <h2 class="preview-chat-title">Probá tu asistente</h2>
-        </div>
-        <p class="preview-chat-desc">Escribí como si fueras un cliente y mirá cómo responde con la configuración que cargaste. Este historial no se guarda. No se envía nada a clientes reales.</p>
-        <div class="preview-chat-box">
-          <div class="preview-chat-messages" id="preview-messages">
-            <div class="preview-chat-empty" id="preview-empty">
-              <p>Escribí un mensaje para empezar la prueba.</p>
+      <!-- ══════════════════════════════════════
+           CARD 10 — Probá tu asistente
+           ══════════════════════════════════════ -->
+      <div class="cfg-card" id="card-prueba">
+        <button class="cfg-card-header" type="button" aria-expanded="false" aria-controls="body-prueba">
+          <div class="cfg-card-title-row">
+            <span class="cfg-card-title">Probá tu asistente</span>
+            <span class="cfg-card-summary" id="sum-prueba"></span>
+          </div>
+          <svg class="cfg-card-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="cfg-card-body" id="body-prueba" hidden>
+          <p class="preview-chat-desc">Escribí como si fueras un cliente y mirá cómo responde con la configuración que cargaste. Este historial no se guarda. No se envía nada a clientes reales.</p>
+          <div class="preview-chat-box">
+            <div class="preview-chat-messages" id="preview-messages">
+              <div class="preview-chat-empty" id="preview-empty">
+                <p>Escribí un mensaje para empezar la prueba.</p>
+              </div>
+            </div>
+            <div class="preview-chat-footer">
+              <textarea
+                class="preview-chat-input"
+                id="preview-input"
+                placeholder="Ej: Hola, ¿cuánto sale una consulta?"
+                rows="1"
+              ></textarea>
+              <button class="preview-chat-send" id="preview-send" title="Enviar">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M2 14L14 8 2 2v4.5l8 1.5-8 1.5V14Z" fill="currentColor"/>
+                </svg>
+              </button>
             </div>
           </div>
-          <div class="preview-chat-footer">
-            <textarea
-              class="preview-chat-input"
-              id="preview-input"
-              placeholder="Ej: Hola, ¿cuánto sale una consulta?"
-              rows="1"
-            ></textarea>
-            <button class="preview-chat-send" id="preview-send" title="Enviar">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M2 14L14 8 2 2v4.5l8 1.5-8 1.5V14Z" fill="currentColor"/>
-              </svg>
-            </button>
+          <div class="preview-chat-reset">
+            <button class="btn-preview-reset" id="preview-reset">↺ Limpiar conversación</button>
           </div>
-        </div>
-        <div class="preview-chat-reset">
-          <button class="btn-preview-reset" id="preview-reset">↺ Limpiar conversación</button>
         </div>
       </div>
 
@@ -932,20 +882,6 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
       });
     }
     initAccordion();
-
-    // ── Section chip active state ──
-    (function initChipObserver() {
-      const chips = document.querySelectorAll('.cfg-chip');
-      function setActive(href) {
-        chips.forEach(c => c.classList.toggle('active', c.getAttribute('href') === href));
-      }
-      const targets = Array.from(chips).map(c => document.querySelector(c.getAttribute('href'))).filter(Boolean);
-      if (!('IntersectionObserver' in window)) return;
-      const obs = new IntersectionObserver(entries => {
-        entries.forEach(entry => { if (entry.isIntersecting) setActive('#' + entry.target.id); });
-      }, { rootMargin: '-10% 0px -60% 0px', threshold: 0 });
-      targets.forEach(t => obs.observe(t));
-    })();
 
     // ── Section summaries ──
     function renderSummaries(b) {
@@ -1112,7 +1048,7 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
 
       const testStep = stepTest
         ? doneRow('Asistente probado')
-        : pendingRow('Probá tu asistente', '<a href="#section-prueba" style="color:var(--accent);text-decoration:none">Ir al chat de prueba →</a>');
+        : pendingRow('Probá tu asistente', '<a href="#card-prueba" style="color:var(--accent);text-decoration:none">Ir al chat de prueba →</a>');
 
       panel.innerHTML = `
         <p class="activation-title">Pasos para activar tu asistente</p>
