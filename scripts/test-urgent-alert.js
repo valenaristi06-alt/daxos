@@ -333,6 +333,58 @@
     assert('keyword negada: WA NO enviado',    waCalls.length,    0);
   }
 
+  // ── Suite 5: negación bloquea solo la keyword que sigue, no otras ─────────
+  // "no es urgente pero sangra" → "urgente" negado, "sangra" match → dispara
+  // "no es nada grave, solo quiero vacunar" → ninguna keyword → no dispara
+
+  console.log('\n── Suite 5: negación parcial — otra keyword en mismo mensaje dispara ──');
+  {
+    const bizSangra = { ...biz, urgent_keywords: 'urgente, sangra' };
+
+    // caso 1: "urgente" negado pero "sangra" presente → debe disparar
+    {
+      const { emailCalls, waCalls, stubEmail, stubWA } = makeStubs();
+      const flow = makeFlow();
+
+      await flow.handleIncoming({
+        business: bizSangra, owner,
+        contactId: '59891234567',
+        messageText: 'no es urgente pero sangra mucho',
+        conversationId: 'conv-suite5a',
+        waCredentials: waCreds,
+        nowMs: BASE_NOW,
+        sendEmail: stubEmail,
+        sendWA: stubWA,
+      });
+      await new Promise(r => setImmediate(r));
+      await new Promise(r => setImmediate(r));
+
+      assert('"no es urgente pero sangra": email enviado',  emailCalls.length, 1);
+      assert('"no es urgente pero sangra": WA enviado',     waCalls.length,    1);
+    }
+
+    // caso 2: ninguna keyword presente → no debe disparar
+    {
+      const { emailCalls, waCalls, stubEmail, stubWA } = makeStubs();
+      const flow = makeFlow();
+
+      await flow.handleIncoming({
+        business: bizSangra, owner,
+        contactId: '59891234567',
+        messageText: 'no es nada grave, solo quiero vacunar',
+        conversationId: 'conv-suite5b',
+        waCredentials: waCreds,
+        nowMs: BASE_NOW,
+        sendEmail: stubEmail,
+        sendWA: stubWA,
+      });
+      await new Promise(r => setImmediate(r));
+
+      assert('"solo quiero vacunar": email NO enviado',  emailCalls.length, 0);
+      assert('"solo quiero vacunar": WA NO enviado',     waCalls.length,    0);
+    }
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
 
   console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
