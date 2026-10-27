@@ -268,7 +268,8 @@ if (IS_PROD && !process.env.SESSION_SECRET) {
   process.exit(1);
 }
 
-const sessionsDb = new Database(path.join(__dirname, '../data/sessions.db'));
+const _dataDir = process.env.DB_DIR || path.join(__dirname, '../data');
+const sessionsDb = new Database(path.join(_dataDir, 'sessions.db'));
 
 app.use(session({
   store: new BetterSQLiteStore({ client: sessionsDb }),
