@@ -24,7 +24,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--sans);
-  min-height: 100vh;
+  min-height: 100dvh;
   line-height: 1.5;
 }
 
@@ -32,7 +32,7 @@ body {
 
 .app-layout {
   display: flex;
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* ── Sidebar ── */
@@ -399,14 +399,14 @@ body {
 .app-main {
   margin-left: 220px;
   flex: 1;
-  min-height: 100vh;
+  min-height: 100dvh;
   padding: 40px 48px 80px;
 }
 
 .app-main--full {
   padding: 0;
   display: flex;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -2524,7 +2524,7 @@ select option { background: #1a1a1a; }
   /* Bug fix: top padding pushes content below the fixed "Salir" button (~38px tall).
      Bottom padding = nav height + safe area + 24px breathing room. */
   .app-main { margin-left: 0; padding: 52px 16px calc(56px + env(safe-area-inset-bottom) + 24px); }
-  .app-main--full { height: calc(100vh - 56px - env(safe-area-inset-bottom)); }
+  .app-main--full { height: calc(100dvh - 56px - env(safe-area-inset-bottom)); }
   .mobile-nav { display: flex; }
   /* Bug fix: sticky save bar sits above the mobile nav, not behind it. */
   .actions { bottom: calc(56px + env(safe-area-inset-bottom)); }
