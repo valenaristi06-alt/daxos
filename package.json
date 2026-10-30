@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Daxos automation server",
   "main": "src/server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
@@ -12,6 +15,7 @@
     "@anthropic-ai/sdk": "^0.112.3",
     "@aws-sdk/client-s3": "^3.1144.0",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.11.1",
     "better-sqlite3-session-store": "^0.1.0",
@@ -23,7 +27,8 @@
     "helmet": "^8.3.0",
     "mammoth": "^1.12.3",
     "multer": "^2.2.0",
-    "pdf-parse": "^2.4.5"
+    "pdf-parse": "^2.4.5",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "nodemon": "^3.1.10",

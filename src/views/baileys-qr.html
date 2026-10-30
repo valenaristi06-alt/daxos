@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conexión WhatsApp — Daxos</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 16px;
+      padding: 36px 32px;
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+    }
+
+    .logo {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: #58a6ff;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      font-size: 0.8rem;
+      color: #6e7681;
+      margin-bottom: 28px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: 20px;
+      margin-bottom: 24px;
+      transition: all 0.3s;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .badge-connecting { background: #1c2128; color: #e3b341; border: 1px solid #3d2f00; }
+    .badge-connecting .dot { background: #e3b341; animation: pulse 1.2s ease-in-out infinite; }
+
+    .badge-qr_pending { background: #0d2136; color: #58a6ff; border: 1px solid #0c2d4a; }
+    .badge-qr_pending .dot { background: #58a6ff; animation: pulse 1.2s ease-in-out infinite; }
+
+    .badge-connected { background: #0d2118; color: #3fb950; border: 1px solid #0d3320; }
+    .badge-connected .dot { background: #3fb950; }
+
+    .badge-disconnected, .badge-stopped { background: #1f0d0d; color: #f85149; border: 1px solid #3d0f0f; }
+    .badge-disconnected .dot, .badge-stopped .dot { background: #f85149; }
+
+    .badge-idle { background: #1c2128; color: #8b949e; border: 1px solid #30363d; }
+    .badge-idle .dot { background: #8b949e; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    #qr-section { display: none; }
+
+    .qr-frame {
+      display: inline-block;
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+
+    #qr-img {
+      display: block;
+      width: 220px;
+      height: 220px;
+    }
+
+    .qr-hint {
+      font-size: 0.78rem;
+      color: #6e7681;
+      line-height: 1.5;
+      max-width: 280px;
+      margin: 0 auto;
+    }
+
+    #spinner-section { display: none; }
+
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 3px solid #21262d;
+      border-top-color: #58a6ff;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+      margin: 8px auto 24px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #connected-section { display: none; }
+
+    .check-icon {
+      font-size: 3rem;
+      margin-bottom: 12px;
+    }
+
+    #error-section { display: none; }
+
+    .detail-msg {
+      font-size: 0.82rem;
+      color: #6e7681;
+      margin-top: 12px;
+      line-height: 1.5;
+    }
+
+    .detail-msg.warn { color: #e3b341; }
+
+    .divider { border: none; border-top: 1px solid #21262d; margin: 20px 0; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">Daxos</div>
+  <div class="subtitle">Conexión WhatsApp · Solo para administradores de COLBET</div>
+
+  <div class="status-badge badge-idle" id="status-badge">
+    <span class="dot"></span>
+    <span id="status-text">Iniciando…</span>
+  </div>
+
+  <div id="qr-section">
+    <div class="qr-frame">
+      <img id="qr-img" alt="Código QR de WhatsApp">
+    </div>
+    <p class="qr-hint">
+      Abrí WhatsApp en tu teléfono → <strong>Dispositivos vinculados</strong> →
+      <strong>Vincular dispositivo</strong> → escaneá este código.<br><br>
+      El código expira en ~60 segundos. Si vence, se genera uno nuevo automáticamente.
+    </p>
+  </div>
+
+  <div id="spinner-section">
+    <div class="spinner"></div>
+    <p class="detail-msg" id="spinner-detail"></p>
+  </div>
+
+  <div id="connected-section">
+    <div class="check-icon">&#10003;</div>
+    <p class="detail-msg">El bot de COLBET está conectado y recibiendo mensajes.</p>
+  </div>
+
+  <div id="error-section">
+    <p class="detail-msg warn" id="error-detail"></p>
+  </div>
+
+  <hr class="divider">
+  <p class="detail-msg" id="footer-msg"></p>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const badge      = document.getElementById('status-badge');
+  const badgeText  = document.getElementById('status-text');
+  const qrSection  = document.getElementById('qr-section');
+  const qrImg      = document.getElementById('qr-img');
+  const spinSection= document.getElementById('spinner-section');
+  const spinDetail = document.getElementById('spinner-detail');
+  const connSection= document.getElementById('connected-section');
+  const errSection = document.getElementById('error-section');
+  const errDetail  = document.getElementById('error-detail');
+  const footerMsg  = document.getElementById('footer-msg');
+
+  let pollTimer = null;
+  let stopped   = false;
+
+  const STATE_CFG = {
+    connected:    { cls: 'connected',    text: 'Conectado',       spin: false, qr: false, conn: true,  err: null,                                          interval: 15000 },
+    qr_pending:   { cls: 'qr_pending',   text: 'Escaneá el QR',  spin: false, qr: true,  conn: false, err: null,                                          interval: 5000  },
+    connecting:   { cls: 'connecting',   text: 'Conectando…',     spin: true,  qr: false, conn: false, err: null,                                          interval: 4000  },
+    disconnected: { cls: 'disconnected', text: 'Desconectado',    spin: true,  qr: false, conn: false, err: null,                                          interval: 6000  },
+    stopped:      { cls: 'stopped',      text: 'Detenido',        spin: false, qr: false, conn: false, err: 'Baileys se detuvo. Revisá los logs de Railway.', interval: 30000 },
+    idle:         { cls: 'idle',         text: 'Iniciando…',      spin: true,  qr: false, conn: false, err: null,                                          interval: 4000  },
+  };
+
+  const SPINNER_MSGS = {
+    connecting:   'Estableciendo conexión con WhatsApp…',
+    disconnected: 'Reintentando automáticamente…',
+    idle:         'Esperando que Baileys inicie…',
+  };
+
+  function show(el) { el.style.display = ''; }
+  function hide(el) { el.style.display = 'none'; }
+
+  function applyState(status, qrData) {
+    const cfg = STATE_CFG[status] || STATE_CFG.idle;
+
+    badge.className = 'status-badge badge-' + cfg.cls;
+    badgeText.textContent = cfg.text;
+
+    if (cfg.qr && qrData) {
+      qrImg.src = qrData; // data URL — not logged anywhere
+      show(qrSection);
+    } else {
+      hide(qrSection);
+      qrImg.src = ''; // clear so stale QR can't be seen
+    }
+
+    cfg.spin ? show(spinSection) : hide(spinSection);
+    spinDetail.textContent = SPINNER_MSGS[status] || '';
+
+    cfg.conn ? show(connSection) : hide(connSection);
+
+    if (cfg.err) {
+      errDetail.textContent = cfg.err;
+      show(errSection);
+    } else {
+      hide(errSection);
+    }
+
+    footerMsg.textContent = status === 'connected'
+      ? 'Podés cerrar esta pestaña.'
+      : 'La página se actualiza automáticamente.';
+
+    return cfg.interval;
+  }
+
+  async function poll() {
+    if (stopped) return;
+    let interval = 5000;
+
+    try {
+      const res = await fetch('/api/baileys/qr', {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' },
+      });
+
+      if (res.status === 401) {
+        badge.className = 'status-badge badge-stopped';
+        badgeText.textContent = 'No autenticado';
+        errDetail.textContent = 'Tu sesión expiró. Volvé a iniciar sesión en Daxos.';
+        show(errSection);
+        hide(spinSection);
+        footerMsg.textContent = '';
+        stopped = true;
+        return;
+      }
+
+      if (res.status === 403 || res.status === 404) {
+        badge.className = 'status-badge badge-stopped';
+        badgeText.textContent = 'Acceso denegado';
+        errDetail.textContent = 'Esta página solo está disponible para el administrador de COLBET.';
+        show(errSection);
+        hide(spinSection);
+        footerMsg.textContent = '';
+        stopped = true;
+        return;
+      }
+
+      const data = await res.json();
+      interval = applyState(data.status, data.qr || null);
+
+    } catch (_err) {
+      interval = applyState('disconnected', null);
+      spinDetail.textContent = 'Error de red. Reintentando…';
+    }
+
+    clearTimeout(pollTimer);
+    pollTimer = setTimeout(poll, interval);
+  }
+
+  poll();
+})();
+</script>
+</body>
+</html>
