@@ -47,6 +47,16 @@ function getApiConfig({ provider, accessToken }) {
 }
 
 async function sendWhatsAppMessage(to, text, creds) {
+  if (creds.provider === 'baileys') {
+    const sock = creds.socket;
+    if (!sock) throw new Error('baileys: socket not available');
+    // Use the original remoteJid directly — never reconstruct from phone digits,
+    // which would fail for @lid JIDs or non-standard formats.
+    const jid = creds.remoteJid;
+    if (!jid) throw new Error('baileys: no remoteJid in credentials');
+    await sock.sendMessage(jid, { text });
+    return { provider: 'baileys', to };
+  }
   const { messagesUrl, jsonHeaders, doFetch } = getApiConfig(creds);
   const res = await doFetch(messagesUrl(creds.phoneNumberId), {
     method: 'POST',
@@ -65,6 +75,11 @@ async function sendWhatsAppMessage(to, text, creds) {
 }
 
 async function uploadMedia(buffer, filename, mimeType, creds) {
+  if (creds.provider === 'baileys') {
+    // Baileys sends directly from buffer — no separate upload step.
+    // Returns a sentinel that sendWhatsApp{Audio,Document,Image} detect.
+    return { _baileys: true, buffer, filename, mimeType };
+  }
   const { mediaUrl, formHeaders, doFetch } = getApiConfig(creds);
   const makeForm = () => {
     const form = new FormData();
@@ -81,6 +96,17 @@ async function uploadMedia(buffer, filename, mimeType, creds) {
 }
 
 async function sendWhatsAppAudio(to, mediaId, creds) {
+  if (creds.provider === 'baileys') {
+    const sock = creds.socket;
+    if (!sock) throw new Error('baileys: socket not available');
+    if (!mediaId?._baileys) throw new Error('baileys: expected _baileys sentinel from uploadMedia');
+    await sock.sendMessage(creds.remoteJid, {
+      audio:    mediaId.buffer,
+      mimetype: mediaId.mimeType || 'audio/ogg; codecs=opus',
+      ptt:      true,
+    });
+    return { provider: 'baileys', to };
+  }
   const { messagesUrl, jsonHeaders, doFetch } = getApiConfig(creds);
   const res = await doFetch(messagesUrl(creds.phoneNumberId), {
     method: 'POST',
@@ -99,6 +125,17 @@ async function sendWhatsAppAudio(to, mediaId, creds) {
 }
 
 async function sendWhatsAppDocument(to, mediaId, filename, creds) {
+  if (creds.provider === 'baileys') {
+    const sock = creds.socket;
+    if (!sock) throw new Error('baileys: socket not available');
+    if (!mediaId?._baileys) throw new Error('baileys: expected _baileys sentinel from uploadMedia');
+    await sock.sendMessage(creds.remoteJid, {
+      document: mediaId.buffer,
+      mimetype: mediaId.mimeType || 'application/octet-stream',
+      fileName: filename || mediaId.filename || 'file',
+    });
+    return { provider: 'baileys', to };
+  }
   const { messagesUrl, jsonHeaders, doFetch } = getApiConfig(creds);
   const res = await doFetch(messagesUrl(creds.phoneNumberId), {
     method: 'POST',
@@ -117,6 +154,15 @@ async function sendWhatsAppDocument(to, mediaId, filename, creds) {
 }
 
 async function sendWhatsAppImage(to, mediaId, caption, creds) {
+  if (creds.provider === 'baileys') {
+    const sock = creds.socket;
+    if (!sock) throw new Error('baileys: socket not available');
+    if (!mediaId?._baileys) throw new Error('baileys: expected _baileys sentinel from uploadMedia');
+    const content = { image: mediaId.buffer };
+    if (caption) content.caption = caption;
+    await sock.sendMessage(creds.remoteJid, content);
+    return { provider: 'baileys', to };
+  }
   const { messagesUrl, jsonHeaders, doFetch } = getApiConfig(creds);
   const res = await doFetch(messagesUrl(creds.phoneNumberId), {
     method: 'POST',
@@ -135,6 +181,13 @@ async function sendWhatsAppImage(to, mediaId, caption, creds) {
 }
 
 async function markAsRead(messageId, creds) {
+  if (creds.provider === 'baileys') {
+    const sock = creds.socket;
+    const remoteJid = creds.remoteJid;
+    if (!sock || !remoteJid) return;
+    await sock.readMessages([{ remoteJid, id: messageId, fromMe: false }]).catch(() => {});
+    return;
+  }
   const { messagesUrl, jsonHeaders, doFetch } = getApiConfig(creds);
   await doFetch(messagesUrl(creds.phoneNumberId), {
     method: 'POST',
@@ -148,6 +201,13 @@ async function markAsRead(messageId, creds) {
 }
 
 async function sendTypingIndicator(to, creds) {
+  if (creds.provider === 'baileys') {
+    const sock = creds.socket;
+    const remoteJid = creds.remoteJid;
+    if (!sock || !remoteJid) return;
+    await sock.sendPresenceUpdate('composing', remoteJid).catch(() => {});
+    return;
+  }
   const { messagesUrl, jsonHeaders, doFetch } = getApiConfig(creds);
   await doFetch(messagesUrl(creds.phoneNumberId), {
     method: 'POST',

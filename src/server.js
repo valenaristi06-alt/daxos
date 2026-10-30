@@ -40,6 +40,28 @@ function _getConvHourlyCap() {
 const IS_PROD = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT;
 
 const crypto = require('crypto');
+
+// Extracts the raw WA message ID from Meta's wamid envelope.
+// wamid format: "wamid.<base64>" where the decoded bytes contain header + phone
+// digits + separator + raw_WA_id (uppercase alphanumeric, 10–22 chars) + NUL.
+// Baileys stores msg.key.id = this raw_WA_id. Using it enables cross-provider dedup:
+// if Baileys already processed a message, this rawId is already in processed_messages,
+// and Meta's webhook can detect the duplicate before re-processing.
+// Returns the raw ID string, or null if the wamid is absent / malformed.
+function extractRawIdFromWamid(wamid) {
+  if (!wamid?.startsWith('wamid.')) return null;
+  try {
+    const buf = Buffer.from(wamid.slice(6), 'base64');
+    // Walk backwards from end, skipping NUL bytes
+    let end = buf.length - 1;
+    while (end > 0 && buf[end] === 0) end--;
+    // Walk further back to find start of printable ASCII run
+    let start = end;
+    while (start > 0 && buf[start - 1] >= 0x20 && buf[start - 1] < 0x7f) start--;
+    const candidate = buf.slice(start, end + 1).toString();
+    return (candidate.length >= 10 && /^[A-Z0-9]+$/.test(candidate)) ? candidate : null;
+  } catch { return null; }
+}
 const dns    = require('dns').promises;
 const net    = require('net');
 const express = require('express');
@@ -367,6 +389,21 @@ app.use('/uploads', (req, res, next) => {
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
+});
+
+// Baileys operational status — separate from /health so Railway's health check
+// never depends on Baileys. Other businesses are unaffected if Baileys is down.
+// Requires admin bearer token; not exposed to end users.
+app.get('/api/baileys/status', requireBearerToken, (req, res) => {
+  if (process.env.BAILEYS_ENABLED !== '1') return res.json({ enabled: false });
+  const _b = require('./baileys');
+  res.json({
+    enabled:      true,
+    business_id:  _b.BAILEYS_BUSINESS_ID,
+    state:        _b.getBaileysState(),
+    connected_at: _b.getBaileysConnectedAt(),
+    has_qr:       !!_b.getBaileysQR(),
+  });
 });
 
 // Fields the owner's browser is allowed to see. Everything else is stripped.
@@ -1894,8 +1931,12 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     }
   }
 
-  const sendCtxOk  = waCredentials.provider === 'kapso' ? 'kapso-send-ok'  : 'webhook-send-ok';
-  const sendCtxErr = waCredentials.provider === 'kapso' ? 'kapso-send-err' : 'webhook-send-error';
+  const sendCtxOk  = waCredentials.provider === 'kapso'  ? 'kapso-send-ok'
+                   : waCredentials.provider === 'baileys' ? 'baileys-send-ok'
+                   : 'webhook-send-ok';
+  const sendCtxErr = waCredentials.provider === 'kapso'  ? 'kapso-send-err'
+                   : waCredentials.provider === 'baileys' ? 'baileys-send-err'
+                   : 'webhook-send-error';
 
   // Owner booking-reply detection — check before trial/limit gates so owner
   // responses always go through regardless of trial state.
@@ -2591,6 +2632,25 @@ app.post('/webhook', async (req, res) => {
           continue;
         }
 
+        // Suppress Meta processing for businesses handled by Baileys.
+        // Only fires when BAILEYS_ENABLED=1, the incoming business matches the
+        // Baileys-exclusive business (hardcoded to 10 in production), AND Baileys
+        // currently holds the lock. Other businesses are never affected.
+        //
+        // Suppression + lock-check = primary protection.
+        // Cross-provider dedup (extractRawIdFromWamid) below = secondary protection
+        // for the brief window when the lock transitions (e.g. deploy overlap).
+        if (process.env.BAILEYS_ENABLED === '1') {
+          const _b = require('./baileys');
+          if (business.id === _b.BAILEYS_BUSINESS_ID && _b.isBaileysLockHeld()) {
+            logError('webhook-baileys-suppress', {
+              message: `business_id=${business.id} phone_number_id=${phoneNumberId} suppressed — Baileys holds lock`,
+              stack: '',
+            });
+            continue;
+          }
+        }
+
         const waCredentials = { phoneNumberId: business.phone_number_id, accessToken: business.wa_access_token, provider: business.wa_provider || 'meta' };
 
         for (const msg of messages) {
@@ -2608,8 +2668,18 @@ app.post('/webhook', async (req, res) => {
             continue;
           }
 
-          // Dedup: INSERT OR IGNORE — if already processed, skip
+          // Dedup — primary: wamid string. Secondary (cross-provider): raw WA ID
+          // extracted from the wamid envelope. Baileys stores msg.key.id = raw WA ID.
+          // If Baileys already processed this message (lock transition window), the
+          // rawId is already in processed_messages and we skip before re-processing.
+          // _rawId is kept in scope so ALL discard/rollback paths below can delete it.
+          let _rawId = null;
           if (msg.id) {
+            _rawId = extractRawIdFromWamid(msg.id);
+            if (_rawId && !tryMarkProcessed(business.id, _rawId)) {
+              logError('msg-duplicate', { message: `source=meta_cross_provider business_id=${business.id} msg_id=${msg.id} raw_id=${_rawId}`, stack: '' });
+              continue;
+            }
             if (!tryMarkProcessed(business.id, msg.id)) {
               logError('msg-duplicate', { message: `source=meta business_id=${business.id} msg_id=${msg.id}`, stack: '' });
               continue;
@@ -2680,6 +2750,7 @@ app.post('/webhook', async (req, res) => {
                 });
               } catch (err) {
                 if (msg.id) deleteProcessedMessage(business.id, msg.id);
+                if (_rawId)  deleteProcessedMessage(business.id, _rawId);
                 logError('webhook-process-error', err);
               }
               continue;
@@ -2690,6 +2761,7 @@ app.post('/webhook', async (req, res) => {
             const imgStaleReason = isMsgStale(business, msgTimestamp);
             if (imgStaleReason) {
               if (msg.id) deleteProcessedMessage(business.id, msg.id);
+              if (_rawId)  deleteProcessedMessage(business.id, _rawId);
               logError('msg-stale', { message: `type=image msgId=${msg.id} business_id=${business.id} reason=${imgStaleReason}`, stack: '' });
               continue;
             }
@@ -2736,6 +2808,7 @@ app.post('/webhook', async (req, res) => {
             const staleReason = isMsgStale(business, msgTimestamp);
             if (staleReason) {
               if (msg.id) deleteProcessedMessage(business.id, msg.id);
+              if (_rawId)  deleteProcessedMessage(business.id, _rawId);
               logError('msg-stale', { message: `type=${msgType} msgId=${msg.id} business_id=${business.id} reason=${staleReason}`, stack: '' });
               continue;
             }
@@ -2779,6 +2852,7 @@ app.post('/webhook', async (req, res) => {
           if (msgType !== 'text' && msgType !== 'audio') {
             logError('msg-discard', { message: `reason=unsupported_type type=${msgType} business_id=${business.id} msg_id=${msg.id || 'none'}`, stack: '' });
             if (msg.id) deleteProcessedMessage(business.id, msg.id);
+            if (_rawId)  deleteProcessedMessage(business.id, _rawId);
             continue;
           }
 
@@ -2787,6 +2861,7 @@ app.post('/webhook', async (req, res) => {
             text = msg.text?.body;
             if (!text) {
               if (msg.id) deleteProcessedMessage(business.id, msg.id);
+              if (_rawId)  deleteProcessedMessage(business.id, _rawId);
               logError('msg-discard', { message: `reason=empty_text_body business_id=${business.id} msg_id=${msg.id || 'none'}`, stack: '' });
               continue;
             }
@@ -2827,8 +2902,9 @@ app.post('/webhook', async (req, res) => {
               msgTimestamp, msgTimestampField: 'msg.timestamp',
             });
           } catch (err) {
-            // Rollback dedup mark so Meta retry can reprocess
+            // Rollback both dedup marks so Meta retry can reprocess
             if (msg.id) deleteProcessedMessage(business.id, msg.id);
+            if (_rawId)  deleteProcessedMessage(business.id, _rawId);
             logError('webhook-process-error', err);
           }
         }
@@ -3164,6 +3240,22 @@ app.post('/webhook/kapso', async (req, res) => {
     if (!business) {
       logKapsoEvent(`discarded:business_not_found`);
       return;
+    }
+
+    // Suppress Kapso processing for businesses handled by Baileys.
+    // Only fires when BAILEYS_ENABLED=1, the incoming business matches the
+    // Baileys-exclusive business (hardcoded to 10 in production), AND Baileys
+    // currently holds the lock. Other businesses are never affected.
+    if (process.env.BAILEYS_ENABLED === '1') {
+      const _b = require('./baileys');
+      if (business.id === _b.BAILEYS_BUSINESS_ID && _b.isBaileysLockHeld()) {
+        logKapsoEvent('suppressed:baileys_lock_held');
+        logError('kapso-baileys-suppress', {
+          message: `business_id=${business.id} phone_number_id=${phoneNumberId} suppressed — Baileys holds lock`,
+          stack: '',
+        });
+        return;
+      }
     }
 
     // Dedup: before any processing (covers owner reply and customer paths)
@@ -4777,14 +4869,60 @@ setInterval(() => {
   }).catch(err => logError('demo-followup-job', { message: err.message, stack: err.stack || '' }));
 }, 10 * 60 * 1000);
 
-app.listen(PORT, () => {
+const _httpServer = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   const ckResult = checkpoint();
   console.log('WAL checkpoint on startup:', JSON.stringify(ckResult));
   setTimeout(() => startupBackupCheck().catch(err => logError('backup-startup', err)), 15_000);
   purgeOldErrorLog();
   setInterval(() => purgeOldErrorLog(), 24 * 60 * 60 * 1000);
+
+  if (process.env.BAILEYS_ENABLED === '1') {
+    const { initBaileys } = require('./baileys');
+    initBaileys({ processIncomingMessage, logError, getBusinessById, tryMarkProcessed, deleteProcessedMessage })
+      .catch(err => logError('baileys-init', { message: err.message, stack: err.stack || '' }));
+  }
 });
+
+// ─── Baileys QR endpoint (only registered when BAILEYS_ENABLED=1) ─────────────
+
+if (process.env.BAILEYS_ENABLED === '1') {
+  const _baileys = require('./baileys');
+
+  app.get('/api/baileys/qr',
+    requireAuth,
+    rateLimitWith(10, 60_000, req => `baileys-qr:${req.session.userId}`),
+    (req, res) => {
+      // Authorization: only the owner of the Baileys business can access this
+      const business = getBusinessByUserId(req.session.userId);
+      if (!business || business.id !== _baileys.BAILEYS_BUSINESS_ID) {
+        return res.status(404).end();
+      }
+
+      const state = _baileys.getBaileysState();
+      if (state === 'CONNECTED') return res.json({ status: 'connected' });
+
+      const qr = _baileys.getBaileysQR();
+      if (qr) return res.json({ status: 'qr_pending', qr });
+
+      return res.json({ status: state.toLowerCase() });
+    }
+  );
+
+  // HTML page: QR scanner UI — gated to authenticated COLBET owner only.
+  // Served from src/views/ (outside public/), not reachable via express.static.
+  app.get('/baileys/qr', requireAuth, (req, res) => {
+    const business = getBusinessByUserId(req.session.userId);
+    if (!business || business.id !== _baileys.BAILEYS_BUSINESS_ID) {
+      return res.status(403).send(
+        '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Acceso denegado</title></head>' +
+        '<body style="font-family:sans-serif;text-align:center;padding:60px;color:#c00">' +
+        '<h2>Acceso denegado</h2><p>Esta página es exclusiva para el administrador de COLBET.</p></body></html>'
+      );
+    }
+    res.sendFile(path.join(__dirname, 'views/baileys-qr.html'));
+  });
+}
 
 // ─── Backup endpoints ─────────────────────────────────────────────────────────
 
@@ -5641,13 +5779,38 @@ app.post('/admin/set-plan-cortesia', (req, res) => {
 });
 
 process.on('SIGTERM', () => {
-  console.log('SIGTERM received — checkpointing WAL and closing DB...');
-  try {
-    checkpoint();
-    closeDb();
-    console.log('DB closed cleanly.');
-  } catch (err) {
-    console.error('Error during shutdown:', err.message);
+  console.log('SIGTERM received — starting graceful shutdown...');
+
+  // 1. Stop Baileys first: writes shutdown timestamp, closes socket, releases lock.
+  //    Must happen before process.exit so the next deploy reads the correct replay threshold.
+  if (process.env.BAILEYS_ENABLED === '1') {
+    try {
+      const { stopBaileys } = require('./baileys');
+      stopBaileys();
+      console.log('[shutdown] Baileys stopped.');
+    } catch (e) {
+      console.error('[shutdown] Baileys stop failed:', e.message);
+    }
   }
-  process.exit(0);
+
+  // 2. Stop accepting new HTTP connections; let in-flight requests drain.
+  _httpServer.close(() => {
+    console.log('[shutdown] HTTP server closed — checkpointing and closing DB...');
+    try {
+      checkpoint();
+      closeDb();
+      console.log('[shutdown] DB closed cleanly.');
+    } catch (err) {
+      console.error('[shutdown] Error closing DB:', err.message);
+    }
+    process.exit(0);
+  });
+
+  // 3. Force exit if drain exceeds Railway's grace window (typically 10–30 s).
+  //    .unref() so this timer alone doesn't keep the process alive.
+  setTimeout(() => {
+    console.error('[shutdown] Graceful shutdown timeout — forcing exit.');
+    try { checkpoint(); closeDb(); } catch {}
+    process.exit(1);
+  }, 10_000).unref();
 });

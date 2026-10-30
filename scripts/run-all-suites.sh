@@ -50,6 +50,7 @@ run_suite "test-wa-health"     "scripts/test-wa-health-check.js"
 run_suite "test-owner-view"    "scripts/test-owner-view.js"
 run_suite "test-security"      "scripts/test-security.js"
 run_suite "test-lote3"         "scripts/test-lote3.js"
+run_suite "test-baileys"       "scripts/test-baileys.js"
 
 echo "================================================================"
 echo "Done."
