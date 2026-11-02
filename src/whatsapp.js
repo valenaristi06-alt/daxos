@@ -360,12 +360,32 @@ async function downloadKapsoMedia(mediaUrl, mediaId, phoneNumberId) {
  * Returns null if no split is needed (no "|||" or only one non-empty part).
  * Merges overflow beyond 4 parts into the 4th.
  */
+// Returns false if the text block contains list-formatted lines (-, •, 1.) so it stays intact.
+function _hasListLines(text) {
+  return text.split('\n').some(line => /^[\-•*]\s/.test(line.trim()) || /^\d+\.\s/.test(line.trim()));
+}
+
+// Splits a text block on blank lines unless it contains list formatting.
+function _expandByParagraphs(text) {
+  const paragraphs = text.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
+  if (paragraphs.length <= 1 || _hasListLines(text)) return [text.trim()];
+  return paragraphs;
+}
+
 function parseSplitParts(reply) {
-  const rawParts = reply.split('|||').map(p => p.trim()).filter(Boolean);
-  if (rawParts.length <= 1) return null;
-  return rawParts.length <= 4
-    ? rawParts
-    : [...rawParts.slice(0, 3), rawParts.slice(3).join('\n\n')];
+  const byDelimiter = reply.split('|||').map(p => p.trim()).filter(Boolean);
+
+  // Safety net: expand any segment that contains blank-line paragraph breaks.
+  const expanded = [];
+  for (const seg of byDelimiter) {
+    expanded.push(..._expandByParagraphs(seg));
+  }
+
+  if (expanded.length <= 1) return null;
+
+  return expanded.length <= 4
+    ? expanded
+    : [...expanded.slice(0, 3), expanded.slice(3).join('\n\n')];
 }
 
 const _SPLIT_TOTAL_PAUSE_MS = 8000;
