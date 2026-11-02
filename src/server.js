@@ -2273,8 +2273,9 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     }
   }
 
-  // Generate reply and enforce minimum delay in parallel
-  const delayMs = (business.response_delay ?? 5) * 1000;
+  // Generate reply; track when the delay ends so typing can fill the gap.
+  const delayMs  = (business.response_delay ?? 5) * 1000;
+  const _delayEnd = Date.now() + delayMs;
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const currentBookingState = business.booking_enabled ? getBookingState(conversation.id) : null;
   const businessImages = getBusinessImages(business.id);
@@ -2295,13 +2296,10 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   });
   let rawReply;
   try {
-    [rawReply] = await Promise.all([
-      generateReply(business, history, claudeText ?? text, conversation.label || null, {
-        enabled: !!business.booking_enabled,
-        state: currentBookingState,
-      }, runtimeCtx, conversation.id, imageData),
-      sleep(delayMs),
-    ]);
+    rawReply = await generateReply(business, history, claudeText ?? text, conversation.label || null, {
+      enabled: !!business.booking_enabled,
+      state: currentBookingState,
+    }, runtimeCtx, conversation.id, imageData);
     logError('webhook-claude-ok', { message: `business_id=${business.id} reply_length=${rawReply.length}`, stack: '' });
     incrementAnthropicCall(business.id);
   } catch (claudeErr) {
@@ -2498,10 +2496,30 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
 
   // Meta: mark as read + show typing before sending the first part.
   // Skipped when needsHuman — message should stay unread (owner still needs to see it).
+  // Timing: typing fires at max(now, _delayEnd - typingMs) so the indicator is visible
+  // for 1-3 s before the first part without exceeding max(delayEnd, claudeMs + typingMs).
   let _readAndTypingDone = false;
   if (!needsHuman && waCredentials?.provider === 'meta' && msgId) {
-    await markReadAndTyping(msgId, waCredentials);
-    _readAndTypingDone = true;
+    if (delayMs > 0) {
+      // Show typing for 1-3 s proportional to first part length, within the delay budget.
+      const _firstPart  = _splitParts ? _splitParts[0] : reply;
+      const _typingMs   = Math.max(1000, Math.min(3000, Math.round(_firstPart.length * 12)));
+      const _markReadAt = Math.max(Date.now(), _delayEnd - _typingMs);
+      const _waitMs     = _markReadAt - Date.now();
+      if (_waitMs > 0) await sleep(_waitMs);
+      await markReadAndTyping(msgId, waCredentials);
+      _readAndTypingDone = true;
+      await sleep(_typingMs);
+    } else {
+      // delay=0: mark read + send immediately, no artificial typing pause.
+      await markReadAndTyping(msgId, waCredentials);
+      _readAndTypingDone = true;
+    }
+  } else {
+    // Enforce minimum response delay for non-Meta paths and needsHuman.
+    // (For Meta normal the typing timing already guarantees message >= _delayEnd.)
+    const _remaining = _delayEnd - Date.now();
+    if (_remaining > 0) await sleep(_remaining);
   }
 
   try {

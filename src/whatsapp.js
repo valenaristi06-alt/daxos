@@ -6,6 +6,8 @@ const GRAPH_BASE = 'https://graph.facebook.com/v21.0';
 const IS_PROD = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT;
 // KAPSO_API_BASE_URL and KAPSO_TEST_ALLOW_LOCALHOST are only honoured outside production.
 const KAPSO_BASE = (!IS_PROD && process.env.KAPSO_API_BASE_URL) || 'https://api.kapso.ai/meta/whatsapp/v24.0';
+// META_GRAPH_BASE_URL allows tests to redirect Meta calls to a local mock server.
+const META_BASE = (!IS_PROD && process.env.META_GRAPH_BASE_URL) || GRAPH_BASE;
 
 // For Meta calls: try bizToken (or systemToken if absent); on token error, retry once with META_SYSTEM_TOKEN.
 // optionsOrFactory: plain options object (JSON body), or () => options (for FormData — stream can't be reused).
@@ -40,8 +42,8 @@ function getApiConfig({ provider, accessToken }) {
     };
   }
   return {
-    messagesUrl: (phoneNumberId) => `${GRAPH_BASE}/${phoneNumberId}/messages`,
-    mediaUrl:    (phoneNumberId) => `${GRAPH_BASE}/${phoneNumberId}/media`,
+    messagesUrl: (phoneNumberId) => `${META_BASE}/${phoneNumberId}/messages`,
+    mediaUrl:    (phoneNumberId) => `${META_BASE}/${phoneNumberId}/media`,
     jsonHeaders: { 'Content-Type': 'application/json' },
     formHeaders: {},
     doFetch: (url, optionsOrFactory, logTag) => metaFetch(url, optionsOrFactory, accessToken, logTag),
@@ -399,7 +401,7 @@ const _SPLIT_TOTAL_PAUSE_MS = 8000;
  * Non-2xx responses are logged to error_log (never silenced).
  * Accepts _doFetch / _logFn overrides for unit testing.
  */
-async function markReadAndTyping(msgId, creds, { _doFetch, _logFn } = {}) {
+async function markReadAndTyping(msgId, creds, { _doFetch, _logFn, _timeoutMs = 3000 } = {}) {
   if (!msgId || creds.provider !== 'meta') return;
   const { messagesUrl, jsonHeaders, doFetch: defaultDoFetch } = getApiConfig(creds);
   const fetch = _doFetch || defaultDoFetch;
@@ -415,6 +417,7 @@ async function markReadAndTyping(msgId, creds, { _doFetch, _logFn } = {}) {
         message_id: msgId,
         typing_indicator: { type: 'text' },
       }),
+      signal: AbortSignal.timeout(_timeoutMs),
     }, 'markReadAndTyping');
   } catch (err) {
     log('markReadAndTyping-error', {

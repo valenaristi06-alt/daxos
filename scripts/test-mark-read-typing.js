@@ -211,6 +211,25 @@ async function runErrorTest() {
     }
   );
   ok('null msgId: no-op', logged5.length === 0);
+
+  // Meta API hangs → times out after _timeoutMs and logs error.
+  // _doFetch keeps a ref'd timer (200ms fallback) so the event loop doesn't drain before
+  // AbortSignal.timeout(50) fires (AbortSignal uses an unref'd timer internally).
+  const loggedTimeout = [];
+  await markReadAndTyping(
+    'wamid.test',
+    { provider: 'meta', phoneNumberId: 'test-pnid', accessToken: 'tok' },
+    {
+      _doFetch: (url, opts) => new Promise((_, rej) => {
+        const fallback = setTimeout(() => rej(new Error('test-fallback')), 200);
+        opts.signal?.addEventListener('abort', () => { clearTimeout(fallback); rej(opts.signal.reason); });
+      }),
+      _logFn: (ctx, err) => loggedTimeout.push({ ctx, msg: err.message }),
+      _timeoutMs: 50,
+    }
+  );
+  ok('timeout: error logged', loggedTimeout.length === 1, `got ${loggedTimeout.length}`);
+  ok('timeout: context is markReadAndTyping-error', loggedTimeout[0]?.ctx === 'markReadAndTyping-error');
 }
 
 // Run all
