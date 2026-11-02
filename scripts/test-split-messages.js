@@ -81,6 +81,52 @@ ok('phone intact in its part', phone?.[0] === 'Podés llamarnos al 099 123 456.'
 const long = parseSplitParts('Este es un mensaje muy largo que contiene mucha información sobre el negocio. Vendemos productos de calidad y ofrecemos el mejor servicio de atención al cliente. Si necesitás más información no dudes en consultarnos.');
 ok('long message without separator → null', long === null);
 
+// ── Safety net: paragraph expansion ──────────────────────────────────────────
+
+console.log('\n--- paragraph safety net ---');
+
+// (a) 3 paragraphs without ||| → 3 parts
+const threeParas = parseSplitParts(
+  'Hola, gracias por tu consulta.\n\nTenemos remeras desde $650 y pantalones desde $1.200.\n\n¿Te puedo ayudar con algo más?'
+);
+ok('3 paragraphs without ||| → 3 parts', threeParas?.length === 3);
+ok('3 paragraphs: first para correct', threeParas?.[0] === 'Hola, gracias por tu consulta.');
+ok('3 paragraphs: second para correct', threeParas?.[1] === 'Tenemos remeras desde $650 y pantalones desde $1.200.');
+ok('3 paragraphs: third para correct', threeParas?.[2] === '¿Te puedo ayudar con algo más?');
+
+// (b) Price list stays intact (not split by paragraph net)
+const priceList = parseSplitParts(
+  'Nuestros precios:\n- Remeras: $650\n- Pantalones: $1.200\n- Buzos: $1.800'
+);
+ok('price list without ||| → null (list kept intact)', priceList === null);
+
+// (b2) Price list as part of a split keeps it together
+const priceListInSplit = parseSplitParts(
+  'Tenemos varios productos. ||| Nuestros precios:\n- Remeras: $650\n- Pantalones: $1.200\n- Buzos: $1.800 ||| ¿Te interesa alguno?'
+);
+ok('price list part stays as one part', priceListInSplit?.length === 3);
+ok('price list content intact', priceListInSplit?.[1].includes('- Remeras: $650'));
+
+// (c) More than 4 paragraphs → 4 parts, overflow merged into 4th
+const fiveParas = parseSplitParts(
+  'Párrafo 1.\n\nPárrafo 2.\n\nPárrafo 3.\n\nPárrafo 4.\n\nPárrafo 5.'
+);
+ok('5 paragraphs capped to 4 parts', fiveParas?.length === 4);
+ok('5 paragraphs: overflow merged into 4th', fiveParas?.[3] === 'Párrafo 4.\n\nPárrafo 5.');
+
+// Single paragraph (no blank lines, no |||) → null
+ok('single para no blank lines → null',
+  parseSplitParts('Hola, ¿en qué te puedo ayudar hoy?') === null);
+
+// Paragraph + ||| combo: ||| split expanded further by blank lines
+const mixedSplit = parseSplitParts(
+  'Primera parte. ||| Segunda parte.\n\nTercera parte.'
+);
+ok('||| then blank-line expansion → 3 parts', mixedSplit?.length === 3);
+ok('mixed: first part correct', mixedSplit?.[0] === 'Primera parte.');
+ok('mixed: second part correct', mixedSplit?.[1] === 'Segunda parte.');
+ok('mixed: third part correct', mixedSplit?.[2] === 'Tercera parte.');
+
 // ── splitAndSend ─────────────────────────────────────────────────────────────
 
 console.log('\n--- splitAndSend ---');
@@ -98,7 +144,8 @@ async function runSendTests() {
     typingCalls.push({ phone, at: Date.now() });
   };
 
-  const creds = { provider: 'meta', phoneNumberId: 'test' };
+  // Typing behavior tested with Kapso provider (Meta path covered in test-mark-read-typing.js).
+  const creds = { provider: 'kapso', phoneNumberId: 'test' };
   const phone = '+59899000001';
 
   // Test: two parts sent in order
