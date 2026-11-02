@@ -355,4 +355,49 @@ async function downloadKapsoMedia(mediaUrl, mediaId, phoneNumberId) {
   return { buffer: buf2, contentType: contentType2 };
 }
 
-module.exports = { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, downloadKapsoMedia, downloadMetaMedia, isAllowedKapsoHost };
+/**
+ * Parses a reply string into split parts.
+ * Returns null if no split is needed (no "|||" or only one non-empty part).
+ * Merges overflow beyond 4 parts into the 4th.
+ */
+function parseSplitParts(reply) {
+  const rawParts = reply.split('|||').map(p => p.trim()).filter(Boolean);
+  if (rawParts.length <= 1) return null;
+  return rawParts.length <= 4
+    ? rawParts
+    : [...rawParts.slice(0, 3), rawParts.slice(3).join('\n\n')];
+}
+
+const _SPLIT_TOTAL_PAUSE_MS = 8000;
+
+/**
+ * Sends an array of message parts sequentially with typing indicators between them.
+ * response_delay for the first part is already consumed upstream — do NOT re-wait here.
+ * Accepts _sendFn / _typingFn overrides for testing.
+ */
+async function splitAndSend(parts, { customerPhone, waCredentials, _sendFn, _typingFn } = {}) {
+  const send   = _sendFn   || sendWhatsAppMessage;
+  const typing = _typingFn || sendTypingIndicator;
+  const sleep  = ms => new Promise(r => setTimeout(r, ms));
+  const sentParts = [];
+  const charsFromPart2 = parts.slice(1).reduce((s, p) => s + p.length, 0);
+
+  for (let i = 0; i < parts.length; i++) {
+    try {
+      await typing(customerPhone, waCredentials).catch(() => {});
+      if (i > 0 && charsFromPart2 > 0) {
+        const pause = Math.max(800, Math.min(4000,
+          Math.round(_SPLIT_TOTAL_PAUSE_MS * parts[i].length / charsFromPart2)
+        ));
+        await sleep(pause);
+      }
+      await send(customerPhone, parts[i], waCredentials);
+      sentParts.push(parts[i]);
+    } catch (err) {
+      return { sentParts, fullySent: false };
+    }
+  }
+  return { sentParts, fullySent: true };
+}
+
+module.exports = { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, downloadKapsoMedia, downloadMetaMedia, isAllowedKapsoHost, parseSplitParts, splitAndSend };

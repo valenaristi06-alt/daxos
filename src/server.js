@@ -195,7 +195,7 @@ async function extractTextFromFile(buffer, mimetype, originalname) {
 }
 
 const fs = require('fs');
-const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, downloadKapsoMedia, downloadMetaMedia } = require('./whatsapp');
+const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, downloadKapsoMedia, downloadMetaMedia, parseSplitParts, splitAndSend } = require('./whatsapp');
 const { generateAudioBuffer, transcribeAudio } = require('./elevenlabs');
 const { convertToOgg } = require('./audio');
 
@@ -815,6 +815,15 @@ app.patch('/api/business/weekly-summary-enabled', requireAuth, (req, res) => {
   res.json({ ok: true, weekly_summary_enabled: enabled });
 });
 
+app.patch('/api/business/split-messages', requireAuth, (req, res) => {
+  const { enabled } = req.body;
+  if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be boolean' });
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'No business' });
+  setStyleProfile(user.business_id, { mensajes_separados: enabled });
+  res.json({ ok: true, mensajes_separados: enabled });
+});
+
 // Exact consent text — stored verbatim for legal record
 const CONSENT_TEXT = 'Confirmo que esta es mi voz (o tengo autorización explícita de su dueño) y autorizo usarla para generar respuestas automáticas de este negocio.';
 
@@ -1409,8 +1418,16 @@ app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
       reply = reply.replace(/^\[SEND_DOC\]\s*/m, '');
     }
     reply = reply.trim();
+    // Split-mode: parse parts and clean ||| so the client never sees the delimiter
+    const _pvSplitEnabled = business.style_profile?.mensajes_separados === true;
+    const _pvParts = _pvSplitEnabled ? parseSplitParts(reply) : null;
+    reply = _pvParts
+      ? _pvParts.join('\n\n')
+      : reply.replace(/\|\|\|/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    const _pvReplyForTTS = _pvParts ? _pvParts.join(' ') : reply;
+
     const planAllowsAudio = ['crecimiento', 'a_medida'].includes(business.plan);
-    const replyFitsAudio = reply.length <= AUDIO_MAX_CHARS;
+    const replyFitsAudio = _pvReplyForTTS.length <= AUDIO_MAX_CHARS;
     const isFirstMessage = history.length === 0;
     const wantsAudio = business.response_mode === 'audio' ||
                        (business.response_mode === 'audio_key' && isFirstMessage);
@@ -1419,14 +1436,16 @@ app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
     let audio_b64 = null;
     if (sent_audio) {
       try {
-        const mp3 = await generateAudioBuffer(business.voice_id, reply);
+        const mp3 = await generateAudioBuffer(business.voice_id, _pvReplyForTTS);
         audio_b64 = mp3.toString('base64');
       } catch (audioErr) {
         console.error('[preview-audio] ElevenLabs failed:', audioErr.message);
       }
     }
 
-    res.json({ reply, sent_doc, sent_audio, needs_human, audio_b64 });
+    const _pvResponse = { reply, sent_doc, sent_audio, needs_human, audio_b64 };
+    if (_pvParts && _pvParts.length > 1) _pvResponse.parts = _pvParts;
+    res.json(_pvResponse);
   } catch (err) {
     const root = err.cause ?? err;
     logError('preview-chat', root);
@@ -2402,6 +2421,17 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   imgTextBefore = sanitizeForClient(imgTextBefore);
   imgTextAfter  = sanitizeForClient(imgTextAfter);
 
+  // ── Split-message mode ──────────────────────────────────────────────────
+  // parseSplitParts returns null if no "|||" or only one non-empty part.
+  const _splitEnabled = business.style_profile?.mensajes_separados === true;
+  const _splitParts   = _splitEnabled ? parseSplitParts(reply) : null;
+  // Normalize reply for DB / single-message send: join parts or clean stray "|||"
+  reply = _splitParts
+    ? _splitParts.join('\n\n')
+    : reply.replace(/\|\|\|/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  // TTS always gets a single clean string (no separators, no double newlines)
+  const _replyForTTS = _splitParts ? _splitParts.join(' ') : reply;
+
   if (conversation.silent) setConversationSilent(conversation.id, 0);
   addMessage(conversation.id, 'user', text);
   addMessage(conversation.id, 'assistant', reply);
@@ -2433,21 +2463,21 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
 
   let replySent = false;
   const planAllowsAudio = ['crecimiento', 'a_medida'].includes(business.plan);
-  const replyFitsAudio = reply.length <= AUDIO_MAX_CHARS;
+  const replyFitsAudio = _replyForTTS.length <= AUDIO_MAX_CHARS;
   const isFirstMessage = history.length === 0;
   const wantsAudio = business.response_mode === 'audio' ||
                      (business.response_mode === 'audio_key' && isFirstMessage);
   // TTS daily chars cap check
   const ttsDailyCap = !business.plan_cortesia ? _getTtsDailyCap(business.plan) : Infinity;
   const ttsSpending = getSpendingToday(business.id);
-  const ttsCapHit   = ttsDailyCap !== Infinity && (ttsSpending.elevenlabs_chars + reply.length > ttsDailyCap);
+  const ttsCapHit   = ttsDailyCap !== Infinity && (ttsSpending.elevenlabs_chars + _replyForTTS.length > ttsDailyCap);
   try {
     if (wantsAudio && business.voice_id && planAllowsAudio && replyFitsAudio && !ttsCapHit) {
       try {
-        logError('tts-text', { message: `business_id=${business.id} chars=${reply.length}`, stack: '' });
-        const mp3 = await generateAudioBuffer(business.voice_id, reply);
-        try { setClaudeUsageTtsChars(getLastClaudeUsageId(conversation.id), reply.length); } catch (_) {}
-        try { incrementElevenLabsChars(business.id, reply.length); } catch (_) {}
+        logError('tts-text', { message: `business_id=${business.id} chars=${_replyForTTS.length}`, stack: '' });
+        const mp3 = await generateAudioBuffer(business.voice_id, _replyForTTS);
+        try { setClaudeUsageTtsChars(getLastClaudeUsageId(conversation.id), _replyForTTS.length); } catch (_) {}
+        try { incrementElevenLabsChars(business.id, _replyForTTS.length); } catch (_) {}
         logError('tts-buffers', { message: `mp3=${mp3.length}b`, stack: '' });
         const ogg = await convertToOgg(mp3);
         logError('tts-buffers', { message: `ogg=${ogg.length}b mime=audio/ogg; codecs=opus`, stack: '' });
@@ -2469,12 +2499,21 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
         // After escalation the bot must not send anything extra — skip imgTextAfter
         if (imgTextAfter && !needsHuman) await sendWhatsAppMessage(customerPhone, imgTextAfter, waCredentials);
         logError('webhook-send-result', { message: `mode=text+image split before=${!!imgTextBefore} after=${!!imgTextAfter} skipped_after=${needsHuman && !!imgTextAfter}`, stack: '' });
+      } else if (_splitParts) {
+        const _sr = await splitAndSend(_splitParts, { customerPhone, waCredentials });
+        if (_sr.sentParts.length > 0) replySent = true;
+        if (!_sr.fullySent) {
+          logError('split-send-partial', {
+            message: `business_id=${business.id} sent=${_sr.sentParts.length}/${_splitParts.length}`,
+            stack: '',
+          });
+        }
       } else {
         const sendResult = await sendWhatsAppMessage(customerPhone, reply, waCredentials);
         logError('webhook-send-result', { message: `mode=text body=${JSON.stringify(sendResult).slice(0, 300)}`, stack: '' });
       }
     }
-    replySent = true;
+    if (!_splitParts) replySent = true;
   } catch (sendErr) {
     logError(sendCtxErr, sendErr);
   }

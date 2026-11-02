@@ -451,6 +451,16 @@ El precio es $3.500. Si querés, coordinamos un horario para que lo veas."></tex
             </div>
             <p class="delay-value-display">Espera: <strong id="delay-display">5</strong> segundos</p>
           </div>
+
+          <div class="field">
+            <label class="field-label">¿Mandás en mensajes separados?</label>
+            <span class="field-hint">El asistente divide su respuesta en mensajes cortos enviados uno tras otro, como haría una persona real. Solo aplica a respuestas de texto.</span>
+            <label class="toggle-row">
+              <input type="checkbox" id="split_messages_enabled" />
+              <span class="toggle-switch"></span>
+              <span class="toggle-label" id="split-messages-label">Apagado</span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -1230,6 +1240,10 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
       weeklySummaryEl.checked = weeklySummaryOn;
       document.getElementById('weekly-summary-label').textContent = weeklySummaryOn ? 'Activado' : 'Apagado';
 
+      const splitOn = b.style_profile?.mensajes_separados === true;
+      document.getElementById('split_messages_enabled').checked = splitOn;
+      document.getElementById('split-messages-label').textContent = splitOn ? 'Activado' : 'Apagado';
+
       const delayVal = b.response_delay ?? 5;
       document.getElementById('response_delay').value = delayVal;
       document.getElementById('delay-display').textContent = delayVal;
@@ -1923,6 +1937,27 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
         this.checked = !enabled;
         document.getElementById('weekly-summary-label').textContent = !enabled ? 'Activado' : 'Apagado';
         console.error('[weekly-summary-toggle] network error:', err);
+      }
+    });
+
+    document.getElementById('split_messages_enabled').addEventListener('change', async function () {
+      const enabled = this.checked;
+      document.getElementById('split-messages-label').textContent = enabled ? 'Activado' : 'Apagado';
+      try {
+        const res = await fetch('/api/business/split-messages', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled }),
+        });
+        if (!res.ok) {
+          this.checked = !enabled;
+          document.getElementById('split-messages-label').textContent = !enabled ? 'Activado' : 'Apagado';
+          console.error('[split-messages-toggle] failed:', await res.text());
+        }
+      } catch (err) {
+        this.checked = !enabled;
+        document.getElementById('split-messages-label').textContent = !enabled ? 'Activado' : 'Apagado';
+        console.error('[split-messages-toggle] network error:', err);
       }
     });
 

@@ -717,8 +717,11 @@ function setUserPhone(userId, phone) {
 }
 
 function setStyleProfile(businessId, profile) {
+  const row = db.prepare('SELECT style_profile FROM businesses WHERE id = ?').get(businessId);
+  const existing = row?.style_profile ? JSON.parse(row.style_profile) : {};
+  const merged = { ...existing, ...profile };
   db.prepare('UPDATE businesses SET style_profile = ? WHERE id = ?')
-    .run(JSON.stringify(profile), businessId);
+    .run(JSON.stringify(merged), businessId);
 }
 
 function setWebsiteSummary(businessId, summary) {

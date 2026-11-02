@@ -64,7 +64,10 @@ function buildSystemPrompt(business, label, bookingContext = null, runtimeCtx = 
       `Largo de mensajes: ${p.largo_mensajes}`,
       `Forma de cerrar: ${p.forma_de_cerrar}`,
       `Características: ${(p.caracteristicas || []).join(', ')}`,
-      'Usá este perfil como guía adicional al redactar cada respuesta.'
+      'Usá este perfil como guía adicional al redactar cada respuesta.',
+      ...(p.mensajes_separados ? [
+        'Cuando respondas, separás tu respuesta en partes usando exactamente "|||" como único separador. Máximo 4 partes. Nunca cortés en medio de: listas, precios, direcciones, teléfonos ni URLs. Cada parte es una o dos frases completas y naturales. No ponés "|||" al inicio ni al final de la respuesta.',
+      ] : []),
     );
   }
 
