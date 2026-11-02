@@ -219,7 +219,7 @@ async function extractTextFromFile(buffer, mimetype, originalname) {
 }
 
 const fs = require('fs');
-const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, downloadKapsoMedia, downloadMetaMedia, parseSplitParts, splitAndSend } = require('./whatsapp');
+const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, markReadAndTyping, downloadKapsoMedia, downloadMetaMedia, parseSplitParts, splitAndSend } = require('./whatsapp');
 const { generateAudioBuffer, transcribeAudio } = require('./elevenlabs');
 const { convertToOgg } = require('./audio');
 
@@ -2495,6 +2495,15 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   const ttsDailyCap = !business.plan_cortesia ? _getTtsDailyCap(business.plan) : Infinity;
   const ttsSpending = getSpendingToday(business.id);
   const ttsCapHit   = ttsDailyCap !== Infinity && (ttsSpending.elevenlabs_chars + _replyForTTS.length > ttsDailyCap);
+
+  // Meta: mark as read + show typing before sending the first part.
+  // Skipped when needsHuman — message should stay unread (owner still needs to see it).
+  let _readAndTypingDone = false;
+  if (!needsHuman && waCredentials?.provider === 'meta' && msgId) {
+    await markReadAndTyping(msgId, waCredentials);
+    _readAndTypingDone = true;
+  }
+
   try {
     if (wantsAudio && business.voice_id && planAllowsAudio && replyFitsAudio && !ttsCapHit) {
       try {
@@ -2524,7 +2533,10 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
         if (imgTextAfter && !needsHuman) await sendWhatsAppMessage(customerPhone, imgTextAfter, waCredentials);
         logError('webhook-send-result', { message: `mode=text+image split before=${!!imgTextBefore} after=${!!imgTextAfter} skipped_after=${needsHuman && !!imgTextAfter}`, stack: '' });
       } else if (_splitParts) {
-        const _sr = await splitAndSend(_splitParts, { customerPhone, waCredentials });
+        // Pass msgId so splitAndSend can re-activate typing before parts 2, 3, 4.
+        // needsHuman=true → msgId passed as null so typing is skipped for those parts.
+        const _splitMsgId = !needsHuman ? msgId : null;
+        const _sr = await splitAndSend(_splitParts, { customerPhone, waCredentials, msgId: _splitMsgId });
         if (_sr.sentParts.length > 0) replySent = true;
         if (!_sr.fullySent) {
           logError('split-send-partial', {
@@ -2544,8 +2556,8 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
 
   if (!imageSent) await sendImageNow();
 
-  // Mark as read only when bot sent a reply and it's not a derivation
-  if (!needsHuman && replySent) {
+  // markAsRead: skip if markReadAndTyping already marked it (avoids duplicate read call to Meta).
+  if (!needsHuman && replySent && !_readAndTypingDone) {
     markAsRead(msgId, waCredentials).catch(() => {});
   }
 

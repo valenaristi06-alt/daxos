@@ -144,7 +144,8 @@ async function runSendTests() {
     typingCalls.push({ phone, at: Date.now() });
   };
 
-  const creds = { provider: 'meta', phoneNumberId: 'test' };
+  // Typing behavior tested with Kapso provider (Meta path covered in test-mark-read-typing.js).
+  const creds = { provider: 'kapso', phoneNumberId: 'test' };
   const phone = '+59899000001';
 
   // Test: two parts sent in order

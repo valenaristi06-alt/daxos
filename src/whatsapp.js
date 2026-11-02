@@ -1,5 +1,7 @@
 'use strict';
 
+const { logError } = require('./db');
+
 const GRAPH_BASE = 'https://graph.facebook.com/v21.0';
 const IS_PROD = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT;
 // KAPSO_API_BASE_URL and KAPSO_TEST_ALLOW_LOCALHOST are only honoured outside production.
@@ -391,20 +393,77 @@ function parseSplitParts(reply) {
 const _SPLIT_TOTAL_PAUSE_MS = 8000;
 
 /**
+ * Meta Cloud API: marks the incoming message as read AND shows "typing..." in one call.
+ * The typing indicator stays active until the bot sends its reply or 25 s elapse.
+ * Only fires for Meta provider; no-op otherwise.
+ * Non-2xx responses are logged to error_log (never silenced).
+ * Accepts _doFetch / _logFn overrides for unit testing.
+ */
+async function markReadAndTyping(msgId, creds, { _doFetch, _logFn } = {}) {
+  if (!msgId || creds.provider !== 'meta') return;
+  const { messagesUrl, jsonHeaders, doFetch: defaultDoFetch } = getApiConfig(creds);
+  const fetch = _doFetch || defaultDoFetch;
+  const log   = _logFn   || logError;
+  let res;
+  try {
+    res = await fetch(messagesUrl(creds.phoneNumberId), {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        status: 'read',
+        message_id: msgId,
+        typing_indicator: { type: 'text' },
+      }),
+    }, 'markReadAndTyping');
+  } catch (err) {
+    log('markReadAndTyping-error', {
+      message: `network error: ${err.message} msgId=${msgId}`,
+      stack: err.stack || '',
+    });
+    return;
+  }
+  if (!res.ok) {
+    let body = '';
+    try { body = await res.text(); } catch {}
+    log('markReadAndTyping-error', {
+      message: `status=${res.status} msgId=${msgId} body=${body.slice(0, 300)}`,
+      stack: '',
+    });
+  }
+}
+
+/**
  * Sends an array of message parts sequentially with typing indicators between them.
  * response_delay for the first part is already consumed upstream — do NOT re-wait here.
- * Accepts _sendFn / _typingFn overrides for testing.
+ *
+ * For Meta provider: markReadAndTyping replaces sendTypingIndicator.
+ *   - Part 0 (first): server.js calls markReadAndTyping before splitAndSend; no internal call here.
+ *   - Parts 1+ (subsequent): splitAndSend calls markReadAndTyping to re-activate typing.
+ *   - If msgId is null (needsHuman path), no typing call is made for any part.
+ * For Kapso/Baileys: sendTypingIndicator called before every part as before.
+ *
+ * Accepts _sendFn / _typingFn / _markReadTypingFn overrides for testing.
  */
-async function splitAndSend(parts, { customerPhone, waCredentials, _sendFn, _typingFn } = {}) {
-  const send   = _sendFn   || sendWhatsAppMessage;
-  const typing = _typingFn || sendTypingIndicator;
-  const sleep  = ms => new Promise(r => setTimeout(r, ms));
+async function splitAndSend(parts, { customerPhone, waCredentials, msgId, _sendFn, _typingFn, _markReadTypingFn } = {}) {
+  const send  = _sendFn  || sendWhatsAppMessage;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
   const sentParts = [];
   const charsFromPart2 = parts.slice(1).reduce((s, p) => s + p.length, 0);
+  const isMetaProvider = waCredentials?.provider === 'meta';
 
   for (let i = 0; i < parts.length; i++) {
     try {
-      await typing(customerPhone, waCredentials).catch(() => {});
+      if (isMetaProvider) {
+        // Parts 2, 3, 4 (i > 0): re-activate typing + re-mark read (idempotent).
+        // Part 0 (i = 0): handled by server.js before splitAndSend is called.
+        if (i > 0 && msgId) {
+          await (_markReadTypingFn || markReadAndTyping)(msgId, waCredentials);
+        }
+      } else {
+        // Kapso / Baileys: typing indicator before every part.
+        await (_typingFn || sendTypingIndicator)(customerPhone, waCredentials).catch(() => {});
+      }
       if (i > 0 && charsFromPart2 > 0) {
         const pause = Math.max(800, Math.min(4000,
           Math.round(_SPLIT_TOTAL_PAUSE_MS * parts[i].length / charsFromPart2)
@@ -420,4 +479,4 @@ async function splitAndSend(parts, { customerPhone, waCredentials, _sendFn, _typ
   return { sentParts, fullySent: true };
 }
 
-module.exports = { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, downloadKapsoMedia, downloadMetaMedia, isAllowedKapsoHost, parseSplitParts, splitAndSend };
+module.exports = { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, markReadAndTyping, downloadKapsoMedia, downloadMetaMedia, isAllowedKapsoHost, parseSplitParts, splitAndSend };
