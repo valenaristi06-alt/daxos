@@ -63,6 +63,7 @@ run_suite "test-urgent-alert"    "scripts/test-urgent-alert.js"
 run_suite "test-urgent-keywords" "scripts/test-urgent-keywords.js"
 run_suite "test-urgent-toggle"   "scripts/test-urgent-toggle.js"
 run_suite "test-split-messages"  "scripts/test-split-messages.js"
+run_suite "test-client-queue"    "scripts/test-client-queue.js"
 
 echo "================================================================"
 echo "Done."

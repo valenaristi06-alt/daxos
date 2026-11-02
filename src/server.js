@@ -106,6 +106,30 @@ const { runBackup, maybeScheduledBackup, maybeSilenceAlert, startupBackupCheck, 
 const urgentAlertThrottle = new Map(); // conversationId → ms timestamp, resets on server restart
 const urgentBizHourly = new Map(); // businessId → { count, windowStart }, resets on server restart
 
+// Per-client serialization queue. Key: `${businessId}:${customerPhone}`.
+// Each value is the tail Promise of the chain for that client.
+// A 90 s timeout wraps each processing call so a hung message never blocks the next.
+const _clientQueue = new Map();
+const _CLIENT_QUEUE_TIMEOUT_MS = 90_000;
+
+function _enqueueForClient(key, fn) {
+  const prev = _clientQueue.get(key) ?? Promise.resolve();
+  const next = prev.then(() => {
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('client-queue-timeout')), _CLIENT_QUEUE_TIMEOUT_MS)
+    );
+    return Promise.race([fn(), timeout]).catch(err => {
+      logError('client-queue-error', { message: `key=${key} err=${err.message}`, stack: err.stack || '' });
+    });
+  });
+  _clientQueue.set(key, next);
+  // Clean up once this tail settles so the Map doesn't grow unboundedly.
+  next.finally(() => {
+    if (_clientQueue.get(key) === next) _clientQueue.delete(key);
+  });
+  return next;
+}
+
 function _urgentBizHourlyOk(bizId) {
   const HOUR_MS = 60 * 60 * 1000;
   const LIMIT = 10;
@@ -2780,18 +2804,20 @@ app.post('/webhook', async (req, res) => {
               const storedText = caption ? `[imagen] ${caption}` : '[imagen]';
               const imageData = { base64: imgBuffer.toString('base64'), mimeType: actualMime, caption };
               logError('meta-image-vision', { message: `business_id=${business.id} mime=${actualMime} bytes=${imgBuffer.length} has_caption=${!!caption}`, stack: '' });
-              try {
-                await processIncomingMessage(business, waCredentials, {
-                  msgId: msg.id, customerPhone,
-                  text: storedText,
-                  msgTimestamp, msgTimestampField: 'msg.timestamp',
-                  imageData,
-                });
-              } catch (err) {
-                if (msg.id) deleteProcessedMessage(business.id, msg.id);
-                if (_rawId)  deleteProcessedMessage(business.id, _rawId);
-                logError('webhook-process-error', err);
-              }
+              _enqueueForClient(`${business.id}:${customerPhone}`, async () => {
+                try {
+                  await processIncomingMessage(business, waCredentials, {
+                    msgId: msg.id, customerPhone,
+                    text: storedText,
+                    msgTimestamp, msgTimestampField: 'msg.timestamp',
+                    imageData,
+                  });
+                } catch (err) {
+                  if (msg.id) deleteProcessedMessage(business.id, msg.id);
+                  if (_rawId)  deleteProcessedMessage(business.id, _rawId);
+                  logError('webhook-process-error', err);
+                }
+              });
               continue;
             }
 
@@ -2935,17 +2961,19 @@ app.post('/webhook', async (req, res) => {
             }
           }
 
-          try {
-            await processIncomingMessage(business, waCredentials, {
-              msgId: msg.id, customerPhone, text,
-              msgTimestamp, msgTimestampField: 'msg.timestamp',
-            });
-          } catch (err) {
-            // Rollback both dedup marks so Meta retry can reprocess
-            if (msg.id) deleteProcessedMessage(business.id, msg.id);
-            if (_rawId)  deleteProcessedMessage(business.id, _rawId);
-            logError('webhook-process-error', err);
-          }
+          _enqueueForClient(`${business.id}:${customerPhone}`, async () => {
+            try {
+              await processIncomingMessage(business, waCredentials, {
+                msgId: msg.id, customerPhone, text,
+                msgTimestamp, msgTimestampField: 'msg.timestamp',
+              });
+            } catch (err) {
+              // Rollback both dedup marks so Meta retry can reprocess
+              if (msg.id) deleteProcessedMessage(business.id, msg.id);
+              if (_rawId)  deleteProcessedMessage(business.id, _rawId);
+              logError('webhook-process-error', err);
+            }
+          });
         }
       }
     }
@@ -3461,13 +3489,15 @@ app.post('/webhook/kapso', async (req, res) => {
 
       logKapsoEvent(`processing:image business_id=${business.id} from=${msg.from} mime=${actualMime} bytes=${imgBuffer.length}`);
 
-      await processIncomingMessage(business, waCredentials, {
-        msgId:             msg.id,
-        customerPhone:     msg.from,
-        text:              imgStoredText,
-        msgTimestamp:      imgTimestamp,
-        msgTimestampField: imgTimestampField,
-        imageData,
+      _enqueueForClient(`${business.id}:${msg.from}`, async () => {
+        await processIncomingMessage(business, waCredentials, {
+          msgId:             msg.id,
+          customerPhone:     msg.from,
+          text:              imgStoredText,
+          msgTimestamp:      imgTimestamp,
+          msgTimestampField: imgTimestampField,
+          imageData,
+        });
       });
       return;
     }
@@ -3498,12 +3528,14 @@ app.post('/webhook/kapso', async (req, res) => {
     }
 
     logKapsoEvent(`processing business_id=${business.id} from=${msg.from} type=${msg.type} msg_id=${msg.id}`);
-    await processIncomingMessage(business, waCredentials, {
-      msgId:            msg.id,
-      customerPhone:    msg.from,
-      text:             text.trim(),
-      msgTimestamp,
-      msgTimestampField,
+    _enqueueForClient(`${business.id}:${msg.from}`, async () => {
+      await processIncomingMessage(business, waCredentials, {
+        msgId:            msg.id,
+        customerPhone:    msg.from,
+        text:             text.trim(),
+        msgTimestamp,
+        msgTimestampField,
+      });
     });
   } catch (err) {
     logKapsoEvent(`error:${err.message.slice(0, 100)}`);
