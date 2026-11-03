@@ -23,6 +23,7 @@ const MP_REF_TO_PLAN    = { arranque: 'arranque', crecimiento: 'crecimiento', ne
 const _CAP_ANTHROPIC = { arranque: 70,  crecimiento: 150, a_medida: 300  };
 const _CAP_TTS_CHARS = { arranque: 20000, crecimiento: 100000, a_medida: 500000 };
 const _CAP_CONV_HOURLY = 8;
+const _CAP_PREVIEW = 100;
 
 function _getAnthropicDailyCap(plan) {
   const override = getRuntimeConfig ? (() => { try { return getRuntimeConfig(`cap_daily_anthropic_${plan}`); } catch { return null; } })() : null;
@@ -76,6 +77,7 @@ const Database = require('better-sqlite3');
 const multer = require('multer');
 const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
   incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
+  incrementPreviewCall, getPreviewSpendingToday, setSpendingCapOwnerNotified, setSpendingCapNeedsAttention,
   getConvAssistantCountLastHour, setSpendingCapNotified,
   createPasswordResetToken, getPasswordResetToken, markPasswordResetTokenUsed, changeUserPassword,
   insertEsPending, getActivePendingBusinesses, deleteEsPending, cleanExpiredEsPending,
@@ -100,7 +102,7 @@ const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = 
 const { handleDemoFlow, processFollowups } = require('./demo-flow');
 const { sendWeeklySummaries } = require('./weekly');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
-const { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail } = require('./email');
+const { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail, sendSpendingCapEmail } = require('./email');
 const { runBackup, maybeScheduledBackup, maybeSilenceAlert, startupBackupCheck, getLatestBackupMeta, listAllBackups } = require('./backup');
 
 const urgentAlertThrottle = new Map(); // conversationId → ms timestamp, resets on server restart
@@ -452,6 +454,7 @@ const OWNER_BUSINESS_FIELDS = new Set([
   'business_hours', 'after_hours_instructions', 'urgent_phone', 'owner_rules',
   'booking_enabled', 'weekly_summary_enabled',
   'billing_requires_invoice', 'billing_legal_name', 'billing_rut', 'billing_address', 'billing_email', 'billing_updated_at',
+  'spending_cap_hit_today',
 ]);
 
 function ownerView(biz) {
@@ -605,11 +608,13 @@ app.get('/api/config', (req, res) => {
 app.get('/api/business', requireAuth, (req, res) => {
   const business = getBusinessByUserId(req.session.userId);
   if (!business) return res.json(null);
+  const spending_cap_hit_today = !business.plan_cortesia &&
+    (getSpendingToday(business.id).anthropic_calls >= _getAnthropicDailyCap(business.plan));
   if (business.plan === 'arranque' && business.trial_starts_at && !business.plan_cortesia) {
     const trial_conv_count = getTrialConversationCount(business.id, business.trial_starts_at);
-    return res.json(ownerView({ ...business, trial_conv_count, trial_conv_limit: TRIAL_CONV_LIMIT }));
+    return res.json(ownerView({ ...business, trial_conv_count, trial_conv_limit: TRIAL_CONV_LIMIT, spending_cap_hit_today }));
   }
-  res.json(ownerView(business));
+  res.json(ownerView({ ...business, spending_cap_hit_today }));
 });
 
 app.patch('/api/business/wa-payment-confirmed', requireAuth, (req, res) => {
@@ -1415,10 +1420,10 @@ app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
   if (!message || !message.trim()) return res.status(400).json({ error: 'Mensaje vacío.' });
 
   try {
-    // Daily Anthropic cap check for preview
+    // Preview has its own daily counter (100/day) separate from the real cap
     if (!business.plan_cortesia) {
-      const sp = getSpendingToday(business.id);
-      if (sp.anthropic_calls >= _getAnthropicDailyCap(business.plan)) {
+      const previewCalls = getPreviewSpendingToday(business.id);
+      if (previewCalls >= _CAP_PREVIEW) {
         return res.status(429).json({ error: 'Límite diario de llamadas alcanzado. El bot pausó automáticamente.' });
       }
     }
@@ -1429,7 +1434,7 @@ app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
       documents: getBusinessDocumentTexts(user.business_id),
     };
     const rawReply = await generateReply(business, history, message.trim(), null, null, previewCtx);
-    incrementAnthropicCall(business.id);
+    incrementPreviewCall(business.id);
     let sent_doc = false;
     let needs_human = false;
     let reply = rawReply;
@@ -2179,26 +2184,41 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
 
   // Conversation paused — record message so owner sees it, but no AI reply
   if (conversation.needs_attention) {
-    addMessage(conversation.id, 'user', text);
-    if (conversation.paused_reason === 'keyword' && conversation.pause_reply_count < 3) {
-      const nowSec = Math.floor(Date.now() / 1000);
-      const lastAt = conversation.pause_last_reply_at || 0;
-      if (nowSec - lastAt >= 15 * 60) {
-        const replyText = getDefaultPauseReplyText(business);
-        recordKeywordPauseReply(conversation.id);
-        sendWhatsAppMessage(customerPhone, replyText, waCredentials)
-          .catch(err => logError('pause-reply-send', { message: err.message, stack: '' }));
-        addMessage(conversation.id, 'assistant', replyText);
-        logError('kapso-event', { message: `silenced:paused reason=keyword count=${conversation.pause_reply_count + 1} auto_reply_sent`, stack: '' });
+    // spending_cap pause: auto-resume if the cap has reset (next day or raised)
+    if (conversation.paused_reason === 'spending_cap' && !business.plan_cortesia) {
+      const _sp = getSpendingToday(business.id);
+      const _dc = _getAnthropicDailyCap(business.plan);
+      if (_sp.anthropic_calls < _dc) {
+        markConversationResumed(conversation.id);
+        logError('kapso-event', { message: `spending_cap auto-resumed conv=${conversation.id} calls=${_sp.anthropic_calls}/${_dc}`, stack: '' });
+        // fall through — cap reset, bot processes this message normally
       } else {
-        logError('kapso-event', { message: `silenced:paused reason=keyword count=${conversation.pause_reply_count} throttled last_reply_ago=${Math.floor((nowSec - lastAt) / 60)}m`, stack: '' });
+        addMessage(conversation.id, 'user', text);
+        logError('kapso-event', { message: `silenced:paused reason=spending_cap calls=${_sp.anthropic_calls}/${_dc}`, stack: '' });
+        return;
       }
-    } else if (conversation.paused_reason === 'keyword') {
-      logError('kapso-event', { message: `silenced:paused reason=keyword count=${conversation.pause_reply_count} limit_reached`, stack: '' });
     } else {
-      logError('kapso-event', { message: `silenced:paused reason=${conversation.paused_reason || 'human'}`, stack: '' });
+      addMessage(conversation.id, 'user', text);
+      if (conversation.paused_reason === 'keyword' && conversation.pause_reply_count < 3) {
+        const nowSec = Math.floor(Date.now() / 1000);
+        const lastAt = conversation.pause_last_reply_at || 0;
+        if (nowSec - lastAt >= 15 * 60) {
+          const replyText = getDefaultPauseReplyText(business);
+          recordKeywordPauseReply(conversation.id);
+          sendWhatsAppMessage(customerPhone, replyText, waCredentials)
+            .catch(err => logError('pause-reply-send', { message: err.message, stack: '' }));
+          addMessage(conversation.id, 'assistant', replyText);
+          logError('kapso-event', { message: `silenced:paused reason=keyword count=${conversation.pause_reply_count + 1} auto_reply_sent`, stack: '' });
+        } else {
+          logError('kapso-event', { message: `silenced:paused reason=keyword count=${conversation.pause_reply_count} throttled last_reply_ago=${Math.floor((nowSec - lastAt) / 60)}m`, stack: '' });
+        }
+      } else if (conversation.paused_reason === 'keyword') {
+        logError('kapso-event', { message: `silenced:paused reason=keyword count=${conversation.pause_reply_count} limit_reached`, stack: '' });
+      } else {
+        logError('kapso-event', { message: `silenced:paused reason=${conversation.paused_reason || 'human'}`, stack: '' });
+      }
+      return;
     }
-    return;
   }
 
   // Pause keyword check — before any network call so WA errors can't skip it
@@ -2250,6 +2270,8 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
         message: `biz=${business.id} plan=${business.plan} reason=${reason} calls=${spending.anthropic_calls}/${dailyCap} hourly=${hourlyCount}/${hourlyCap}`,
         stack: '',
       });
+      // Mark conversation so owner sees it needs attention (daily cap only — hourly cap is transient)
+      if (hitDaily) setSpendingCapNeedsAttention(conversation.id);
       const nowSec = Math.floor(Date.now() / 1000);
       const lastNotified = conversation.spending_cap_notified_at || 0;
       if (nowSec - lastNotified > 12 * 3600) {
@@ -2267,6 +2289,28 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
         }
       } else {
         addMessage(conversation.id, 'user', text);
+      }
+      // Notify owner once per UY day (email + WA best-effort)
+      if (hitDaily) {
+        const todayMvd = toUYDateStr(Date.now());
+        const bizFresh = getBusinessById(business.id);
+        if (bizFresh.spending_cap_owner_notified_at !== todayMvd) {
+          setSpendingCapOwnerNotified(business.id, todayMvd);
+          const owner = getUserByBusinessId(business.id);
+          const panelUrl = `${process.env.APP_URL || 'https://daxos.lat'}/conversations.html`;
+          if (owner?.email) {
+            sendSpendingCapEmail({ to: owner.email, businessName: business.name, panelUrl, plan: business.plan, dailyCap })
+              .catch(err => logError('spending-cap-email', { message: err.message, stack: '' }));
+          }
+          if (owner?.phone) {
+            const normPhone = normalizeContactPhone(owner.phone);
+            if (normPhone) {
+              const waMsg = `⚠️ Tu asistente Daxos (${business.name}) alcanzó el límite de respuestas de hoy. Escribí vos a los clientes que queden esperando. ${panelUrl}`;
+              sendWhatsAppMessage(normPhone, waMsg, waCredentials)
+                .catch(err => logError('spending-cap-wa', { message: err.message, stack: '' }));
+            }
+          }
+        }
       }
       markAsRead(msgId, waCredentials).catch(() => {});
       return;

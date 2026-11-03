@@ -16,7 +16,7 @@ const TEST_PASS  = 'prueba1234';
 
 // Validate --estado
 const ESTADO = process.env.SEED_ESTADO || 'activo';
-const ESTADOS_VALIDOS = ['activo', 'vacio', 'desconectado', 'prueba'];
+const ESTADOS_VALIDOS = ['activo', 'vacio', 'desconectado', 'prueba', 'tope'];
 if (!ESTADOS_VALIDOS.includes(ESTADO)) {
   console.error('  [seed] ERROR: SEED_ESTADO="' + ESTADO + '" no válido. Opciones: ' + ESTADOS_VALIDOS.join(', '));
   process.exit(1);
@@ -34,6 +34,7 @@ const ESTADO_CFG = {
   vacio:        { phone_number_id: 'pid-local-test', planPaid: true,  trialDaysAgo: null, trialEnded: false, subscriptionStatus: 'active',    seedConvs: false },
   desconectado: { phone_number_id: null,             planPaid: true,  trialDaysAgo: null, trialEnded: false, subscriptionStatus: 'active',    seedConvs: false },
   prueba:       { phone_number_id: 'pid-local-test', planPaid: false, trialDaysAgo: 30,   trialEnded: true,  subscriptionStatus: 'cancelled', seedConvs: false },
+  tope:         { phone_number_id: 'pid-local-test', planPaid: true,  trialDaysAgo: null, trialEnded: false, subscriptionStatus: 'active',    seedConvs: false },
 };
 const cfg = ESTADO_CFG[ESTADO];
 
@@ -109,6 +110,31 @@ if (existingIds.length > 0) {
 }
 db.prepare('DELETE FROM excluded_contacts WHERE business_id = ?').run(bizId);
 console.log('  [seed] Datos anteriores limpiados');
+
+// ── 4. Estado "tope": cupo alcanzado + una conv sin responder ─────────────────
+if (ESTADO === 'tope') {
+  const todayMvd = new Date(Date.now() - 3 * 3_600_000).toISOString().slice(0, 10);
+  // Set anthropic_calls = 70 (arranque daily cap) for today
+  db.prepare(`
+    INSERT INTO spending_counters (business_id, date, anthropic_calls, elevenlabs_chars, preview_calls)
+    VALUES (?, ?, 70, 0, 0)
+    ON CONFLICT(business_id, date) DO UPDATE SET anthropic_calls = 70
+  `).run(bizId, todayMvd);
+  console.log('  [seed] spending_counters: anthropic_calls=70 (cap alcanzado) para ' + todayMvd);
+
+  // One unanswered conversation — paused_reason='spending_cap', needs_attention=1
+  const rT = db.prepare(`
+    INSERT INTO conversations (business_id, customer_id, needs_attention, paused_at, paused_reason, created_at)
+    VALUES (?, '59891230001', 1, unixepoch(), 'spending_cap', ?)
+  `).run(bizId, utcMinsAgo(5));
+  db.prepare(`INSERT INTO messages (conversation_id, role, content, silent, created_at) VALUES (?, 'user', ?, 0, ?)`)
+    .run(rT.lastInsertRowid, '¿Tienen turno para mañana a las 11?', utcMinsAgo(5));
+  console.log('  [seed] Conv T: +598 91 230 001 — sin respuesta (tope alcanzado)');
+
+  db.close();
+  console.log('  [seed] Listo. Estado=tope — alerta roja visible en Inicio.\n');
+  process.exit(0);
+}
 
 // ── 4. Conversaciones ─────────────────────────────────────────────────────────
 if (!cfg.seedConvs) {

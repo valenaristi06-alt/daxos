@@ -149,27 +149,29 @@ async function main() {
     assert(r5.status === 400, 'reset-password: missing fields → 400');
   }
 
-  // ── Suite 3: Spending caps (Anthropic daily, conv hourly) ──
+  // ── Suite 3: Spending caps (preview counter, not real cap) ──
   console.log('\nSuite 3: Spending caps via preview endpoint');
   {
-    // Set daily cap to 0 via runtime_config in DB
     const Database = require('better-sqlite3');
-    const db = new Database(path.join(DB_DIR, 'daxos.db'));
-    db.prepare('INSERT OR REPLACE INTO runtime_config (key, value) VALUES (?, ?)').run('cap_daily_anthropic_arranque', '0');
-    db.close();
-
     const cookie = await registerUser(`captest-${Date.now()}@t.com`);
-    // Set up business quickly (PUT /api/business)
     await req('PUT', '/api/business', { name: 'CapBiz' }, { cookie });
-    // preview-chat should be blocked (cap=0)
+
+    // Get the business id for this user
+    const db3 = new Database(path.join(DB_DIR, 'daxos.db'));
+    const u = db3.prepare(`SELECT b.id FROM businesses b JOIN users u ON u.business_id = b.id WHERE u.email LIKE 'captest-%' ORDER BY b.id DESC LIMIT 1`).get();
+    const today = new Date(Date.now() - 3 * 3_600_000).toISOString().slice(0, 10);
+    // Saturate preview_calls at 100 (the preview daily cap)
+    db3.prepare(`
+      INSERT INTO spending_counters (business_id, date, anthropic_calls, elevenlabs_chars, preview_calls)
+      VALUES (?, ?, 0, 0, 100)
+      ON CONFLICT(business_id, date) DO UPDATE SET preview_calls = 100
+    `).run(u.id, today);
+    db3.close();
+
+    // preview-chat should be blocked by preview counter
     const r = await req('POST', '/api/business/preview-chat',
       { message: 'Hola', history: [] }, { cookie });
-    assert(r.status === 429, 'preview-chat: daily cap 0 → 429');
-
-    // Reset cap to a higher value
-    const db2 = new Database(path.join(DB_DIR, 'daxos.db'));
-    db2.prepare('DELETE FROM runtime_config WHERE key = ?').run('cap_daily_anthropic_arranque');
-    db2.close();
+    assert(r.status === 429, 'preview-chat: preview cap 100 → 429');
   }
 
   // ── Suite 4: DB improvements ──

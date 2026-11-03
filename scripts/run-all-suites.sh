@@ -41,6 +41,7 @@ echo "----------------------------------------------------------------"
 
 run_suite "test-db"              "scripts/test-db.js"
 run_suite "test-billing"         "scripts/test-billing.js"
+run_suite "test-spending-cap"    "scripts/test-spending-cap.js"
 run_suite "test-trial-grace"     "scripts/test-trial-grace.js"
 run_suite "test-wa-disconnect"   "scripts/test-wa-disconnect.js"
 run_suite "test-pause-keyword"   "scripts/test-pause-keyword.js"

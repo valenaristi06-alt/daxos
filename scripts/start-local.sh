@@ -7,6 +7,7 @@
 #   npm run local-seguro -- --estado=vacio         # WA conectado, plan activo, sin conversaciones
 #   npm run local-seguro -- --estado=desconectado  # WA desconectado, plan activo, sin conversaciones
 #   npm run local-seguro -- --estado=prueba        # WA conectado, prueba terminada, sin conversaciones
+#   npm run local-seguro -- --estado=tope          # WA conectado, plan activo, tope diario alcanzado (alerta roja en Inicio)
 set -e
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,7 +20,7 @@ for arg in "$@"; do
     --estado=*) ESTADO="${arg#--estado=}" ;;
   esac
 done
-ESTADOS_VALIDOS="activo vacio desconectado prueba"
+ESTADOS_VALIDOS="activo vacio desconectado prueba tope"
 if ! echo "$ESTADOS_VALIDOS" | grep -qw "$ESTADO"; then
   echo "ERROR: --estado=\"$ESTADO\" no válido. Opciones: $ESTADOS_VALIDOS"
   exit 1

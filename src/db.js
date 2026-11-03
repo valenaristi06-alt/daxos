@@ -554,6 +554,26 @@ db.exec(`
     }
   }
 
+  // NOTE: feature/agenda uses key '017_agenda'. This key is '017_spending_caps_mvd' — distinct.
+  // When merging feature/agenda into main AFTER this branch, rename its migration to '018_agenda'.
+  if (!applied('017_spending_caps_mvd')) {
+    try {
+      const scCols = db.prepare('PRAGMA table_info(spending_counters)').all().map(c => c.name);
+      if (!scCols.includes('preview_calls'))
+        db.exec('ALTER TABLE spending_counters ADD COLUMN preview_calls INTEGER NOT NULL DEFAULT 0');
+      const bizCols = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+      if (!bizCols.includes('spending_cap_owner_notified_at'))
+        db.exec('ALTER TABLE businesses ADD COLUMN spending_cap_owner_notified_at TEXT');
+      const convCaps = db.prepare('PRAGMA table_info(conversations)').all().map(c => c.name);
+      if (!convCaps.includes('paused_reason'))
+        db.exec("ALTER TABLE conversations ADD COLUMN paused_reason TEXT");
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('017_spending_caps_mvd');
+      console.log('[migration 017] preview_calls + spending_cap_owner_notified_at + paused_reason (if missing) added');
+    } catch (e) {
+      console.error('[migration 017] failed (non-fatal):', e.message);
+    }
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -599,8 +619,13 @@ db.exec(`CREATE TABLE IF NOT EXISTS demo_flow_sessions (
 
 // --- spending caps ---
 
+// America/Montevideo is UTC-3 with no DST since 2015.
+function _getMvdDateStr() {
+  return new Date(Date.now() - 3 * 3_600_000).toISOString().slice(0, 10);
+}
+
 function incrementAnthropicCall(businessId) {
-  const date = new Date().toISOString().slice(0, 10);
+  const date = _getMvdDateStr();
   db.prepare(`
     INSERT INTO spending_counters (business_id, date, anthropic_calls) VALUES (?, ?, 1)
     ON CONFLICT(business_id, date) DO UPDATE SET anthropic_calls = anthropic_calls + 1
@@ -608,7 +633,7 @@ function incrementAnthropicCall(businessId) {
 }
 
 function incrementElevenLabsChars(businessId, chars) {
-  const date = new Date().toISOString().slice(0, 10);
+  const date = _getMvdDateStr();
   db.prepare(`
     INSERT INTO spending_counters (business_id, date, elevenlabs_chars) VALUES (?, ?, ?)
     ON CONFLICT(business_id, date) DO UPDATE SET elevenlabs_chars = elevenlabs_chars + ?
@@ -616,10 +641,36 @@ function incrementElevenLabsChars(businessId, chars) {
 }
 
 function getSpendingToday(businessId) {
-  const date = new Date().toISOString().slice(0, 10);
+  const date = _getMvdDateStr();
   return db.prepare(
     'SELECT anthropic_calls, elevenlabs_chars FROM spending_counters WHERE business_id = ? AND date = ?'
   ).get(businessId, date) || { anthropic_calls: 0, elevenlabs_chars: 0 };
+}
+
+function incrementPreviewCall(businessId) {
+  const date = _getMvdDateStr();
+  db.prepare(`
+    INSERT INTO spending_counters (business_id, date, preview_calls) VALUES (?, ?, 1)
+    ON CONFLICT(business_id, date) DO UPDATE SET preview_calls = preview_calls + 1
+  `).run(businessId, date);
+}
+
+function getPreviewSpendingToday(businessId) {
+  const date = _getMvdDateStr();
+  return (db.prepare(
+    'SELECT preview_calls FROM spending_counters WHERE business_id = ? AND date = ?'
+  ).get(businessId, date) || { preview_calls: 0 }).preview_calls;
+}
+
+function setSpendingCapOwnerNotified(businessId, uyDate) {
+  db.prepare('UPDATE businesses SET spending_cap_owner_notified_at = ? WHERE id = ?').run(uyDate, businessId);
+}
+
+// Marks conversation needs_attention without permanently silencing the bot.
+// paused_reason='spending_cap' lets processIncomingMessage auto-resume when cap resets.
+// Only applies when needs_attention=0 — never overwrites a pause set by another reason.
+function setSpendingCapNeedsAttention(convId) {
+  db.prepare("UPDATE conversations SET needs_attention = 1, paused_at = unixepoch(), paused_reason = 'spending_cap' WHERE id = ? AND needs_attention = 0").run(convId);
 }
 
 function getConvAssistantCountLastHour(convId) {
@@ -1770,6 +1821,10 @@ module.exports = {
   incrementAnthropicCall,
   incrementElevenLabsChars,
   getSpendingToday,
+  incrementPreviewCall,
+  getPreviewSpendingToday,
+  setSpendingCapOwnerNotified,
+  setSpendingCapNeedsAttention,
   getConvAssistantCountLastHour,
   setSpendingCapNotified,
   createPasswordResetToken,

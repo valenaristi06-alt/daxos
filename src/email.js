@@ -481,4 +481,46 @@ async function sendUrgentAlertEmail({ to, businessName, contactId, messageText, 
   }
 }
 
-module.exports = { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail };
+async function sendSpendingCapEmail({ to, businessName, panelUrl, plan, dailyCap }) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    console.warn('[resend] RESEND_API_KEY not set, skipping email');
+    return;
+  }
+
+  const linkHtml = panelUrl
+    ? `<p><a href="${panelUrl}" style="background:#dc2626;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:8px">Ver conversaciones</a></p>`
+    : '';
+  const upsellHtml = plan === 'arranque' && dailyCap
+    ? `<p style="color:#555;font-size:13px;margin-top:16px">Tu plan incluye ${dailyCap} respuestas por día. Con el plan Crecimiento tenés 150.${panelUrl ? ` <a href="${panelUrl.replace('/conversations.html', '/dashboard.html')}">Ver planes</a>.` : ''}</p>`
+    : '';
+  const body = {
+    from: 'Daxos <notificaciones@daxos.lat>',
+    to: [to],
+    subject: `⚠️ Límite diario alcanzado — ${businessName}`,
+    html: `
+      <p>Hola,</p>
+      <p>Tu asistente <strong>${escapeHtml(businessName)}</strong> alcanzó el límite de respuestas automáticas de hoy.</p>
+      <p>Por hoy, los clientes no van a recibir respuestas del bot. Contestá vos directamente desde el panel o por WhatsApp.</p>
+      ${linkHtml}
+      ${upsellHtml}
+      <p style="color:#666;font-size:12px">Este aviso se envía una vez por día.</p>
+    `,
+  };
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${key}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Resend ${res.status}: ${text}`);
+  }
+}
+
+module.exports = { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail, sendSpendingCapEmail };

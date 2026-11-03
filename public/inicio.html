@@ -63,6 +63,9 @@
     <!-- 3. AVISO DE TRIAL / PLAN -->
     <div id="trial-banner" style="display:none"></div>
 
+    <!-- 3b. ALERTA TOPE DIARIO -->
+    <div id="cap-alert-banner" style="display:none"></div>
+
     <!-- 4. TARJETA ÚLTIMA CONVERSACIÓN -->
     <div id="last-conv-card" class="lc-card" aria-label="Última conversación">
       <div style="display:flex;flex-direction:column;gap:10px;" aria-hidden="true">
@@ -345,6 +348,15 @@
       }
     })();
 
+    // ── 3b. ALERTA TOPE DIARIO ───────────────────────────────────────────────
+    (function renderCapAlert() {
+      if (!b?.spending_cap_hit_today) return;
+      const el = document.getElementById('cap-alert-banner');
+      el.className = 'trial-banner trial-banner--expired';
+      el.innerHTML = '<span class="trial-msg">⚠️ Tu asistente alcanzó el límite de hoy. Contestá vos a los clientes que escriban.</span>';
+      el.style.display = 'flex';
+    })();
+
     // ── 4. TARJETA ÚLTIMA CONVERSACIÓN ───────────────────────────────────────
     async function renderLastConv() {
       const card = document.getElementById('last-conv-card');
@@ -454,6 +466,8 @@
         link.textContent = `${c} conversación${c !== 1 ? 'es' : ''} espera${c !== 1 ? 'n' : ''} que la${c !== 1 ? 's' : ''} atiendas vos`;
         el.appendChild(link);
         el.appendChild(document.createTextNode('.'));
+      } else if (b?.spending_cap_hit_today) {
+        el.textContent = msgText;
       } else {
         el.textContent = msgText + ' Nadie está esperando que lo atiendas vos.';
       }
