@@ -769,22 +769,37 @@ async function initBaileys({ processIncomingMessage, logError, getBusinessById, 
 
   _deps = { processIncomingMessage, logError, getBusinessById, tryMarkProcessed, deleteProcessedMessage };
 
-  if (!acquireLock()) {
-    logError('baileys-lock-busy', {
-      message: `Another process holds the lock — Baileys not initialized on this instance`,
-      stack: '',
-    });
-    _deps = null; // clear: stopBaileys() guards on _deps === null; don't hold reference if no lock
+  process.once('SIGINT', stopBaileys);
+
+  // Railway may start a new container before the previous one releases
+  // the shared-volume lock. Retry instead of abandoning initialization.
+  const lockWaitStartedAt = Date.now();
+  let nextLockLogAt = 0;
+
+  while (_state !== 'STOPPED') {
+    if (acquireLock()) break;
+
+    const now = Date.now();
+    if (now >= nextLockLogAt) {
+      logError('baileys-lock-busy', {
+        message: 'Another process holds the lock; retrying every 5 seconds',
+        stack: '',
+      });
+      nextLockLogAt = now + 30000;
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 5000));
+  }
+
+  if (_state === 'STOPPED' || !_lockAcquired) {
+    _deps = null;
     return;
   }
 
-  // SIGTERM is handled by server.js, which calls stopBaileys() before closing
-  // the HTTP server and exiting. This ensures the shutdown file is written and
-  // the lock is released in the correct order within the full shutdown sequence.
-  // SIGINT (Ctrl+C in local dev) is handled here as a fallback.
-  process.once('SIGINT', stopBaileys);
-
-  logError('baileys-init', { message: `business_id=${BAILEYS_BUSINESS_ID} session_dir=${SESSION_DIR}`, stack: '' });
+  logError('baileys-init', {
+    message: `business_id=${BAILEYS_BUSINESS_ID} session_dir=${SESSION_DIR} lock_wait_ms=${Date.now() - lockWaitStartedAt}`,
+    stack: '',
+  });
 
   await _connect();
 }
