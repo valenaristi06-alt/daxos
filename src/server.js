@@ -432,6 +432,28 @@ app.get('/api/baileys/status', requireBearerToken, (req, res) => {
   });
 });
 
+// Pairing code for COLBET. Uses the live Baileys socket; returns only a code
+// that requestPairingCode resolved after sending the companion_hello to WhatsApp.
+app.post('/api/baileys/pairing-code', requireBearerToken, async (req, res) => {
+  if (process.env.BAILEYS_ENABLED !== '1') {
+    return res.status(503).json({ error: 'Baileys no está habilitado' });
+  }
+  try {
+    const { requestBaileysPairingCode } = require('./baileys');
+    const code = await requestBaileysPairingCode();
+    return res.json({ code });
+  } catch (err) {
+    const status = Number.isInteger(err?.status) ? err.status : 500;
+    logError('baileys-pairing-code', {
+      message: `code=${err?.code || 'PAIRING_FAILED'} ${err?.message || 'unknown'}`,
+      stack: err?.stack || '',
+    });
+    return res.status(status).json({
+      error: err?.publicMessage || 'No se pudo obtener el código de vinculación',
+    });
+  }
+});
+
 // Fields the owner's browser is allowed to see. Everything else is stripped.
 // Keeps credentials (wa_access_token), internal tracking (kapso_*_at, kapso_setup_link_id),
 // and server paths (document_path) off the wire.

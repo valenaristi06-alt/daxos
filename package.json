@@ -9,13 +9,14 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "local-seguro": "bash scripts/start-local.sh"
+    "local-seguro": "bash scripts/start-local.sh",
+    "postinstall": "node scripts/apply-baileys-patch.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",
     "@aws-sdk/client-s3": "^3.1144.0",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
-    "@whiskeysockets/baileys": "^7.0.0-rc14",
+    "@whiskeysockets/baileys": "git+https://github.com/Abdullah9213/Baileys.git#9bc4edcf85578ce2e1cc8f151d2d69064d08c94e",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.11.1",
     "better-sqlite3-session-store": "^0.1.0",

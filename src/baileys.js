@@ -92,6 +92,11 @@ let _heartbeatTimer = null;
 let _qrTimeoutTimer = null; // fires if QR not scanned within QR_TIMEOUT_MS
 let _qrTimedOut     = false; // latches to true when timeout fires; visible via getBaileysState()
 
+// Pairing-code request: coalesce in-flight calls and reuse the last code WhatsApp
+// accepted until the socket leaves the unauthenticated window.
+let _confirmedPairingCode = null;
+let _pairingInFlight      = null;
+
 // ── Lock file — token-based O_EXCL + heartbeat ───────────────────────────────
 
 function acquireLock() {
@@ -301,6 +306,8 @@ function stopBaileys() {
     }
   }
   _clearQrTimeout();
+  _confirmedPairingCode = null;
+  _pairingInFlight = null;
   if (_socket) {
     try { _socket.end?.(); } catch {}
     _socket = null;
@@ -315,6 +322,7 @@ async function _connect() {
   _state = 'CONNECTING';
   _qrB64 = null;
   _qrTimedOut = false;
+  _confirmedPairingCode = null;
   _clearQrTimeout();
 
   const { logError, getBusinessById, processIncomingMessage, tryMarkProcessed, deleteProcessedMessage } = _deps;
@@ -380,6 +388,7 @@ async function _connect() {
         _clearQrTimeout(); // authenticated — cancel the timeout
         _state = 'CONNECTED';
         _qrB64   = null;
+        _confirmedPairingCode = null;
         _retries = 0;
         _connectedAt = Math.floor(Date.now() / 1000);
         logError('baileys-connected', { message: `business_id=${BAILEYS_BUSINESS_ID} connected_at=${_connectedAt}`, stack: '' });
@@ -388,6 +397,7 @@ async function _connect() {
 
       if (connection === 'close') {
         _clearQrTimeout(); // socket closed — timeout no longer relevant
+        _confirmedPairingCode = null;
         _socket = null;
         const { code, shouldClearSession, isTerminal, shouldYield, isRestartSignal } = classifyDisconnect(lastDisconnect);
 
@@ -602,6 +612,122 @@ async function _handleMessage(msg, { logError, getBusinessById, processIncomingM
   deleteProcessedMessage(BAILEYS_BUSINESS_ID, msgId);
 }
 
+// ── Pairing code (existing socket, COLBET number) ─────────────────────────────
+
+function _pairingError(status, code, publicMessage) {
+  const err = new Error(publicMessage);
+  err.status = status;
+  err.code = code;
+  err.publicMessage = publicMessage;
+  return err;
+}
+
+function _phoneDigitsForPairing(raw) {
+  if (raw == null) return '';
+  let digits = String(raw).replace(/\D/g, '');
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  return digits;
+}
+
+function _normalizePairingCode(raw) {
+  if (raw == null) return null;
+  const code = String(raw).replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  return code.length === 8 ? code : null;
+}
+
+async function _waitForPairingSocket(timeoutMs = 25_000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (_state === 'STOPPED') {
+      throw _pairingError(503, 'STOPPED', 'Baileys está detenido');
+    }
+    if (_state === 'CONNECTED' || _socket?.authState?.creds?.registered) {
+      throw _pairingError(409, 'ALREADY_CONNECTED', 'WhatsApp ya está vinculado');
+    }
+    if (_socket && typeof _socket.requestPairingCode === 'function' && _state === 'QR_PENDING') {
+      return _socket;
+    }
+    await _sleep(250);
+  }
+  if (_state === 'CONNECTED' || _socket?.authState?.creds?.registered) {
+    throw _pairingError(409, 'ALREADY_CONNECTED', 'WhatsApp ya está vinculado');
+  }
+  throw _pairingError(503, 'SOCKET_NOT_READY', 'El socket de Baileys no está listo para el código de vinculación');
+}
+
+async function _requestPairingCodeOnce() {
+  if (!_deps) {
+    throw _pairingError(503, 'NOT_INITIALIZED', 'Baileys no está inicializado');
+  }
+
+  const { logError, getBusinessById } = _deps;
+  const business = getBusinessById(BAILEYS_BUSINESS_ID);
+  if (!business) {
+    throw _pairingError(404, 'BUSINESS_NOT_FOUND', 'Negocio COLBET no encontrado');
+  }
+
+  const phone = _phoneDigitsForPairing(business.whatsapp_number);
+  if (phone.length < 8 || phone.length > 15) {
+    throw _pairingError(400, 'PHONE_NOT_CONFIGURED', 'El negocio COLBET no tiene un número de WhatsApp configurado');
+  }
+
+  if (_confirmedPairingCode && _state === 'QR_PENDING') {
+    return _confirmedPairingCode;
+  }
+
+  const sock = await _waitForPairingSocket();
+  if (sock.authState?.creds?.registered) {
+    throw _pairingError(409, 'ALREADY_CONNECTED', 'WhatsApp ya está vinculado');
+  }
+  if (typeof sock.requestPairingCode !== 'function') {
+    throw _pairingError(500, 'PAIRING_UNSUPPORTED', 'Esta versión de Baileys no expone requestPairingCode');
+  }
+
+  logError('baileys-pairing-code-request', {
+    message: `business_id=${BAILEYS_BUSINESS_ID} state=${_state}`,
+    stack: '',
+  });
+
+  let raw;
+  try {
+    raw = await sock.requestPairingCode(phone);
+  } catch (err) {
+    if (err?.status && err?.code) throw err;
+    logError('baileys-pairing-code-error', {
+      message: `business_id=${BAILEYS_BUSINESS_ID} ${err?.message || 'request_failed'}`,
+      stack: err?.stack || '',
+    });
+    throw _pairingError(502, 'WHATSAPP_REJECTED', 'WhatsApp no confirmó el código de vinculación');
+  }
+
+  const code = _normalizePairingCode(raw);
+  if (!code) {
+    logError('baileys-pairing-code-invalid', {
+      message: `business_id=${BAILEYS_BUSINESS_ID} invalid_or_empty_response`,
+      stack: '',
+    });
+    throw _pairingError(502, 'INVALID_CODE', 'WhatsApp no devolvió un código de vinculación válido');
+  }
+
+  _confirmedPairingCode = code;
+  logError('baileys-pairing-code-ok', {
+    message: `business_id=${BAILEYS_BUSINESS_ID}`,
+    stack: '',
+  });
+  return code;
+}
+
+async function requestBaileysPairingCode() {
+  if (_confirmedPairingCode && _state === 'QR_PENDING' && !_pairingInFlight) {
+    return _confirmedPairingCode;
+  }
+  if (_pairingInFlight) return _pairingInFlight;
+  _pairingInFlight = _requestPairingCodeOnce().finally(() => {
+    _pairingInFlight = null;
+  });
+  return _pairingInFlight;
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 async function initBaileys({ processIncomingMessage, logError, getBusinessById, tryMarkProcessed, deleteProcessedMessage }) {
@@ -662,6 +788,7 @@ module.exports = {
   getBaileysState,
   getBaileysConnectedAt,
   isBaileysLockHeld,
+  requestBaileysPairingCode,
   BAILEYS_BUSINESS_ID,
   _forTest,
 };
