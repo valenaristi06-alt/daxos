@@ -5076,6 +5076,121 @@ if (process.env.BAILEYS_ENABLED === '1') {
     }
   );
 
+
+  // Dedicated token: grants access only to the COLBET QR.
+  const requireBaileysQrToken = (req, res, next) => {
+    const secret = process.env.BAILEYS_QR_ADMIN_TOKEN;
+    if (!secret) return res.status(503).json({ error: 'Token QR no configurado' });
+    if (req.headers.authorization !== `Bearer ${secret}`) {
+      return res.status(401).json({ error: 'No autenticado' });
+    }
+    next();
+  };
+
+  // Admin QR endpoint: dedicated QR token.
+  app.get('/admin/api/baileys/qr',
+    rateLimitWith(40, 60_000, req => `baileys-admin-qr:${req.ip}`),
+    requireBaileysQrToken,
+    (req, res) => {
+    res.set('Cache-Control', 'no-store');
+
+    const state = _baileys.getBaileysState();
+    if (state === 'CONNECTED') return res.json({ status: 'connected' });
+
+    const qr = _baileys.getBaileysQR();
+    if (qr) return res.json({ status: 'qr_pending', qr });
+
+    return res.json({ status: String(state).toLowerCase() });
+  });
+
+  // Admin QR page: token is entered locally and never placed in the URL.
+  app.get('/admin/baileys/qr', (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.type('html').send(`<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conectar COLBET — Daxos</title>
+<style>
+body{font-family:Arial,sans-serif;background:#111;color:#eee;text-align:center;padding:35px 16px}
+input,button{padding:12px;margin:8px;border-radius:6px}
+button{cursor:pointer}
+img{display:block;background:white;padding:12px;width:280px;max-width:90%;margin:25px auto}
+a{color:#f0a36c}
+</style>
+</head>
+<body>
+<h2>Conectar WhatsApp de COLBET</h2>
+<p>Ingresá el token administrativo de Daxos.</p>
+<form id="form">
+<input id="token" type="password" placeholder="Token QR administrativo" required autocomplete="off">
+<button type="submit">Consultar conexión</button>
+</form>
+<p id="status">Esperando autenticación.</p>
+<img id="qr" hidden alt="QR de vinculación de WhatsApp">
+<a id="download" hidden download="colbet-whatsapp-qr.png">Guardar QR</a>
+<script>
+const form = document.getElementById('form');
+const input = document.getElementById('token');
+const status = document.getElementById('status');
+const img = document.getElementById('qr');
+const download = document.getElementById('download');
+let timer = null;
+let lastQr = '';
+
+async function check() {
+  try {
+    const response = await fetch('/admin/api/baileys/qr', {
+      headers: { Authorization: 'Bearer ' + input.value.trim() },
+      cache: 'no-store'
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      status.textContent = data.error || 'No autorizado.';
+      return;
+    }
+
+    if (data.status === 'connected') {
+      status.textContent = 'WhatsApp ya está conectado.';
+      img.hidden = true;
+      download.hidden = true;
+      clearInterval(timer);
+      return;
+    }
+
+    if (data.qr) {
+      if (data.qr !== lastQr) {
+        lastQr = data.qr;
+        img.src = data.qr;
+        download.href = data.qr;
+      }
+      img.hidden = false;
+      download.hidden = false;
+      status.textContent = 'QR disponible. Enviáselo a COLBET para que lo escanee.';
+    } else {
+      img.hidden = true;
+      download.hidden = true;
+      status.textContent = 'Estado: ' + data.status + '. Esperando un QR válido...';
+    }
+  } catch {
+    status.textContent = 'Error consultando Daxos.';
+  }
+}
+
+form.addEventListener('submit', event => {
+  event.preventDefault();
+  clearInterval(timer);
+  lastQr = '';
+  check();
+  timer = setInterval(check, 2500);
+});
+</script>
+</body>
+</html>`);
+  });
+
   // HTML page: QR scanner UI — gated to authenticated COLBET owner only.
   // Served from src/views/ (outside public/), not reachable via express.static.
   app.get('/baileys/qr', requireAuth, (req, res) => {
