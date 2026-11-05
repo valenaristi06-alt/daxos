@@ -266,9 +266,24 @@ async function _getBaileys() {
 
 // ── Silent logger for Baileys internals ──────────────────────────────────────
 
-function _makeSilentLogger() {
+function _makeSilentLogger(logError) {
   const noop = () => {};
-  const l = { trace: noop, debug: noop, info: noop, warn: noop, error: noop, fatal: noop };
+  const emit = level => (...args) => {
+    const label = args.find(value => typeof value === 'string') || '';
+    const context = args.find(value => value && typeof value === 'object' && !(value instanceof Error));
+    const err = context?.err || context?.error || args.find(value => value instanceof Error);
+    const reason = err?.message ? String(err.message).replace(/[\r\n]+/g, ' ').slice(0, 180) : '';
+    const status = err?.output?.statusCode ?? err?.statusCode ?? '';
+    if (!reason && !/notification|pair|handshake|connection/i.test(label)) return;
+    logError('baileys-internal', {
+      message: `level=${level} event=${label.slice(0, 100)} status=${status} error=${reason}`,
+      stack: '',
+    });
+  };
+  const l = {
+    trace: noop, debug: noop, info: noop,
+    warn: emit('warn'), error: emit('error'), fatal: emit('fatal')
+  };
   l.child = () => l;
   return l;
 }
@@ -344,7 +359,7 @@ async function _connect() {
       version,
       auth: authState,
       printQRInTerminal: false,
-      logger: _makeSilentLogger(),
+      logger: _makeSilentLogger(logError),
       syncFullHistory: false,
       markOnlineOnConnect: false,
       // Ignore groups and status at the socket level for efficiency
@@ -355,9 +370,24 @@ async function _connect() {
     _socket = sock;
 
     sock.ev.on('creds.update', saveCreds);
+    sock.ev.on('creds.update', (update) => {
+      if (update?.registered === true) {
+        logError('baileys-registration-confirmed', {
+          message: `business_id=${BAILEYS_BUSINESS_ID} registered=true`,
+          stack: '',
+        });
+      }
+    });
 
     sock.ev.on('connection.update', async (update) => {
-      const { connection, lastDisconnect, qr } = update;
+      const { connection, lastDisconnect, qr, isNewLogin } = update;
+
+      if (isNewLogin) {
+        logError('baileys-pair-success', {
+          message: `business_id=${BAILEYS_BUSINESS_ID} isNewLogin=true`,
+          stack: '',
+        });
+      }
 
       if (qr) {
         try {
@@ -400,9 +430,13 @@ async function _connect() {
         _confirmedPairingCode = null;
         _socket = null;
         const { code, shouldClearSession, isTerminal, shouldYield, isRestartSignal } = classifyDisconnect(lastDisconnect);
+        const disconnectReason = String(lastDisconnect?.error?.message || '')
+          .replace(/[\r\n]+/g, ' ').slice(0, 160);
+        const disconnectStatus = lastDisconnect?.error?.output?.statusCode
+          ?? lastDisconnect?.error?.statusCode ?? code;
 
         logError('baileys-disconnect', {
-          message: `business_id=${BAILEYS_BUSINESS_ID} code=${code} yield=${shouldYield} terminal=${isTerminal} retries=${_retries}`,
+          message: `business_id=${BAILEYS_BUSINESS_ID} code=${code} yield=${shouldYield} terminal=${isTerminal} retries=${_retries} reason=${disconnectReason} errorStatus=${disconnectStatus}`,
           stack: '',
         });
 
