@@ -175,7 +175,7 @@ async function runUploadsBackup(s3) {
             tamaño_anterior: `${prevU.Size} bytes`,
             nota: 'Uploads backup pesa menos de la mitad que la copia anterior.',
           },
-        }).catch(() => {});
+        }).catch(err => logError('mail-error', { message: err.message, stack: err.stack || '' }));
       }
     }
 
@@ -267,7 +267,7 @@ async function runBackup() {
             tamaño_anterior: `${prev.Size} bytes`,
             nota: 'La copia nueva pesa menos de la mitad que la anterior. Se conservaron todas las copias viejas.',
           },
-        }).catch(() => {});
+        }).catch(err => logError('mail-error', { message: err.message, stack: err.stack || '' }));
       }
     }
 
@@ -285,7 +285,7 @@ async function runBackup() {
           adminEmail,
           event: 'backup_error',
           data: { mensaje: `[uploads] ${uploadsErr.message}` },
-        }).catch(() => {});
+        }).catch(err => logError('mail-error', { message: err.message, stack: err.stack || '' }));
       }
     }
 
@@ -299,7 +299,7 @@ async function runBackup() {
         adminEmail,
         event: 'backup_error',
         data: { mensaje: err.message },
-      }).catch(() => {});
+      }).catch(e => logError('mail-error', { message: e.message, stack: e.stack || '' }));
     }
     throw err;
   } finally {
@@ -323,7 +323,7 @@ async function maybeScheduledBackup() {
   }
 
   console.log('[backup-schedule] 04:xx UY window — triggering daily backup');
-  runBackup().catch(() => {});
+  runBackup().catch(err => logError('backup-error', { message: err.message, stack: err.stack || '' }));
   return true;
 }
 
@@ -341,7 +341,7 @@ async function maybeSilenceAlert() {
       adminEmail,
       event: 'backup_sin_copias',
       data: { nota: 'No se encontró ningún backup en R2.' },
-    }).catch(() => {});
+    }).catch(err => logError('mail-error', { message: err.message, stack: err.stack || '' }));
     return;
   }
 
@@ -359,7 +359,7 @@ async function maybeSilenceAlert() {
         fecha:            latest.LastModified,
         horas_sin_backup: Math.round(ageMs / 3600000),
       },
-    }).catch(() => {});
+    }).catch(err => logError('mail-error', { message: err.message, stack: err.stack || '' }));
   }
 }
 

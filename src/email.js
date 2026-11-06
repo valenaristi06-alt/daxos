@@ -168,9 +168,53 @@ async function sendWeeklySummaryEmail({ to, businessName, stats, weekLabel }) {
   }
 }
 
+async function sendSaleIntentEmail({ to, businessName, clientName, clientPhone, lastMessages, convUrl }) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) { console.warn('[resend] RESEND_API_KEY not set, skipping sale intent email'); return; }
+
+  const msgRows = (lastMessages || []).map(m => {
+    const role = m.role === 'user' ? 'Cliente' : 'Asistente';
+    const color = m.role === 'user' ? '#374151' : '#6b7280';
+    return `<tr><td style="padding:4px 12px 4px 0;color:${color};font-weight:bold;white-space:nowrap;vertical-align:top">${escapeHtml(role)}</td><td style="color:${color}">${escapeHtml(String(m.content || ''))}</td></tr>`;
+  }).join('');
+
+  const linkHtml = convUrl
+    ? `<p><a href="${convUrl}" style="background:#16a34a;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:8px">Abrir la conversación</a></p>`
+    : '';
+
+  const body = {
+    from: 'Daxos <notificaciones@daxos.lat>',
+    to: [to],
+    subject: `🛒 ${businessName}: un cliente quiere comprar`,
+    html: `
+      <p>Hola,</p>
+      <p>Un cliente mostró intención de compra en <strong>${escapeHtml(businessName)}</strong>.</p>
+      <table style="border-collapse:collapse;margin:16px 0">
+        <tr><td style="padding:4px 12px 4px 0;color:#666">Nombre</td><td>${escapeHtml(clientName || 'desconocido')}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;color:#666">Teléfono</td><td>${escapeHtml(clientPhone || 'desconocido')}</td></tr>
+      </table>
+      ${msgRows ? `<p><strong>Últimos mensajes:</strong></p><table style="border-collapse:collapse;margin:16px 0">${msgRows}</table>` : ''}
+      ${linkHtml}
+    `,
+  };
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error(`Resend ${res.status}: ${t}`);
+  }
+}
+
 async function sendAdminNotificationEmail({ adminEmail, event, data }) {
   const key = process.env.RESEND_API_KEY;
-  if (!key) return;
+  if (!key) {
+    console.warn('[resend] RESEND_API_KEY not set, skipping admin notification email');
+    return;
+  }
 
   const subjects = {
     registration:           `Nuevo registro — ${data.email}`,
@@ -604,4 +648,4 @@ function sendClaudeErrorAdminEmail({ errorType, businessId, businessName, errorM
   });
 }
 
-module.exports = { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail, sendSpendingCapEmail, sendOwnerBotStoppedEmail, sendClaudeErrorAdminEmail };
+module.exports = { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail, sendSpendingCapEmail, sendOwnerBotStoppedEmail, sendClaudeErrorAdminEmail, sendSaleIntentEmail };

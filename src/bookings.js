@@ -31,51 +31,46 @@ function buildOwnerMessage(booking, businessName) {
   ].join('\n');
 }
 
-// Send booking notification to owner via WA. Retries once on failure, then falls back to email.
+// Send booking notification to owner via WA and email in parallel. Both always fire independently.
 // ⚠️ WA send requires business to have phone_number_id + wa_access_token (WhatsApp connected).
 async function notifyOwnerOfBooking({ business, owner, booking, waCredentials }) {
   const ownerPhone = owner?.phone;
   const msg = buildOwnerMessage(booking, business.name);
-  let waSent = false;
 
-  if (ownerPhone && waCredentials?.phoneNumberId) {
+  const waPromise = (async () => {
+    if (!ownerPhone || !waCredentials?.phoneNumberId) {
+      console.error(`[booking-notify] ⛔ CANNOT SEND WA: booking=${booking.id} ownerPhone=${ownerPhone || 'missing'} waCredentials=${waCredentials?.phoneNumberId ? 'ok' : 'missing'}`);
+      return;
+    }
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         await sendWhatsAppMessage(ownerPhone, msg, waCredentials);
-        waSent = true;
         console.log(`[booking-notify] WA ok attempt=${attempt} booking=${booking.id} code=${booking.slot_code} owner=${ownerPhone}`);
-        break;
+        return;
       } catch (err) {
         console.error(`[booking-notify] WA FAILED attempt=${attempt} booking=${booking.id}: ${err.message}`);
         if (attempt === 1) await new Promise(r => setTimeout(r, 4000));
       }
     }
-    if (!waSent) {
-      console.error(`[booking-notify] ⛔ BOTH WA ATTEMPTS FAILED booking=${booking.id} code=${booking.slot_code} customer=${booking.customer_phone} — owner may not be notified`);
-    }
-  } else {
-    console.error(`[booking-notify] ⛔ CANNOT SEND WA: booking=${booking.id} ownerPhone=${ownerPhone || 'missing'} waCredentials=${waCredentials?.phoneNumberId ? 'ok' : 'missing'}`);
-  }
+    console.error(`[booking-notify] ⛔ BOTH WA ATTEMPTS FAILED booking=${booking.id} code=${booking.slot_code} customer=${booking.customer_phone}`);
+  })();
 
-  // Email fallback — always attempt when WA didn't send
-  if (!waSent && owner?.email) {
-    try {
-      await sendBookingNotificationEmail({
-        to:           owner.email,
-        businessName: business.name,
-        clientName:   booking.client_name,
-        reason:       booking.reason,
-        slots:        booking.slots,
-        slotCode:     booking.slot_code,
+  const emailPromise = owner?.email
+    ? sendBookingNotificationEmail({
+        to:            owner.email,
+        businessName:  business.name,
+        clientName:    booking.client_name,
+        reason:        booking.reason,
+        slots:         booking.slots,
+        slotCode:      booking.slot_code,
         businessPhone: business.whatsapp_number || null,
-        panelUrl:     'https://daxos.lat/conversations.html',
-      });
-      console.log(`[booking-notify] email fallback sent to ${owner.email} booking=${booking.id}`);
-    } catch (emailErr) {
-      console.error(`[booking-notify] ⛔ EMAIL FALLBACK ALSO FAILED booking=${booking.id}: ${emailErr.message}`);
-    }
-  }
+        panelUrl:      'https://daxos.lat/conversations.html',
+      })
+        .then(() => console.log(`[booking-notify] email sent to ${owner.email} booking=${booking.id}`))
+        .catch(emailErr => console.error(`[booking-notify] ⛔ EMAIL FAILED booking=${booking.id}: ${emailErr.message}`))
+    : Promise.resolve();
 
+  await Promise.all([waPromise, emailPromise]);
   markBookingNotified(booking.id);
 }
 

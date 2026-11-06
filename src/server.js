@@ -104,7 +104,7 @@ const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = 
 const { handleDemoFlow, processFollowups } = require('./demo-flow');
 const { sendWeeklySummaries } = require('./weekly');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
-const { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail, sendSpendingCapEmail, sendOwnerBotStoppedEmail, sendClaudeErrorAdminEmail } = require('./email');
+const { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail, sendSpendingCapEmail, sendOwnerBotStoppedEmail, sendClaudeErrorAdminEmail, sendSaleIntentEmail } = require('./email');
 const { runBackup, maybeScheduledBackup, maybeSilenceAlert, startupBackupCheck, getLatestBackupMeta, listAllBackups } = require('./backup');
 
 const urgentAlertThrottle = new Map(); // conversationId → ms timestamp, resets on server restart
@@ -1496,6 +1496,7 @@ app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
       sent_doc = true;
       reply = reply.replace(/^\[SEND_DOC\]\s*/m, '');
     }
+    reply = reply.replace(/\[INTERES_COMPRA\]\n?/g, '');
     reply = reply.trim();
     // Split-mode: parse parts and clean ||| so the client never sees the delimiter
     const _pvSplitEnabled = business.style_profile?.mensajes_separados === true;
@@ -1695,6 +1696,8 @@ async function notifyOwnerOfPause({ business, owner, contactId, messageText, con
 
   const normPhone    = normalizeUruguayPhone(owner.phone);
   const normBizPhone = normalizeUruguayPhone(business.whatsapp_number);
+
+  let waPromise = Promise.resolve();
   if (!normPhone) {
     logError('pause-notify-wa-error', { message: `conv ${conversationId}: skip — owner has no phone`, stack: '' });
   } else if (!waCredentials) {
@@ -1703,20 +1706,21 @@ async function notifyOwnerOfPause({ business, owner, contactId, messageText, con
     logError('pause-notify-wa-error', { message: `conv ${conversationId}: skip — owner phone ****${normPhone.slice(-4)} same as business WA (self-send prevented)`, stack: '' });
   } else {
     const waMsg = `${subject} — ${business.name}\nCliente: ${contactId}\nMensaje: ${messageText}\nAbrir la conversación: ${convUrl}`;
-    sendWhatsAppMessage(normPhone, waMsg, waCredentials)
+    waPromise = sendWhatsAppMessage(normPhone, waMsg, waCredentials)
       .catch(err => logError('pause-notify-wa-error', { message: `conv ${conversationId} dest=****${normPhone.slice(-4)}: ${err.message}`, stack: '' }));
   }
 
-  try {
-    await sendPauseEmail({ to: owner.email, businessName: business.name, contactId, messageText, conversationId, convUrl });
-  } catch (err) {
-    logError('pause-notify-error', { message: `conv ${conversationId} owner email failed: ${err.message} — sending fallback to admin`, stack: '' });
-    const adminEmail = process.env.ADMIN_EMAIL;
-    if (adminEmail && adminEmail !== owner.email) {
-      await sendPauseEmail({ to: adminEmail, businessName: business.name, contactId, messageText, conversationId, convUrl })
-        .catch(e => logError('pause-notify-error', { message: `conv ${conversationId} fallback-admin email also failed: ${e.message}`, stack: '' }));
-    }
-  }
+  const emailPromise = sendPauseEmail({ to: owner.email, businessName: business.name, contactId, messageText, conversationId, convUrl })
+    .catch(async (err) => {
+      logError('pause-notify-error', { message: `conv ${conversationId} owner email failed: ${err.message} — sending fallback to admin`, stack: '' });
+      const adminEmail = process.env.ADMIN_EMAIL;
+      if (adminEmail && adminEmail !== owner.email) {
+        await sendPauseEmail({ to: adminEmail, businessName: business.name, contactId, messageText, conversationId, convUrl })
+          .catch(e => logError('pause-notify-error', { message: `conv ${conversationId} fallback-admin email also failed: ${e.message}`, stack: '' }));
+      }
+    });
+
+  await Promise.all([emailPromise, waPromise]);
 }
 
 // Notifies the owner when the bot stops responding.
@@ -1767,6 +1771,43 @@ async function notifyOwnerBotStopped(kind, business, owner, conv) {
           .catch(err => {
             logError('wa-owner-notify-error', { message: err.message, stack: err.stack || '', kind });
           });
+      }
+    }
+  }
+}
+
+// Notifies the owner when a client shows clear purchase intent.
+// Rate-limited: 1 per conversation per 12h via owner_alert_log kind='sale_intent'.
+async function notifyOwnerSaleIntent(business, owner, conv, lastMessages, customerPhone) {
+  if (!conv?.id || !business?.id) return;
+  if (ownerAlertRecentlySent(conv.id, 'sale_intent', 12 * 3600)) return;
+  recordOwnerAlert(business.id, conv.id, 'sale_intent');
+
+  const appUrl  = process.env.APP_URL || 'https://daxos.lat';
+  const convUrl = `${appUrl}/conversations.html?conv=${conv.id}`;
+  const clientName = conv.customer_id || customerPhone || 'el cliente';
+  const waText = `🛒 ${business.name}: ${clientName} quiere comprar. Abrir: ${convUrl}`;
+
+  if (owner?.email) {
+    sendSaleIntentEmail({
+      to:           owner.email,
+      businessName: business.name,
+      clientName,
+      clientPhone:  customerPhone || '',
+      lastMessages,
+      convUrl,
+    }).catch(err => logError('mail-error', { message: err.message, stack: err.stack || '' }));
+  }
+
+  if (owner?.phone) {
+    const ownerCreds = business.phone_number_id
+      ? { phoneNumberId: business.phone_number_id, accessToken: business.wa_access_token, provider: business.wa_provider || 'meta' }
+      : null;
+    if (ownerCreds) {
+      const normOwnerPhone = normalizeContactPhone(owner.phone);
+      if (normOwnerPhone) {
+        sendWhatsAppMessage(normOwnerPhone, waText, ownerCreds)
+          .catch(err => logError('wa-owner-notify-error', { message: err.message, stack: err.stack || '', kind: 'sale_intent' }));
       }
     }
   }
@@ -2501,6 +2542,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   let sendDoc = false;
   let needsHuman = false;
   let isUrgente = false;
+  let isSaleIntent = false;
   let reply = rawReply;
   if (/\[NEEDS_HUMAN\]/.test(reply)) {
     needsHuman = true;
@@ -2509,6 +2551,10 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   if (/\[URGENTE\]/.test(reply)) {
     isUrgente = true;
     reply = reply.replace(/\[URGENTE\]\n?/g, '');
+  }
+  if (/\[INTERES_COMPRA\]/.test(reply)) {
+    isSaleIntent = true;
+    reply = reply.replace(/\[INTERES_COMPRA\]\n?/g, '');
   }
   if (reply.startsWith('[SEND_DOC]')) {
     sendDoc = true;
@@ -2796,6 +2842,12 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
         logError('urgent-alert', { message: `notifyOwnerUrgent ([URGENTE] marker) threw: ${err.message}`, stack: '' });
       });
     }
+  }
+
+  if (isSaleIntent) {
+    const _saleOwner = getUserByBusinessId(business.id);
+    notifyOwnerSaleIntent(business, _saleOwner, conversation, history.slice(-3), customerPhone)
+      .catch(err => logError('sale-intent-notify', { message: err.message, stack: err.stack || '' }));
   }
 }
 
