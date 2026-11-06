@@ -1,4 +1,4 @@
-async function sendPauseEmail({ to, businessName, contactId, messageText, conversationId, convUrl }) {
+async function sendPauseEmail({ to, businessName, contactId, messageText, conversationId, convUrl, subject: subjectOverride }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     console.warn('[resend] RESEND_API_KEY not set, skipping email');
@@ -11,7 +11,7 @@ async function sendPauseEmail({ to, businessName, contactId, messageText, conver
   const body = {
     from: 'Daxos <notificaciones@daxos.lat>',
     to: [to],
-    subject: `Nueva conversación pausada — ${businessName}`,
+    subject: subjectOverride || `Nueva conversación pausada — ${businessName}`,
     html: `
       <p>Hola,</p>
       <p>Un cliente necesita atención humana en tu asistente de <strong>${escapeHtml(businessName)}</strong>.</p>
@@ -523,4 +523,85 @@ async function sendSpendingCapEmail({ to, businessName, panelUrl, plan, dailyCap
   }
 }
 
-module.exports = { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail, sendSpendingCapEmail };
+async function sendOwnerBotStoppedEmail({ to, businessName, clientName, convUrl, kind }) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return;
+
+  const subjects = {
+    hourly_cap: `⏸️ ${businessName}: asistente pausó un momento`,
+    api_error:  `⚠️ ${businessName}: el asistente tuvo un problema técnico`,
+    wa_error:   `⚠️ ${businessName}: falla al enviar mensaje por WhatsApp`,
+  };
+  const bodies = {
+    hourly_cap: `
+      <p>Hola,</p>
+      <p>Tu asistente de <strong>${escapeHtml(businessName)}</strong> pausó temporalmente las respuestas al cliente <strong>${escapeHtml(clientName)}</strong> porque recibió muchas consultas en poco tiempo.</p>
+      <p>Se reactiva automáticamente en unos minutos. Si querés atenderlo antes, podés contestarle desde el panel.</p>`,
+    api_error: `
+      <p>Hola,</p>
+      <p>Tu asistente de <strong>${escapeHtml(businessName)}</strong> no pudo responder al cliente <strong>${escapeHtml(clientName)}</strong> por un problema técnico.</p>
+      <p>Te recomendamos contestarle directamente desde el panel. Ya notificamos al equipo de Daxos.</p>`,
+    wa_error: `
+      <p>Hola,</p>
+      <p>Tu asistente de <strong>${escapeHtml(businessName)}</strong> no pudo enviar un mensaje al cliente <strong>${escapeHtml(clientName)}</strong> por WhatsApp.</p>
+      <p>Revisá la conexión de tu número en la configuración de Daxos.</p>`,
+  };
+
+  const subject  = subjects[kind];
+  const bodyHtml = bodies[kind];
+  if (!subject || !bodyHtml) return;
+
+  const linkHtml = convUrl
+    ? `<p><a href="${convUrl}" style="background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:8px">Abrir la conversación</a></p>`
+    : '';
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: 'Daxos <notificaciones@daxos.lat>', to: [to], subject, html: bodyHtml + linkHtml }),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    console.warn('[resend] bot-stopped email failed:', res.status, t);
+  }
+}
+
+function sendClaudeErrorAdminEmail({ errorType, businessId, businessName, errorMessage }) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    console.warn('[resend] RESEND_API_KEY not set, skipping claude error admin email');
+    return Promise.resolve();
+  }
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (!adminEmail) return Promise.resolve();
+
+  const subjects = {
+    no_credits: '⚠️ Daxos: Claude sin créditos',
+    server_error: '⚠️ Daxos: Claude error de servidor',
+  };
+  const subject = subjects[errorType] || '⚠️ Daxos: Claude error';
+
+  return fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${key}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: 'Daxos Admin <no-reply@daxos.lat>',
+      to: adminEmail,
+      subject,
+      text: `Error de Claude (${errorType}) para negocio ${businessName} (ID: ${businessId}).\n\nDetalle: ${errorMessage}\n\nRevisá los créditos en Anthropic.`,
+    }),
+  }).then(res => {
+    if (!res.ok) {
+      return res.text().catch(() => '').then(t => {
+        console.warn('[resend] claude error admin email failed:', res.status, t);
+      });
+    }
+  }).catch(err => {
+    console.warn('[resend] claude error admin email failed:', err.message);
+  });
+}
+
+module.exports = { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail, sendSpendingCapEmail, sendOwnerBotStoppedEmail, sendClaudeErrorAdminEmail };
