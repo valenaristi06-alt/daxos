@@ -66,6 +66,7 @@ run_suite "test-urgent-toggle"   "scripts/test-urgent-toggle.js"
 run_suite "test-split-messages"      "scripts/test-split-messages.js"
 run_suite "test-client-queue"        "scripts/test-client-queue.js"
 run_suite "test-mark-read-typing"    "scripts/test-mark-read-typing.js"
+run_suite "test-panel-send"          "scripts/test-panel-send.js"
 
 echo "================================================================"
 echo "Done."

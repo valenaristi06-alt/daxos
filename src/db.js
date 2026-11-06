@@ -872,6 +872,21 @@ function setHumanPaused(conversationId) {
   db.prepare('UPDATE conversations SET needs_attention = 1, paused_at = NULL, human_paused_at = unixepoch(), needs_human = 0 WHERE id = ?').run(conversationId);
 }
 
+// Called when the owner sends a message from the panel — silences the bot silently.
+// Uses paused_reason='owner_reply' so:
+//   • NO notification email is sent (the owner clearly knows — they just wrote)
+//   • The 24h auto-resume job (autoResumeExpiredConversations) DOES pick this up
+//     because paused_reason='owner_reply' is NOT in the excluded list ('trial')
+//   • getKeywordPausedNeedingFollowup / getKeywordPausedNeeding24h only query
+//     paused_reason='keyword', so the 30-min and 24-h reminder emails WILL NOT fire.
+//   • human_paused_at is set so the human-timeout-resume job can still auto-resume it.
+function setOwnerReplyPaused(conversationId) {
+  db.prepare(`UPDATE conversations SET
+    needs_attention = 1, paused_at = unixepoch(), human_paused_at = unixepoch(),
+    paused_reason = 'owner_reply', needs_human = 0
+  WHERE id = ?`).run(conversationId);
+}
+
 // Resumes a human-paused conversation (timeout or business-hours triggered).
 function clearHumanPause(conversationId) {
   db.prepare('UPDATE conversations SET needs_attention = 0, paused_at = NULL, human_paused_at = NULL, needs_human = 0, auto_resumed_at = unixepoch() WHERE id = ?').run(conversationId);
@@ -1711,6 +1726,7 @@ module.exports = {
   resetConversation,
   setNeedsHuman,
   setHumanPaused,
+  setOwnerReplyPaused,
   clearHumanPause,
   getConversationsNeedingHumanResume,
   autoResumeExpiredConversations,
@@ -1950,7 +1966,9 @@ function getWeeklyStats(businessId) {
   const escalated = db.prepare(`
     SELECT COUNT(DISTINCT c.id) as n FROM conversations c
     JOIN messages m ON m.conversation_id = c.id
-    WHERE c.business_id = ? AND c.needs_attention = 1 AND m.created_at >= ${since}
+    WHERE c.business_id = ? AND c.needs_attention = 1
+      AND (c.paused_reason IS NULL OR c.paused_reason != 'owner_reply')
+      AND m.created_at >= ${since}
   `).get(businessId).n;
 
   // Average seconds between consecutive user→assistant message pairs in the same conversation
