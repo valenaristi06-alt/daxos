@@ -454,7 +454,7 @@
     // ── 5. FRASE RESUMEN ─────────────────────────────────────────────────────
     (function renderSummary() {
       const el = document.getElementById('inicio-summary');
-      const needsAttn = allConvs.filter(c => !c.is_excluded && c.needs_attention);
+      const needsAttn = allConvs.filter(c => !c.is_excluded && c.needs_attention && c.paused_reason !== 'owner_reply');
       const n = today.messages24h;
       const msgText = `${n} mensaje${n !== 1 ? 's' : ''} en las últimas 24 h.`;
 

@@ -54,6 +54,7 @@
       line-height: 1.5;
     }
     .panel-reply-textarea:focus { outline: none; border-color: var(--accent, #C45C1A); }
+    .panel-reply-textarea:disabled { opacity: 0.5; cursor: not-allowed; color: #888; }
     .btn-panel-send {
       align-self: flex-end;
       padding: 8px 16px;
@@ -640,10 +641,15 @@
         document.getElementById('thread-messages').innerHTML = `<p class="no-msgs">${msg}</p>`;
         return;
       }
-      const { conversation, messages, wa_connected, owner_phone, is_excluded } = await res.json();
+      const { conversation, messages, wa_connected, owner_phone, is_excluded, last_user_message_at } = await res.json();
 
       const isPaused    = !!conversation.needs_attention;
       const needsHuman  = !!conversation.needs_human;
+      // Reply box: always show when WA connected.
+      // 24h window expiry: if the client hasn't written in 23.5h the textarea is disabled.
+      const WINDOW_24H_MS = 23.5 * 3600 * 1000;
+      const lastUserMs    = last_user_message_at ? new Date(last_user_message_at.endsWith('Z') ? last_user_message_at : last_user_message_at + 'Z').getTime() : null;
+      const windowExpired = !lastUserMs || (Date.now() - lastUserMs > WINDOW_24H_MS);
       const isOwnerConv = ownerPhoneMatchesCustomer(owner_phone, conversation.customer_id);
 
       const convTags = conversation.tags || [];
@@ -688,20 +694,35 @@
           <span>ℹ️ El asistente notificó al equipo — sigue respondiendo automáticamente</span>
           <button class="btn-pause-toggle" onclick="pauseConv(${id})">Tomar conversación</button>
         </div>` : ''}
-        ${isPaused ? `
+        ${isPaused && conversation.paused_reason === 'owner_reply' ? (() => {
+          const resumeAt = conversation.paused_at
+            ? new Date((conversation.paused_at + 12 * 3600) * 1000).toLocaleTimeString('es-UY', { hour: '2-digit', minute: '2-digit' })
+            : null;
+          const resumeText = resumeAt ? ` · vuelve solo a las ${resumeAt}` : '';
+          return `
+        <div class="pause-banner" id="pause-banner">
+          <span class="pause-banner-text">Pausaste el bot en esta conversación${resumeText}</span>
+          <button class="btn-resume" onclick="resumeConv(${id})">Reanudar bot</button>
+        </div>`;
+        })() : isPaused ? `
         <div class="pause-banner" id="pause-banner">
           <span class="pause-banner-text">⚠️ Asistente pausado — respondé al cliente desde acá</span>
           <button class="btn-resume" onclick="resumeConv(${id})">Reanudar bot</button>
-        </div>
+        </div>` : ''}
         <div id="panel-reply-error" style="display:none;padding:6px 16px;font-size:12px;color:#ef4444;background:rgba(239,68,68,.08);border-top:1px solid rgba(239,68,68,.15)"></div>
         ${wa_connected ? `
         <div class="panel-reply-box" id="panel-reply-box">
+          ${windowExpired ? `
+          <textarea class="panel-reply-textarea" id="panel-reply-text" rows="3" maxlength="4096"
+            placeholder="No podés responder desde acá: el cliente no escribió en las últimas 24 horas. Escribile desde tu WhatsApp o esperá a que te escriba."
+            disabled></textarea>
+          <button class="btn-panel-send" id="btn-panel-send" disabled>Enviar</button>` : `
           <textarea class="panel-reply-textarea" id="panel-reply-text" rows="3" maxlength="4096" placeholder="Escribí tu respuesta al cliente…"></textarea>
-          <button class="btn-panel-send" id="btn-panel-send" onclick="sendFromPanel(${id})">Enviar</button>
+          <button class="btn-panel-send" id="btn-panel-send" onclick="sendFromPanel(${id})">Enviar</button>`}
         </div>` : `
         <div class="panel-reply-box" id="panel-reply-box">
           <p style="font-size:12px;color:#888;margin:0;">WhatsApp no conectado — configurá la conexión en el panel para poder responder desde acá.</p>
-        </div>`}` : ''}
+        </div>`}
       `;
 
       if (!messages.length) {
@@ -765,6 +786,10 @@
       if (errDiv) errDiv.style.display = 'none';
       if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Enviando…'; }
 
+      // Track whether bot was already paused before sending so we know if we need to show the banner.
+      const pauseBanner = document.getElementById('pause-banner');
+      const wasPausedBefore = !!pauseBanner;
+
       const res = await fetch(`/api/conversations/${id}/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -782,6 +807,8 @@
         return;
       }
 
+      const data = await res.json().catch(() => ({}));
+
       const msgList = document.getElementById('thread-messages');
       const row = document.createElement('div');
       row.className = 'bubble-row row-ai';
@@ -789,6 +816,31 @@
       msgList.appendChild(row);
       msgList.scrollTop = msgList.scrollHeight;
       ta.value = '';
+
+      const resumeTs   = Math.floor(Date.now() / 1000) + 12 * 3600;
+      const resumeTime = new Date(resumeTs * 1000).toLocaleTimeString('es-UY', { hour: '2-digit', minute: '2-digit' });
+      const bannerText = `Pausaste el bot en esta conversación · vuelve solo a las ${resumeTime}`;
+
+      if (!wasPausedBefore) {
+        // First owner message: inject banner.
+        const header = document.getElementById('thread-header');
+        if (header) {
+          const replyError = document.getElementById('panel-reply-error');
+          const banner = document.createElement('div');
+          banner.className = 'pause-banner';
+          banner.id = 'pause-banner';
+          banner.innerHTML = `<span class="pause-banner-text">${bannerText}</span><button class="btn-resume" onclick="resumeConv(${id})">Reanudar bot</button>`;
+          if (replyError && replyError.parentNode === header) {
+            header.insertBefore(banner, replyError);
+          } else {
+            header.appendChild(banner);
+          }
+        }
+      } else if (data.is_now_owner_reply) {
+        // Already-paused conv — owner sent again: update resume time in existing banner if present.
+        const bannerSpan = document.querySelector('#pause-banner .pause-banner-text');
+        if (bannerSpan) bannerSpan.textContent = bannerText;
+      }
     }
 
     // ── Label helpers ──
