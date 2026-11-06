@@ -574,6 +574,37 @@ db.exec(`
     }
   }
 
+  // Migration 018: owner alert log for rate-limiting bot-stopped notifications
+  try {
+    if (!applied('018_owner_alerts')) {
+      db.exec(`CREATE TABLE IF NOT EXISTS owner_alert_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        business_id INTEGER NOT NULL,
+        conversation_id INTEGER,
+        kind TEXT NOT NULL,
+        sent_at INTEGER NOT NULL
+      )`);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('018_owner_alerts');
+      console.log('[migration 018] owner_alert_log table created');
+    }
+  } catch (e) { console.warn('[migration 018] owner_alert_log:', e.message); }
+
+  // Migration 019: audit log for runtime_config changes
+  try {
+    if (!applied('019_runtime_config_audit')) {
+      db.exec(`CREATE TABLE IF NOT EXISTS runtime_config_audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key TEXT NOT NULL,
+        old_value TEXT,
+        new_value TEXT,
+        changed_by TEXT,
+        changed_at INTEGER NOT NULL
+      )`);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('019_runtime_config_audit');
+      console.log('[migration 019] runtime_config_audit table created');
+    }
+  } catch (e) { console.warn('[migration 019] runtime_config_audit:', e.message); }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -1681,6 +1712,47 @@ function bulkAddExcludedContacts(businessId, rawPhones, source) {
   return { added, duplicates, invalid, limitReached };
 }
 
+// --- owner alert log ---
+
+// Returns true if an alert of this kind was sent for this conv in the last windowSeconds
+function ownerAlertRecentlySent(conversationId, kind, windowSeconds) {
+  const cutoff = Math.floor(Date.now() / 1000) - windowSeconds;
+  const row = db.prepare(
+    'SELECT 1 FROM owner_alert_log WHERE conversation_id = ? AND kind = ? AND sent_at > ? LIMIT 1'
+  ).get(conversationId, kind, cutoff);
+  return !!row;
+}
+
+// Returns true if an admin alert of this kind was sent for this business in the last windowSeconds
+function adminAlertRecentlySent(businessId, kind, windowSeconds) {
+  const cutoff = Math.floor(Date.now() / 1000) - windowSeconds;
+  const row = db.prepare(
+    'SELECT 1 FROM owner_alert_log WHERE business_id = ? AND conversation_id IS NULL AND kind = ? AND sent_at > ? LIMIT 1'
+  ).get(businessId, kind, cutoff);
+  return !!row;
+}
+
+function recordOwnerAlert(businessId, conversationId, kind) {
+  db.prepare(
+    'INSERT INTO owner_alert_log (business_id, conversation_id, kind, sent_at) VALUES (?, ?, ?, ?)'
+  ).run(businessId, conversationId ?? null, kind, Math.floor(Date.now() / 1000));
+}
+
+// Returns true if any owner alert of this kind was sent for this business (any conv) in the last windowSeconds
+function businessOwnerAlertRecentlySent(businessId, kind, windowSeconds) {
+  const cutoff = Math.floor(Date.now() / 1000) - windowSeconds;
+  const row = db.prepare(
+    'SELECT 1 FROM owner_alert_log WHERE business_id = ? AND kind = ? AND sent_at > ? LIMIT 1'
+  ).get(businessId, kind, cutoff);
+  return !!row;
+}
+
+function recordRuntimeConfigAudit(key, oldValue, newValue, changedBy) {
+  db.prepare(
+    'INSERT INTO runtime_config_audit (key, old_value, new_value, changed_by, changed_at) VALUES (?, ?, ?, ?, ?)'
+  ).run(key, oldValue ?? null, newValue ?? null, changedBy ?? null, Math.floor(Date.now() / 1000));
+}
+
 module.exports = {
   setUserPhone,
   setStyleProfile,
@@ -1845,6 +1917,11 @@ module.exports = {
   deleteDemoFlowSession,
   getDemosForFollowup,
   getUserByPhone,
+  ownerAlertRecentlySent,
+  adminAlertRecentlySent,
+  recordOwnerAlert,
+  businessOwnerAlertRecentlySent,
+  recordRuntimeConfigAudit,
 };
 
 function setWeeklySummaryEnabled(businessId, enabled) {

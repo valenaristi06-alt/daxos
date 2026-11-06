@@ -22,7 +22,7 @@ const MP_REF_TO_PLAN    = { arranque: 'arranque', crecimiento: 'crecimiento', ne
 // Spending cap defaults per plan (overridable via runtime_config)
 const _CAP_ANTHROPIC = { arranque: 70,  crecimiento: 150, a_medida: 300  };
 const _CAP_TTS_CHARS = { arranque: 20000, crecimiento: 100000, a_medida: 500000 };
-const _CAP_CONV_HOURLY = 8;
+const _CAP_CONV_HOURLY = 20;
 const _CAP_PREVIEW = 100;
 
 function _getAnthropicDailyCap(plan) {
@@ -88,7 +88,9 @@ const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserByI
   logDemoCost, getDemoFlowSession, upsertDemoFlowSession, deleteDemoFlowSession,
   getDemosForFollowup, getUserByPhone,
   normalizeContactPhone, isPhoneExcluded, addExcludedContact, removeExcludedContact,
-  getExcludedContacts, bulkAddExcludedContacts } = require('./db');
+  getExcludedContacts, bulkAddExcludedContacts,
+  ownerAlertRecentlySent, adminAlertRecentlySent, recordOwnerAlert,
+  businessOwnerAlertRecentlySent, recordRuntimeConfigAudit } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -102,10 +104,20 @@ const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = 
 const { handleDemoFlow, processFollowups } = require('./demo-flow');
 const { sendWeeklySummaries } = require('./weekly');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
-const { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail, sendSpendingCapEmail } = require('./email');
+const { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail, sendSpendingCapEmail, sendOwnerBotStoppedEmail, sendClaudeErrorAdminEmail } = require('./email');
 const { runBackup, maybeScheduledBackup, maybeSilenceAlert, startupBackupCheck, getLatestBackupMeta, listAllBackups } = require('./backup');
 
 const urgentAlertThrottle = new Map(); // conversationId → ms timestamp, resets on server restart
+
+// Returns true for WA errors that are client-side (expired window, invalid number, etc.)
+// — do NOT notify owner "revisá tu conexión" for these.
+function isClientSideWaError(err) {
+  const msg = err?.message || '';
+  // 131047: 24-h re-engagement window expired
+  // 131026: Message undeliverable (invalid / nonexistent number)
+  // 131030: Recipient phone number not in allowed list (sandbox)
+  return /131047|131026|131030/.test(msg);
+}
 const urgentBizHourly = new Map(); // businessId → { count, windowStart }, resets on server restart
 
 // Per-client serialization queue. Key: `${businessId}:${customerPhone}`.
@@ -1691,6 +1703,59 @@ async function notifyOwnerOfPause({ business, owner, contactId, messageText, con
   }
 }
 
+// Notifies the owner when the bot stops responding.
+// hourly_cap: 1 per (conv, kind) per 2h.
+// api_error, wa_error: additionally max 1 per (business, kind) per 60 min across all convs.
+async function notifyOwnerBotStopped(kind, business, owner, conv) {
+  if (!conv?.id || !business?.id) return;
+  if (ownerAlertRecentlySent(conv.id, kind, 2 * 3600)) return;
+  if (kind !== 'hourly_cap' && businessOwnerAlertRecentlySent(business.id, kind, 3600)) return;
+
+  const appUrl = process.env.APP_URL || 'https://daxos.lat';
+  const convUrl = `${appUrl}/conversations.html?conv=${conv.id}`;
+  const clientName = conv.customer_id || 'el cliente';
+
+  const waTexts = {
+    hourly_cap: `Tu asistente pausó un momento las respuestas a ${clientName} porque escribió muchas veces seguidas. Se reactiva solo en unos minutos. Si querés, contestale vos: ${convUrl}`,
+    api_error:  `Tu asistente tuvo un problema técnico y no pudo responder a ${clientName}. Contestale vos desde el panel: ${convUrl}. Ya avisamos al equipo de Daxos.`,
+    wa_error:   `No pudimos enviar un mensaje a ${clientName} por WhatsApp. Revisá la conexión de tu número: ${convUrl}`,
+  };
+
+  const waText = waTexts[kind];
+  if (!waText) return;
+
+  recordOwnerAlert(business.id, conv.id, kind);
+
+  if (owner?.email) {
+    sendOwnerBotStoppedEmail({
+      to: owner.email,
+      businessName: business.name,
+      clientName,
+      convUrl,
+      kind,
+    }).catch(err => {
+      logError('mail-error', { message: err.message, stack: err.stack || '' });
+      console.warn('[notifyOwnerBotStopped] mail failed:', err.message);
+    });
+  }
+
+  // WhatsApp to owner — best effort, never blocks
+  if (owner?.phone) {
+    const ownerCreds = business.phone_number_id
+      ? { phoneNumberId: business.phone_number_id, accessToken: business.wa_access_token, provider: business.wa_provider || 'meta' }
+      : null;
+    if (ownerCreds) {
+      const normOwnerPhone = normalizeContactPhone(owner.phone);
+      if (normOwnerPhone) {
+        sendWhatsAppMessage(normOwnerPhone, waText, ownerCreds)
+          .catch(err => {
+            logError('wa-owner-notify-error', { message: err.message, stack: err.stack || '', kind });
+          });
+      }
+    }
+  }
+}
+
 // Returns true if email was sent successfully.
 async function notifyOwnerUrgent({ business, owner, contactId, messageText, conversationId, waCredentials, now }) {
   const convUrl = `${process.env.APP_URL || 'https://daxos.lat'}/conversations.html?conv=${conversationId}`;
@@ -2297,7 +2362,9 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
       const nowSec = Math.floor(Date.now() / 1000);
       const lastNotified = conversation.spending_cap_notified_at || 0;
       if (nowSec - lastNotified > 12 * 3600) {
-        const capMsg = 'Nuestro asistente alcanzó el límite de respuestas de hoy. Alguien te va a contestar pronto.';
+        const capMsg = hitDaily
+          ? 'Nuestro asistente alcanzó el límite de respuestas de hoy. Alguien te va a contestar pronto.'
+          : 'Estoy recibiendo muchas consultas en este momento. Escribime de nuevo en unos minutos.';
         sendWhatsAppMessage(customerPhone, capMsg, waCredentials).catch(() => {});
         addMessage(conversation.id, 'user', text);
         addMessage(conversation.id, 'assistant', capMsg);
@@ -2333,6 +2400,11 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
             }
           }
         }
+      }
+      // Notify owner when only hourly cap hit (daily cap already notifies via its own path)
+      if (hitHourly && !hitDaily) {
+        const _hourlyOwner = getUserByBusinessId(business.id);
+        notifyOwnerBotStopped('hourly_cap', business, _hourlyOwner, conversation).catch(() => {});
       }
       markAsRead(msgId, waCredentials).catch(() => {});
       return;
@@ -2379,6 +2451,32 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
       markConversationPaused(conversation.id);
     } else {
       addMessage(conversation.id, 'user', text);
+    }
+    // Notify owner of API failure
+    {
+      const _apiErrOwner = getUserByBusinessId(business.id);
+      notifyOwnerBotStopped('api_error', business, _apiErrOwner, conversation).catch(() => {});
+    }
+    // Admin alert for Claude API failures — rate-limited by DB
+    {
+      const isNoCredits = claudeErr?.status === 402 || /credit/i.test(claudeErr?.message || '');
+      const is5xx = (claudeErr?.status >= 500) || /timeout|ETIMEDOUT/i.test(claudeErr?.message || '');
+      if (isNoCredits || is5xx) {
+        const adminKind = isNoCredits ? 'admin_claude_credits' : 'admin_claude_5xx';
+        const windowSec = isNoCredits ? 3600 : 6 * 3600;
+        if (!adminAlertRecentlySent(business.id, adminKind, windowSec)) {
+          recordOwnerAlert(business.id, null, adminKind);
+          sendClaudeErrorAdminEmail({
+            errorType: isNoCredits ? 'no_credits' : 'server_error',
+            businessId: business.id,
+            businessName: business.name,
+            errorMessage: claudeErr?.message || String(claudeErr),
+          }).catch(err => {
+            logError('mail-error', { message: err.message, stack: err.stack || '' });
+            console.warn('[admin-claude-alert] mail failed:', err.message);
+          });
+        }
+      }
     }
     markAsRead(msgId, waCredentials).catch(() => {});
     return;
@@ -2636,6 +2734,11 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     if (!_splitParts) replySent = true;
   } catch (sendErr) {
     logError(sendCtxErr, sendErr);
+    // Skip owner alert for client-side errors (expired window, invalid number, etc.)
+    if (!isClientSideWaError(sendErr)) {
+      const _waErrOwner = getUserByBusinessId(business.id);
+      notifyOwnerBotStopped('wa_error', business, _waErrOwner, conversation).catch(() => {});
+    }
   }
 
   if (!imageSent) await sendImageNow();
@@ -5146,6 +5249,45 @@ app.post('/admin/api/run-health-check', requireBearerToken, async (req, res) => 
 app.post('/admin/api/run-auto-resume', requireBearerToken, (_req, res) => {
   const n = autoResumeExpiredConversations();
   res.json({ ok: true, resumed: n });
+});
+
+const RUNTIME_CONFIG_ALLOWED = new Set(['cap_conv_hourly']);
+
+app.get('/admin/api/runtime-config/:key', requireBearerToken, (req, res) => {
+  if (!RUNTIME_CONFIG_ALLOWED.has(req.params.key))
+    return res.status(400).json({ error: `Clave no permitida: ${req.params.key}` });
+  try {
+    const value = getRuntimeConfig(req.params.key);
+    res.json({ key: req.params.key, value: value ?? null });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/admin/api/runtime-config/:key', requireBearerToken, (req, res) => {
+  const key = req.params.key;
+  if (!RUNTIME_CONFIG_ALLOWED.has(key))
+    return res.status(400).json({ error: `Clave no permitida: ${key}` });
+
+  const rawValue = req.body?.value;
+  if (rawValue === undefined) return res.status(400).json({ error: 'body.value requerido' });
+
+  let newValue;
+  if (rawValue === '' || rawValue === null) {
+    newValue = null; // reset to hardcoded default
+  } else {
+    const n = parseInt(rawValue, 10);
+    if (isNaN(n) || n < 5 || n > 100)
+      return res.status(400).json({ error: 'value debe ser un entero entre 5 y 100, o vacío para volver al default' });
+    newValue = String(n);
+  }
+
+  try {
+    const oldValue = getRuntimeConfig(key) ?? null;
+    // newValue===null → store '' so getRuntimeConfig returns falsy → hardcoded default kicks in
+    setRuntimeConfig(key, newValue ?? '');
+    const changedBy = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+    recordRuntimeConfigAudit(key, oldValue, newValue, changedBy);
+    res.json({ ok: true, key, value: newValue, previous: oldValue });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/admin/backup-now', requireBearerToken, async (req, res) => {
