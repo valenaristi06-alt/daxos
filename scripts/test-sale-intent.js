@@ -138,6 +138,41 @@ console.log('\nSuite M: notifyOwnerSaleIntent — mail and WA independent');
     emailSrc.includes('sendSaleIntentEmail }') || emailSrc.includes('sendSaleIntentEmail,'));
 }
 
+// ── Suite O: sale_intent suprimido si hay booking_created reciente ─────────────
+console.log('\nSuite O: sale_intent no dispara si ya hubo booking_created en 12h');
+{
+  const DB_DIR_O = '/tmp/test-sale-intent-booking';
+  const { execSync } = require('child_process');
+  try { execSync(`rm -rf ${DB_DIR_O}`); } catch (_) {}
+  require('fs').mkdirSync(DB_DIR_O, { recursive: true });
+
+  process.env.DB_DIR = DB_DIR_O;
+  Object.keys(require.cache).forEach(k => { if (k.includes('/src/db')) delete require.cache[k]; });
+  const { ownerAlertRecentlySent: oar2, recordOwnerAlert: roa2 } = require('../src/db.js');
+
+  const convId = 9002;
+  const bizId  = 2;
+
+  // No prior alerts — sale_intent allowed
+  assert('O1: sale_intent allowed before any booking_created', !oar2(convId, 'booking_created', 12 * 3600));
+
+  // Record booking_created (simulates BOOKING_SLOTS firing first in same message)
+  roa2(bizId, convId, 'booking_created');
+  assert('O2: sale_intent blocked after booking_created recorded', oar2(convId, 'booking_created', 12 * 3600));
+
+  // Source: notifyOwnerSaleIntent checks booking_created
+  const serverSrc2 = require('fs').readFileSync(require('path').join(__dirname, '../src/server.js'), 'utf8');
+  assert('O3: notifyOwnerSaleIntent checks booking_created rate limit',
+    serverSrc2.includes("ownerAlertRecentlySent(conv.id, 'booking_created', 12 * 3600)"));
+
+  // Source: booking creation records booking_created before notifyOwnerOfBooking
+  assert('O4: recordOwnerAlert booking_created called at booking creation in server.js',
+    serverSrc2.includes("recordOwnerAlert(business.id, conversation.id, 'booking_created')"));
+
+  try { execSync(`rm -rf ${DB_DIR_O}`); } catch (_) {}
+  delete process.env.DB_DIR;
+}
+
 // ── Suite N: real model run ────────────────────────────────────────────────────
 console.log('\nSuite N: real model run — purchase intent detection');
 

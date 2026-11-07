@@ -1781,6 +1781,7 @@ async function notifyOwnerBotStopped(kind, business, owner, conv) {
 async function notifyOwnerSaleIntent(business, owner, conv, lastMessages, customerPhone) {
   if (!conv?.id || !business?.id) return;
   if (ownerAlertRecentlySent(conv.id, 'sale_intent', 12 * 3600)) return;
+  if (ownerAlertRecentlySent(conv.id, 'booking_created', 12 * 3600)) return;
   recordOwnerAlert(business.id, conv.id, 'sale_intent');
 
   const appUrl  = process.env.APP_URL || 'https://daxos.lat';
@@ -2627,6 +2628,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
             slots,
           });
           nextBookingState = { step: 'waiting_owner', bookingId: booking.id, name: currentBookingState.name };
+          recordOwnerAlert(business.id, conversation.id, 'booking_created');
           notifyOwnerOfBooking({ business, owner: bookingOwner, booking, waCredentials })
             .catch(err => console.error(`[booking-flow] notifyOwnerOfBooking failed booking=${booking.id}: ${err.message}`));
           console.log(`[booking-flow] booking created id=${booking.id} code=${booking.slot_code} conversation=${conversation.id}`);
