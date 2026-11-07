@@ -605,6 +605,19 @@ db.exec(`
     }
   } catch (e) { console.warn('[migration 019] runtime_config_audit:', e.message); }
 
+  // Migration 020: audit log for test-mail calls
+  try {
+    if (!applied('020_mail_test_log')) {
+      db.exec(`CREATE TABLE IF NOT EXISTS mail_test_log (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        called_at  INTEGER NOT NULL,
+        result     TEXT NOT NULL
+      )`);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('020_mail_test_log');
+      console.log('[migration 020] mail_test_log table created');
+    }
+  } catch (e) { console.warn('[migration 020] mail_test_log:', e.message); }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -1768,6 +1781,17 @@ function recordRuntimeConfigAudit(key, oldValue, newValue, changedBy) {
   ).run(key, oldValue ?? null, newValue ?? null, changedBy ?? null, Math.floor(Date.now() / 1000));
 }
 
+function getLastMailTest() {
+  return db.prepare('SELECT called_at FROM mail_test_log ORDER BY id DESC LIMIT 1').get() || null;
+}
+
+function recordMailTest(result) {
+  db.prepare('INSERT INTO mail_test_log (called_at, result) VALUES (?, ?)').run(
+    Math.floor(Date.now() / 1000),
+    JSON.stringify(result)
+  );
+}
+
 module.exports = {
   setUserPhone,
   setStyleProfile,
@@ -1938,6 +1962,8 @@ module.exports = {
   recordOwnerAlert,
   businessOwnerAlertRecentlySent,
   recordRuntimeConfigAudit,
+  getLastMailTest,
+  recordMailTest,
 };
 
 function setWeeklySummaryEnabled(businessId, enabled) {

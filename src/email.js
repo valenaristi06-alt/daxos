@@ -84,7 +84,7 @@ async function sendUnmatchedPaymentAlert({ adminEmail, payerEmail, amount, curre
   }
 }
 
-async function sendBookingNotificationEmail({ to, businessName, clientName, reason, slots, slotCode, businessPhone, panelUrl }) {
+async function sendBookingNotificationEmail({ to, businessName, clientName, reason, slots, slotCode, businessPhone, panelUrl, subjectPrefix = '' }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) { console.warn('[resend] RESEND_API_KEY not set, skipping booking email'); return; }
 
@@ -100,7 +100,7 @@ async function sendBookingNotificationEmail({ to, businessName, clientName, reas
   const body = {
     from: 'Daxos <notificaciones@daxos.lat>',
     to: [to],
-    subject: `Pedido de turno — ${businessName}`,
+    subject: subjectPrefix + `Pedido de turno — ${businessName}`,
     html: `
       <p>Hola,</p>
       <p>Nuevo pedido de turno en <strong>${escapeHtml(businessName)}</strong>.</p>
@@ -168,7 +168,7 @@ async function sendWeeklySummaryEmail({ to, businessName, stats, weekLabel }) {
   }
 }
 
-async function sendSaleIntentEmail({ to, businessName, clientName, clientPhone, lastMessages, convUrl }) {
+async function sendSaleIntentEmail({ to, businessName, clientName, clientPhone, lastMessages, convUrl, subjectPrefix = '' }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) { console.warn('[resend] RESEND_API_KEY not set, skipping sale intent email'); return; }
 
@@ -185,7 +185,7 @@ async function sendSaleIntentEmail({ to, businessName, clientName, clientPhone, 
   const body = {
     from: 'Daxos <notificaciones@daxos.lat>',
     to: [to],
-    subject: `🛒 ${businessName}: un cliente quiere comprar`,
+    subject: subjectPrefix + `🛒 ${businessName}: un cliente quiere comprar`,
     html: `
       <p>Hola,</p>
       <p>Un cliente mostró intención de compra en <strong>${escapeHtml(businessName)}</strong>.</p>
@@ -488,7 +488,7 @@ async function sendPasswordResetEmail({ to, resetUrl }) {
   if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
 }
 
-async function sendUrgentAlertEmail({ to, businessName, contactId, messageText, conversationId, convUrl, now }) {
+async function sendUrgentAlertEmail({ to, businessName, contactId, messageText, conversationId, convUrl, now, subjectPrefix = '' }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     console.warn('[resend] RESEND_API_KEY not set, skipping urgent alert email');
@@ -502,7 +502,7 @@ async function sendUrgentAlertEmail({ to, businessName, contactId, messageText, 
   const body = {
     from: 'Daxos <notificaciones@daxos.lat>',
     to: [to],
-    subject: `🚨 URGENTE – ${businessName}`,
+    subject: subjectPrefix + `🚨 URGENTE – ${businessName}`,
     html: `
       <p>Hola,</p>
       <p>Un cliente indicó algo urgente en <strong>${escapeHtml(businessName)}</strong>.</p>
@@ -567,7 +567,7 @@ async function sendSpendingCapEmail({ to, businessName, panelUrl, plan, dailyCap
   }
 }
 
-async function sendOwnerBotStoppedEmail({ to, businessName, clientName, convUrl, kind }) {
+async function sendOwnerBotStoppedEmail({ to, businessName, clientName, convUrl, kind, subjectPrefix = '' }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) return;
 
@@ -591,9 +591,9 @@ async function sendOwnerBotStoppedEmail({ to, businessName, clientName, convUrl,
       <p>Revisá la conexión de tu número en la configuración de Daxos.</p>`,
   };
 
-  const subject  = subjects[kind];
+  const subject  = subjectPrefix + (subjects[kind] || '');
   const bodyHtml = bodies[kind];
-  if (!subject || !bodyHtml) return;
+  if (!subjects[kind] || !bodyHtml) return;
 
   const linkHtml = convUrl
     ? `<p><a href="${convUrl}" style="background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:8px">Abrir la conversación</a></p>`
@@ -610,7 +610,7 @@ async function sendOwnerBotStoppedEmail({ to, businessName, clientName, convUrl,
   }
 }
 
-function sendClaudeErrorAdminEmail({ errorType, businessId, businessName, errorMessage }) {
+function sendClaudeErrorAdminEmail({ errorType, businessId, businessName, errorMessage, subjectPrefix = '' }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     console.warn('[resend] RESEND_API_KEY not set, skipping claude error admin email');
@@ -623,7 +623,7 @@ function sendClaudeErrorAdminEmail({ errorType, businessId, businessName, errorM
     no_credits: '⚠️ Daxos: Claude sin créditos',
     server_error: '⚠️ Daxos: Claude error de servidor',
   };
-  const subject = subjects[errorType] || '⚠️ Daxos: Claude error';
+  const subject = subjectPrefix + (subjects[errorType] || '⚠️ Daxos: Claude error');
 
   return fetch('https://api.resend.com/emails', {
     method: 'POST',

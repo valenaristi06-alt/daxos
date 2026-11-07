@@ -90,7 +90,8 @@ const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserByI
   normalizeContactPhone, isPhoneExcluded, addExcludedContact, removeExcludedContact,
   getExcludedContacts, bulkAddExcludedContacts,
   ownerAlertRecentlySent, adminAlertRecentlySent, recordOwnerAlert,
-  businessOwnerAlertRecentlySent, recordRuntimeConfigAudit } = require('./db');
+  businessOwnerAlertRecentlySent, recordRuntimeConfigAudit,
+  getLastMailTest, recordMailTest } = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -104,7 +105,7 @@ const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = 
 const { handleDemoFlow, processFollowups } = require('./demo-flow');
 const { sendWeeklySummaries } = require('./weekly');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
-const { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail, sendSpendingCapEmail, sendOwnerBotStoppedEmail, sendClaudeErrorAdminEmail, sendSaleIntentEmail } = require('./email');
+const { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail, sendSpendingCapEmail, sendOwnerBotStoppedEmail, sendClaudeErrorAdminEmail, sendSaleIntentEmail, sendBookingNotificationEmail } = require('./email');
 const { runBackup, maybeScheduledBackup, maybeSilenceAlert, startupBackupCheck, getLatestBackupMeta, listAllBackups } = require('./backup');
 
 const urgentAlertThrottle = new Map(); // conversationId → ms timestamp, resets on server restart
@@ -5505,6 +5506,62 @@ app.get('/admin/backups', requireBearerToken, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// POST /admin/api/test-mails — sends one copy of every email template to ADMIN_EMAIL
+// Rate limit: once per 10 minutes. Audit log in mail_test_log (excluded from error listing).
+app.post('/admin/api/test-mails', requireBearerToken, async (_req, res) => {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const resendKey  = process.env.RESEND_API_KEY;
+
+  const missing = [];
+  if (!resendKey)  missing.push('RESEND_API_KEY');
+  if (!adminEmail) missing.push('ADMIN_EMAIL');
+  if (missing.length) {
+    return res.status(503).json({ error: `Variables de entorno faltantes: ${missing.join(', ')}` });
+  }
+
+  const COOLDOWN = 600;
+  const last = getLastMailTest();
+  if (last) {
+    const elapsed = Math.floor(Date.now() / 1000) - last.called_at;
+    if (elapsed < COOLDOWN) {
+      const wait = COOLDOWN - elapsed;
+      return res.status(429).json({ error: `Límite: podés enviar de nuevo en ${wait} segundos.` });
+    }
+  }
+
+  const PREFIX   = '[PRUEBA] ';
+  const appUrl   = process.env.APP_URL || 'https://daxos.lat';
+  const convUrl  = `${appUrl}/conversations.html?conv=999`;
+  const bizName  = 'Negocio de Prueba';
+  const clientN  = 'Cliente Prueba';
+  const clientPh = '+59899000000';
+
+  const templates = [
+    { name: 'hourly_cap',          fn: () => sendOwnerBotStoppedEmail({ to: adminEmail, businessName: bizName, clientName: clientN, convUrl, kind: 'hourly_cap', subjectPrefix: PREFIX }) },
+    { name: 'api_error',           fn: () => sendOwnerBotStoppedEmail({ to: adminEmail, businessName: bizName, clientName: clientN, convUrl, kind: 'api_error',  subjectPrefix: PREFIX }) },
+    { name: 'wa_error',            fn: () => sendOwnerBotStoppedEmail({ to: adminEmail, businessName: bizName, clientName: clientN, convUrl, kind: 'wa_error',   subjectPrefix: PREFIX }) },
+    { name: 'sale_intent',         fn: () => sendSaleIntentEmail({ to: adminEmail, businessName: bizName, clientName: clientN, clientPhone: clientPh, lastMessages: [{ role: 'user', content: 'quiero comprar' }, { role: 'assistant', content: '¡Claro! ¿Cuándo lo necesitás?' }], convUrl, subjectPrefix: PREFIX }) },
+    { name: 'turno_nuevo',         fn: () => sendBookingNotificationEmail({ to: adminEmail, businessName: bizName, clientName: clientN, reason: 'Consulta general', slots: ['Lunes 10:00', 'Martes 11:00'], slotCode: 'AB', businessPhone: clientPh, panelUrl: convUrl, subjectPrefix: PREFIX }) },
+    { name: 'pausa',               fn: () => sendPauseEmail({ to: adminEmail, businessName: bizName, contactId: clientPh, messageText: 'quiero hablar con alguien', conversationId: 999, convUrl, subject: `${PREFIX}Nueva conversación pausada — ${bizName}` }) },
+    { name: 'urgente',             fn: () => sendUrgentAlertEmail({ to: adminEmail, businessName: bizName, contactId: clientPh, messageText: 'es una emergencia', conversationId: 999, convUrl, now: new Date(), subjectPrefix: PREFIX }) },
+    { name: 'claude_sin_creditos', fn: () => sendClaudeErrorAdminEmail({ errorType: 'no_credits',   businessId: 0, businessName: bizName, errorMessage: 'Insufficient credits', subjectPrefix: PREFIX }) },
+    { name: 'claude_5xx',          fn: () => sendClaudeErrorAdminEmail({ errorType: 'server_error', businessId: 0, businessName: bizName, errorMessage: 'Internal server error 500', subjectPrefix: PREFIX }) },
+  ];
+
+  const results = {};
+  for (const { name, fn } of templates) {
+    try {
+      await fn();
+      results[name] = 'ok';
+    } catch (err) {
+      results[name] = err.message;
+    }
+  }
+
+  recordMailTest(results);
+  res.json(results);
 });
 
 app.get('/admin/api/backup-status', requireAdmin, async (req, res) => {
