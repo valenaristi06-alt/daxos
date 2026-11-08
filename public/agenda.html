@@ -1,0 +1,2138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/logodaxosnaranjanofondo.png">
+  <link rel="apple-touch-icon" href="/logodaxosnaranjanofondo.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Agenda — Daxos</title>
+  <link rel="stylesheet" href="/dashboard.css" />
+  <script src="/toast.js"></script>
+  <style>
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Toolbar ─────────────────────────────────────────────────────────── */
+    .agenda-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 4px;
+      flex-wrap: wrap;
+    }
+    .agenda-toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+      order: 1;
+    }
+    .agenda-toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+      order: 3;
+    }
+    /* Desktop: title sits between nav and view-toggle, expanding to fill space */
+    .agenda-period-title {
+      order: 2;
+      flex: 1;
+    }
+    /* Mobile: title drops to its own full-width row 2 */
+    @media (max-width: 1023px) {
+      .agenda-toolbar-right { order: 2; margin-left: auto; }
+      .agenda-period-title {
+        order: 3;
+        flex: none;
+        width: 100%;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        padding-top: 2px;
+      }
+    }
+    .btn-today-pill {
+      padding: 0 16px;
+      height: 36px;
+      background: none;
+      border: 1px solid var(--border-2);
+      border-radius: 100px;
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .btn-today-pill:hover { border-color: var(--accent); background: rgba(196,92,26,0.06); }
+    .agenda-nav-arrows { display: flex; gap: 2px; flex-shrink: 0; }
+    .agenda-nav-arrow {
+      width: 32px; height: 36px;
+      background: none;
+      border: 1px solid var(--border-2);
+      color: var(--text);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px;
+      line-height: 1;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .agenda-nav-arrow:first-child { border-radius: 6px 0 0 6px; }
+    .agenda-nav-arrow:last-child  { border-radius: 0 6px 6px 0; margin-left: -1px; }
+    .agenda-nav-arrow:hover { border-color: var(--accent); background: rgba(196,92,26,0.06); z-index: 1; position: relative; }
+    .agenda-period-title {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin: 0;
+      line-height: 1.2;
+      font-family: var(--sans);
+      min-width: 0;
+    }
+    @media (max-width: 767px) { .agenda-period-title { font-size: 15px; } }
+    /* On desktop the title needs min-width:0 to allow flex shrink; order/flex above handle it */
+
+    /* ── View toggle ─────────────────────────────────────────────────────── */
+    .view-toggle {
+      display: flex;
+      background: var(--surface);
+      border: 1px solid var(--border-2);
+      border-radius: 6px;
+      padding: 3px;
+      gap: 2px;
+    }
+    .view-toggle-btn {
+      padding: 6px 14px;
+      height: 32px;
+      border-radius: 4px;
+      border: none;
+      background: none;
+      color: var(--muted);
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      line-height: 1;
+      white-space: nowrap;
+    }
+    .view-toggle-btn.active { background: var(--accent); color: #fff; }
+    .view-toggle-btn:hover:not(.active) { color: var(--text); }
+    @media (max-width: 1023px) { #btn-view-week { display: none; } }
+
+    /* ── Add button ──────────────────────────────────────────────────────── */
+    .btn-agenda-add {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 20px;
+      height: 36px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-family: var(--sans);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      white-space: nowrap;
+      text-decoration: none;
+    }
+    .btn-agenda-add:hover { opacity: 0.88; text-decoration: none; }
+    @media (max-width: 1023px) { .btn-agenda-add { display: none !important; } }
+
+    /* ── Subtitle ────────────────────────────────────────────────────────── */
+    .agenda-subtitle-bar {
+      font-size: 13px;
+      color: var(--muted-2);
+      margin: 0 0 12px;
+      min-height: 18px;
+    }
+
+    /* ── Week strip (mobile day view) ────────────────────────────────────── */
+    .week-strip-wrap { margin-bottom: 12px; overflow: hidden; }
+    .week-strip {
+      display: flex;
+      gap: 4px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding-bottom: 2px;
+    }
+    .week-strip::-webkit-scrollbar { display: none; }
+    .week-day-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 6px 8px;
+      min-height: 52px;
+      min-width: 40px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      background: none;
+      cursor: pointer;
+      color: var(--muted-2);
+      font-size: 10px;
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: background 0.12s, color 0.12s;
+    }
+    .week-day-btn .wd-num {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1;
+    }
+    .week-day-btn:hover { background: rgba(196,92,26,0.06); }
+    .week-day-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .week-day-btn.active .wd-num { color: #fff; }
+    .week-day-btn.today-day:not(.active) .wd-num { color: var(--accent); }
+    .week-day-btn .wd-dot { width: 5px; height: 5px; border-radius: 50%; margin: 0 auto; background: transparent; }
+    .week-day-btn.has-apts .wd-dot { background: var(--accent); }
+    .week-day-btn.active .wd-dot { background: rgba(255,255,255,.8); }
+
+    /* ── Body layout ─────────────────────────────────────────────────────── */
+    .agenda-body {
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+    }
+    .agenda-left-sidebar {
+      width: 216px;
+      flex-shrink: 0;
+      display: none;
+    }
+    @media (min-width: 1024px) { .agenda-left-sidebar { display: block; } }
+    .agenda-content { flex: 1; min-width: 0; }
+
+    /* ── Mini calendar ───────────────────────────────────────────────────── */
+    .mini-cal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      user-select: none;
+    }
+    .mini-cal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .mini-cal-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      text-transform: capitalize;
+      letter-spacing: 0.01em;
+    }
+    .mini-cal-nav {
+      width: 24px; height: 24px;
+      background: none;
+      border: none;
+      color: var(--muted-2);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 4px;
+      font-size: 13px;
+      transition: background 0.12s, color 0.12s;
+    }
+    .mini-cal-nav:hover { background: rgba(255,255,255,.07); color: var(--text); }
+    .mini-cal-dow-row {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      margin-bottom: 4px;
+    }
+    .mini-cal-dow-row span {
+      text-align: center;
+      font-size: 9px;
+      color: var(--muted-2);
+      font-family: var(--mono);
+      padding: 2px 0;
+      letter-spacing: 0.03em;
+    }
+    .mini-cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+    }
+    .mini-cal-day {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2px 0;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background 0.1s;
+    }
+    .mini-cal-day:hover:not(.mcd-empty) { background: rgba(255,255,255,.05); }
+    .mini-cal-day.mcd-empty { cursor: default; }
+    .mini-cal-day-num {
+      width: 24px; height: 24px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 50%;
+      font-size: 11px;
+      color: var(--text);
+      font-weight: 400;
+      line-height: 1;
+      transition: background 0.12s, color 0.12s;
+    }
+    .mini-cal-day.mcd-today .mini-cal-day-num { background: var(--accent); color: #fff; font-weight: 700; }
+    .mini-cal-day.mcd-selected:not(.mcd-today) .mini-cal-day-num { background: rgba(196,92,26,.25); color: var(--accent); font-weight: 600; }
+    .mini-cal-day.mcd-other .mini-cal-day-num { color: var(--muted); }
+    .mini-cal-dot {
+      width: 4px; height: 4px;
+      border-radius: 50%;
+      background: transparent;
+      margin-top: 1px;
+    }
+    .mini-cal-day.mcd-has-apts .mini-cal-dot { background: var(--accent); }
+    .mini-cal-day.mcd-today .mini-cal-dot { background: rgba(255,255,255,.65); }
+    .mini-cal-day.mcd-other .mini-cal-dot { background: rgba(196,92,26,.3); }
+
+    /* ── Sidebar bottom (cancelled toggle) ───────────────────────────────── */
+    .agenda-sidebar-bottom { padding-top: 4px; }
+    /* Mobile cancelled toggle — shown below toolbar, hidden on desktop */
+    .cancelled-toggle-mobile { margin-bottom: 8px; padding: 10px 0; min-height: 44px; }
+    @media (min-width: 1024px) { .cancelled-toggle-mobile { display: none !important; } }
+    .cancelled-toggle-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .cancelled-toggle-wrap:hover .cancelled-toggle-track { border-color: var(--border-2); }
+    .cancelled-toggle-label {
+      font-size: 13px;
+      color: var(--muted);
+      transition: color 0.15s;
+      flex: 1;
+    }
+    .cancelled-toggle-wrap:has(input:checked) .cancelled-toggle-label { color: var(--text); }
+    .cancelled-toggle-track {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      transition: background 0.2s, border-color 0.2s;
+      flex-shrink: 0;
+    }
+    .cancelled-toggle-wrap:has(input:checked) .cancelled-toggle-track {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .cancelled-toggle-thumb {
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 16px; height: 16px;
+      background: var(--muted);
+      border-radius: 50%;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .cancelled-toggle-wrap:has(input:checked) .cancelled-toggle-thumb {
+      transform: translateX(20px);
+      background: #fff;
+    }
+    .cancelled-toggle-input { position: absolute; opacity: 0; width: 0; height: 0; }
+
+    /* ── Timeline (day view) ─────────────────────────────────────────────── */
+    #view-day-content { max-width: 720px; }
+    .timeline-wrap {
+      position: relative;
+      overflow-y: auto;
+      max-height: calc(100dvh - 56px - env(safe-area-inset-bottom, 0px) - 200px);
+    }
+    @media (min-width: 1024px) {
+      .timeline-wrap { max-height: calc(100dvh - 180px); }
+    }
+    .timeline { position: relative; min-height: 200px; padding-top: 30px; }
+    .timeline-hour {
+      display: flex;
+      align-items: flex-start;
+      height: 72px;
+      border-top: 1px solid var(--border);
+      position: relative;
+    }
+    .timeline-hour-label {
+      width: 48px;
+      flex-shrink: 0;
+      font-size: 11px;
+      color: var(--muted-2);
+      font-family: var(--mono);
+      padding-top: 0;
+      text-align: right;
+      padding-right: 10px;
+      margin-top: -7px;
+      letter-spacing: 0.02em;
+      user-select: none;
+    }
+    .timeline-hour-col { flex: 1; height: 100%; position: relative; }
+
+    /* ── Appointment blocks ──────────────────────────────────────────────── */
+    .apt-block {
+      position: absolute;
+      left: 1px; right: 1px;
+      border-radius: 6px;
+      border-left: 3px solid var(--accent);
+      background: rgba(196, 92, 26, 0.13);
+      color: var(--text);
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      overflow: hidden;
+      box-sizing: border-box;
+      transition: background 0.1s;
+      z-index: 1;
+    }
+    .apt-block:hover { background: rgba(196, 92, 26, 0.22); }
+    .apt-block.cancelled {
+      border-left-color: var(--muted-2);
+      background: rgba(119,119,119,0.08);
+      display: none;
+    }
+    #view-agenda.show-cancelled .apt-block.cancelled { display: block; }
+    .apt-block.cancelled .ab-name { text-decoration: line-through; color: var(--muted); }
+    .apt-block.compact { padding: 3px 7px; }
+    .apt-block.compact .ab-svc { display: none; }
+    .apt-block .ab-time { font-size: 10px; color: var(--muted-2); font-family: var(--mono); }
+    .apt-block .ab-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+    .apt-block .ab-svc  { font-size: 11px; color: var(--muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* ── Current time line ───────────────────────────────────────────────── */
+    .now-line, .week-now-line {
+      position: absolute;
+      left: 0; right: 0;
+      height: 2px;
+      background: var(--accent);
+      z-index: 3;
+      pointer-events: none;
+    }
+    .now-line::before, .week-now-line::before {
+      content: '';
+      position: absolute;
+      left: -4px; top: -4px;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+    .week-now-line { z-index: 4; }
+
+    /* ── Empty state ─────────────────────────────────────────────────────── */
+    .agenda-empty {
+      text-align: center;
+      padding: 48px 16px 24px;
+      color: var(--muted-2);
+      font-size: 14px;
+    }
+    .agenda-empty p { margin-bottom: 20px; }
+
+    /* ── State cards ─────────────────────────────────────────────────────── */
+    .agenda-state-wrap {
+      max-width: 480px;
+      margin: 48px auto 0;
+      text-align: center;
+    }
+    .agenda-state-wrap .icard { text-align: center; padding: 40px 32px; }
+    .state-icon { font-size: 36px; margin-bottom: 16px; display: block; }
+    .agenda-state-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 400; margin: 0 0 10px; color: var(--text); }
+    .agenda-state-wrap p  { color: var(--muted-2); font-size: 14px; margin: 0 0 24px; line-height: 1.6; }
+
+    /* ── FAB ─────────────────────────────────────────────────────────────── */
+    .add-apt-fab {
+      position: fixed;
+      bottom: calc(72px + env(safe-area-inset-bottom));
+      right: 16px;
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-size: 24px;
+      line-height: 1;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(196,92,26,.4);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 30;
+      transition: opacity 0.15s;
+    }
+    .add-apt-fab:hover { opacity: 0.9; }
+    @media (min-width: 768px) { .add-apt-fab { bottom: 24px; } }
+    @media (min-width: 1024px) { .add-apt-fab { display: none !important; } }
+
+    /* ── Week grid ───────────────────────────────────────────────────────── */
+    .week-grid-wrap {
+      overflow-y: auto;
+      max-height: calc(100dvh - 56px - env(safe-area-inset-bottom, 0px) - 200px);
+      position: relative;
+    }
+    @media (min-width: 1024px) {
+      .week-grid-wrap { max-height: calc(100dvh - 180px); }
+    }
+    @media (max-width: 1023px) { .week-grid-wrap { display: none; } }
+    .week-header-row {
+      display: flex;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border-2);
+    }
+    .week-axis-spacer { width: 48px; flex-shrink: 0; }
+    .week-day-header {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 8px 4px 6px;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .week-day-header:hover { background: rgba(255,255,255,.03); }
+    .wdh-dow {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted-2);
+      margin-bottom: 4px;
+    }
+    .wdh-num {
+      width: 30px; height: 30px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 50%;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .week-day-header.wdh-today .wdh-num { background: var(--accent); color: #fff; }
+    /* padding-top ensures the first axis-tick label (margin-top:-7px) clears the sticky header */
+    .week-body { display: flex; padding-top: 10px; }
+    .week-axis {
+      width: 48px;
+      flex-shrink: 0;
+      pointer-events: none;
+    }
+    .week-axis-tick {
+      height: 72px;
+      padding-right: 8px;
+      font-size: 11px;
+      color: var(--muted-2);
+      font-family: var(--mono);
+      text-align: right;
+      box-sizing: border-box;
+      user-select: none;
+      margin-top: -7px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-end;
+    }
+    .week-day-cols {
+      display: flex;
+      flex: 1;
+      gap: 0;
+      min-width: 0;
+    }
+    .week-day-col {
+      flex: 1;
+      min-width: 0;
+      position: relative;
+    }
+    .week-day-col-bg { position: relative; }
+    .week-hour-row {
+      height: 72px;
+      border-top: 1px solid var(--border);
+      border-left: 1px solid var(--border);
+      box-sizing: border-box;
+    }
+    .week-day-col:first-child .week-hour-row { border-left: none; }
+    .week-closed-overlay {
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        -45deg,
+        transparent,
+        transparent 5px,
+        rgba(255,255,255,0.018) 5px,
+        rgba(255,255,255,0.018) 10px
+      );
+      pointer-events: none;
+      z-index: 1;
+    }
+    .week-apts-layer {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .week-apts-layer .apt-block { pointer-events: auto; left: 2px; right: 2px; }
+
+    /* ── Month grid ──────────────────────────────────────────────────────── */
+    #view-month-content { overflow-x: hidden; }
+    .month-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      border-top: 1px solid var(--border-2);
+      border-left: 1px solid var(--border-2);
+      min-width: 420px;
+    }
+    .month-dow-hdr {
+      border-right: 1px solid var(--border-2);
+      border-bottom: 1px solid var(--border-2);
+      padding: 8px 4px;
+      font-size: 10px;
+      font-family: var(--mono);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted-2);
+      text-align: center;
+      background: var(--bg);
+    }
+    .month-cell {
+      border-right: 1px solid var(--border-2);
+      border-bottom: 1px solid var(--border-2);
+      padding: 6px 8px;
+      min-height: 96px;
+      cursor: pointer;
+      box-sizing: border-box;
+      transition: background 0.1s;
+      overflow: hidden;
+      vertical-align: top;
+    }
+    .month-cell:hover { background: rgba(255,255,255,.025); }
+    .month-cell.mc-other { opacity: 0.38; }
+    .mc-day-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px; height: 24px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted-2);
+      margin-bottom: 4px;
+      border-radius: 50%;
+      line-height: 1;
+    }
+    .month-cell:not(.mc-other) .mc-day-num { color: var(--text); font-weight: 600; }
+    .month-cell.mc-today .mc-day-num { background: var(--accent); color: #fff; }
+    .mc-apt-line {
+      display: block;
+      font-size: 11px;
+      color: var(--text);
+      background: rgba(196,92,26,.14);
+      border-left: 2px solid var(--accent);
+      border-radius: 2px;
+      padding: 1px 5px;
+      margin-bottom: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.5;
+    }
+    .mc-apt-more {
+      font-size: 10px;
+      color: var(--muted-2);
+      font-family: var(--mono);
+      padding: 1px 2px;
+      display: block;
+    }
+    .mc-dots { display: none; gap: 3px; flex-wrap: wrap; padding-top: 2px; }
+    .mc-dot  { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+    @media (max-width: 639px) {
+      .month-grid { min-width: 0; }
+      .month-dow-hdr { padding: 4px 1px; font-size: 9px; letter-spacing: 0; }
+      .month-cell { min-height: 44px; padding: 3px 1px; }
+      .mc-day-num { width: 20px; height: 20px; font-size: 10px; margin-bottom: 2px; }
+      .mc-apt-line { display: none; }
+      .mc-apt-more { display: none; }
+      .mc-dots { display: flex; }
+    }
+
+    /* ── Detail panel (desktop) ──────────────────────────────────────────── */
+    .detail-panel {
+      position: fixed;
+      top: 0; right: 0; bottom: 0;
+      width: 420px;
+      max-width: calc(100vw - 220px);
+      background: var(--surface);
+      border-left: 1px solid var(--border-2);
+      z-index: 20;
+      overflow-y: auto;
+      padding: 24px;
+      box-sizing: border-box;
+      transform: translateX(100%);
+      transition: transform 0.2s ease;
+    }
+    .detail-panel.open { transform: translateX(0); }
+    @media (max-width: 1023px) { .detail-panel { display: none !important; } }
+    .detail-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .detail-panel-title { font-size: 16px; font-weight: 600; }
+    .detail-close-btn {
+      width: 32px; height: 32px;
+      background: rgba(255,255,255,.06);
+      border: none; border-radius: 50%;
+      color: var(--muted-2); font-size: 18px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+    .detail-close-btn:hover { background: rgba(255,255,255,.12); color: var(--text); }
+
+    /* ── Shared detail content ───────────────────────────────────────────── */
+    .apt-detail-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; font-size: 14px; }
+    .apt-detail-label {
+      color: var(--muted-2);
+      font-size: 10px;
+      font-family: var(--mono);
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      min-width: 72px;
+      flex-shrink: 0;
+      padding-top: 2px;
+    }
+    .apt-detail-val { flex: 1; line-height: 1.4; }
+    .apt-detail-warn {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.2);
+      color: #ef4444;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+    .apt-detail-warn a { color: #ef4444; text-decoration: underline; }
+    .status-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px; font-family: var(--mono); font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .status-chip.confirmed { background: rgba(42,153,102,.15); color: #2a9966; }
+    .status-chip.cancelled { background: rgba(119,119,119,.15); color: var(--muted-2); }
+    .apt-detail-actions {
+      display: flex; gap: 10px; flex-wrap: wrap;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      margin-top: 8px;
+    }
+    .btn-detail {
+      flex: 1;
+      min-width: 100px;
+      padding: 11px 16px;
+      min-height: 44px;
+      border-radius: 4px;
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, border-color 0.15s, color 0.15s, background 0.15s;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .btn-detail-danger  { background: none; border: 1px solid rgba(239,68,68,.3); color: #ef4444; }
+    .btn-detail-danger:hover { background: rgba(239,68,68,.08); }
+    .btn-detail-outline { background: none; border: 1px solid var(--border-2); color: var(--text); }
+    .btn-detail-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Bottom sheet ────────────────────────────────────────────────────── */
+    .sheet-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.5);
+      z-index: 40;
+      opacity: 0; pointer-events: none;
+      transition: opacity .2s;
+    }
+    .sheet-backdrop.open { opacity: 1; pointer-events: auto; }
+    .sheet {
+      position: fixed;
+      top: 0; bottom: 0; left: 0; right: 0;
+      background: var(--surface);
+      border-radius: 0;
+      border-top: none;
+      z-index: 50;
+      padding: 0 0 env(safe-area-inset-bottom);
+      transform: translateY(100%);
+      transition: transform .25s cubic-bezier(.32,.72,0,1);
+      max-height: 100dvh;
+      display: flex; flex-direction: column;
+    }
+    .sheet.open { transform: translateY(0); }
+    @media (min-width: 1024px) { .sheet-backdrop, .sheet { display: none !important; } }
+    .sheet-handle {
+      display: none;
+    }
+    .sheet-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px 10px;
+      flex-shrink: 0;
+    }
+    .sheet-title { font-size: 16px; font-weight: 600; }
+    .sheet-body  { padding: 4px 20px 20px; overflow-y: auto; flex: 1; }
+
+    /* ── Modal ───────────────────────────────────────────────────────────── */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.5);
+      z-index: 60;
+      opacity: 0; pointer-events: none;
+      transition: opacity .2s;
+    }
+    .modal-backdrop.open { opacity: 1; pointer-events: auto; }
+    .modal {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%) scale(.96);
+      background: var(--surface);
+      border: 1px solid var(--border-2);
+      border-radius: 12px;
+      z-index: 70;
+      width: min(440px, calc(100vw - 32px));
+      padding: 24px;
+      opacity: 0; pointer-events: none;
+      transition: opacity .2s, transform .2s;
+      box-sizing: border-box;
+    }
+    .modal.open { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%) scale(1); }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .modal-title  { font-size: 16px; font-weight: 600; }
+    .modal .field { margin-bottom: 14px; }
+    .modal .field label {
+      display: block;
+      font-size: 10px;
+      color: var(--muted-2);
+      font-family: var(--mono);
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .modal .field input,
+    .modal .field select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border-2);
+      border-radius: 4px;
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      padding: 11px 14px;
+      box-sizing: border-box;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      min-height: 44px;
+    }
+    .modal .field input:focus,
+    .modal .field select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(196,92,26,0.15);
+    }
+    .modal .field input:disabled,
+    .modal .field select:disabled { opacity: 0.45; cursor: not-allowed; }
+    .modal .field select {
+      background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23777' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+      cursor: pointer;
+    }
+    .modal-error { color: #ef4444; font-size: 12px; margin-top: 6px; display: none; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+    .btn-modal-cancel {
+      flex: 1;
+      padding: 11px 16px; min-height: 44px;
+      background: none;
+      border: 1px solid var(--border-2);
+      border-radius: 4px;
+      color: var(--muted);
+      font-family: var(--sans); font-size: 14px;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-modal-cancel:hover { border-color: var(--accent); color: var(--text); }
+    .btn-modal-save {
+      flex: 2;
+      padding: 11px 16px; min-height: 44px;
+      background: var(--accent);
+      border: none;
+      border-radius: 4px;
+      color: #fff;
+      font-family: var(--sans); font-size: 14px; font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn-modal-save:hover { opacity: 0.88; }
+    .btn-modal-save:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Upsell apt list ─────────────────────────────────────────────────── */
+    .upsell-apts-list { margin-top: 24px; }
+    .upsell-apts-list h3 {
+      font-size: 11px; font-family: var(--mono); letter-spacing: 0.07em;
+      text-transform: uppercase; color: var(--muted-2); margin-bottom: 12px;
+    }
+    .upsell-apt-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .upsell-apt-row:last-child { border-bottom: none; }
+    .upsell-apt-info { color: var(--text); }
+    .upsell-apt-time { color: var(--muted-2); font-family: var(--mono); font-size: 11px; }
+
+    /* ── Error card ──────────────────────────────────────────────────────── */
+    .agenda-error-card { text-align: center; padding: 40px 24px; }
+    .agenda-error-card .state-icon { font-size: 32px; }
+    .agenda-error-card h2 { font-family: var(--serif); font-size: 20px; font-weight: 400; margin: 12px 0 8px; color: var(--text); }
+    .agenda-error-card p  { color: var(--muted-2); font-size: 14px; margin-bottom: 20px; }
+    .btn-retry {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 11px 24px; min-height: 44px;
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 4px;
+      font-family: var(--sans); font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: opacity 0.15s;
+    }
+    .btn-retry:hover { opacity: 0.88; }
+
+    /* ── Reduced motion ──────────────────────────────────────────────────── */
+    @media (prefers-reduced-motion: reduce) {
+      .sheet, .detail-panel, .modal, .sheet-backdrop, .modal-backdrop { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app-layout">
+
+  <aside class="app-sidebar">
+    <a href="/inicio.html" class="sidebar-logo">
+      <img src="/logodaxosnaranjanofondo.png" alt="" class="logo-img">DAXOS
+    </a>
+    <div class="sidebar-divider"></div>
+    <nav class="sidebar-nav" aria-label="Principal">
+      <a href="/inicio.html" class="sidebar-link">
+        <svg class="sidebar-link-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M2 8L8 2L14 8V14H10V10H6V14H2V8Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+        </svg>
+        Inicio
+      </a>
+      <a href="/dashboard.html" class="sidebar-link">
+        <svg class="sidebar-link-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <line x1="2" y1="4" x2="14" y2="4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <line x1="2" y1="8" x2="14" y2="8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <line x1="2" y1="12" x2="14" y2="12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <circle cx="5" cy="4" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+          <circle cx="10" cy="8" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+          <circle cx="6" cy="12" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+        </svg>
+        Configuración
+      </a>
+      <a href="/conversations.html" class="sidebar-link">
+        <svg class="sidebar-link-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M2 3C2 2 3 1 4 1H12C13 1 14 2 14 3V9C14 10 13 11 12 11H7L4 14V11C3 11 2 10 2 9V3Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+        </svg>
+        Conversaciones
+      </a>
+      <a href="/agenda.html" class="sidebar-link active" aria-current="page">
+        <svg class="sidebar-link-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <rect x="2" y="3" width="12" height="11" rx="1" stroke="currentColor" stroke-width="1.4"/>
+          <line x1="5" y1="1" x2="5" y2="5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <line x1="11" y1="1" x2="11" y2="5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <line x1="2" y1="7" x2="14" y2="7" stroke="currentColor" stroke-width="1.4"/>
+        </svg>
+        Agenda
+      </a>
+    </nav>
+    <div class="sidebar-bottom">
+      <span class="plan-badge" id="plan-badge" style="display:none"></span>
+      <span class="sidebar-email" id="user-email"></span>
+      <button class="btn-logout" id="btn-logout">Salir</button>
+    </div>
+  </aside>
+
+  <main class="app-main" id="main-content">
+
+    <!-- ── Upsell ── -->
+    <div id="view-upsell" style="display:none">
+      <h1 class="page-title">Agenda</h1>
+      <div class="agenda-state-wrap">
+        <div class="icard">
+          <span class="state-icon">📅</span>
+          <h2>Agenda automática</h2>
+          <p>Disponible desde el plan <strong>Crecimiento</strong>.<br>Podés ver tus turnos existentes a continuación.</p>
+          <a href="/dashboard.html" class="btn-agenda-add" style="display:inline-flex;text-decoration:none">Ver planes</a>
+        </div>
+      </div>
+      <div id="view-upsell-apts" class="upsell-apts-list" style="max-width:480px;margin:0 auto"></div>
+    </div>
+
+    <!-- ── Agenda apagada ── -->
+    <div id="view-disabled" style="display:none">
+      <h1 class="page-title">Agenda</h1>
+      <div class="agenda-state-wrap">
+        <div class="icard">
+          <span class="state-icon">📅</span>
+          <h2>Agenda apagada</h2>
+          <p>Activala en <a href="/dashboard.html#card-agenda">Configuración</a> para que el asistente confirme turnos automáticamente.<br>
+          Los turnos existentes son de solo lectura.</p>
+        </div>
+      </div>
+      <div id="view-disabled-apts" class="upsell-apts-list" style="max-width:480px;margin:0 auto"></div>
+    </div>
+
+    <!-- ── Sin horarios ── -->
+    <div id="view-no-hours" style="display:none">
+      <h1 class="page-title">Agenda</h1>
+      <div class="agenda-state-wrap">
+        <div class="icard">
+          <span class="state-icon">🕐</span>
+          <h2>Sin horarios configurados</h2>
+          <p>Cargá tus <a href="/dashboard.html#card-horarios">horarios de atención</a> para activar la agenda.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Error de carga ── -->
+    <div id="view-error" style="display:none">
+      <h1 class="page-title">Agenda</h1>
+      <div class="agenda-state-wrap">
+        <div class="icard agenda-error-card">
+          <span class="state-icon">⚠</span>
+          <h2>No se pudo cargar la agenda</h2>
+          <p id="view-error-msg">Revisá tu conexión e intentá de nuevo.</p>
+          <small id="view-error-detail" style="color:var(--muted);font-family:var(--mono);font-size:11px;word-break:break-all;margin-bottom:16px;display:block"></small>
+          <button type="button" class="btn-retry" id="btn-retry">Reintentar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Agenda principal ── -->
+    <div id="view-agenda" style="display:none">
+
+      <!-- Toolbar —
+           Desktop:  [nav-left] [title–flex:1] [view-toggle + add-btn]  (single row)
+           Mobile:   row1: [nav-left] [view-toggle]  row2: [title full-width]  -->
+      <div class="agenda-toolbar">
+        <div class="agenda-toolbar-left">
+          <button id="btn-today" class="btn-today-pill" type="button">Hoy</button>
+          <div class="agenda-nav-arrows">
+            <button id="btn-prev" class="agenda-nav-arrow" type="button" aria-label="Anterior">&#8592;</button>
+            <button id="btn-next" class="agenda-nav-arrow" type="button" aria-label="Siguiente">&#8594;</button>
+          </div>
+        </div>
+        <div class="agenda-toolbar-right">
+          <div class="view-toggle" role="group" aria-label="Vista">
+            <button id="btn-view-day"   class="view-toggle-btn" type="button">Día</button>
+            <button id="btn-view-week"  class="view-toggle-btn" type="button">Semana</button>
+            <button id="btn-view-month" class="view-toggle-btn" type="button">Mes</button>
+          </div>
+          <button id="btn-add-apt-header" class="btn-agenda-add" type="button" style="display:none">+ Agregar turno</button>
+        </div>
+        <h2 id="agenda-date-label" class="agenda-period-title"></h2>
+      </div>
+
+      <!-- Subtitle -->
+      <p id="agenda-subtitle" class="agenda-subtitle-bar">Cargando...</p>
+
+      <!-- Week strip (mobile day view only) -->
+      <div class="week-strip-wrap" id="week-strip-wrap" style="display:none">
+        <div class="week-strip" id="week-strip" role="group" aria-label="Días de la semana"></div>
+      </div>
+
+      <!-- Body: sidebar + content -->
+      <div class="agenda-body">
+
+        <!-- Left sidebar (desktop ≥1024) -->
+        <aside class="agenda-left-sidebar">
+          <div class="mini-cal" id="mini-cal">
+            <div class="mini-cal-header">
+              <button class="mini-cal-nav" id="mini-cal-prev" type="button" aria-label="Mes anterior">&#8592;</button>
+              <span class="mini-cal-title" id="mini-cal-label"></span>
+              <button class="mini-cal-nav" id="mini-cal-next" type="button" aria-label="Mes siguiente">&#8594;</button>
+            </div>
+            <div class="mini-cal-dow-row">
+              <span>Lu</span><span>Ma</span><span>Mi</span>
+              <span>Ju</span><span>Vi</span><span>Sá</span><span>Do</span>
+            </div>
+            <div id="mini-cal-grid" class="mini-cal-grid"></div>
+          </div>
+          <div class="agenda-sidebar-bottom">
+            <label class="cancelled-toggle-wrap" id="cancelled-toggle-wrap">
+              <input class="cancelled-toggle-input" type="checkbox" id="chk-show-cancelled" aria-label="Mostrar cancelados">
+              <span class="cancelled-toggle-label">Mostrar cancelados</span>
+              <span class="cancelled-toggle-track"><span class="cancelled-toggle-thumb"></span></span>
+            </label>
+          </div>
+        </aside>
+
+        <!-- Main content -->
+        <div class="agenda-content">
+
+          <!-- Cancelled toggle (mobile only — desktop uses sidebar) -->
+          <label class="cancelled-toggle-wrap cancelled-toggle-mobile" id="cancelled-toggle-mobile">
+            <input class="cancelled-toggle-input" type="checkbox" id="chk-show-cancelled-mobile" aria-label="Mostrar cancelados">
+            <span class="cancelled-toggle-label">Mostrar cancelados</span>
+            <span class="cancelled-toggle-track"><span class="cancelled-toggle-thumb"></span></span>
+          </label>
+
+          <!-- Day view -->
+          <div id="view-day-content">
+            <div class="timeline-wrap" id="timeline-wrap">
+              <div class="timeline" id="timeline"></div>
+            </div>
+            <div id="view-no-apts" class="agenda-empty" style="display:none">
+              <p>Sin turnos este día.</p>
+              <button id="btn-add-apt-empty" class="btn-agenda-add" type="button" style="display:none">+ Agregar turno</button>
+            </div>
+          </div>
+
+          <!-- Week view -->
+          <div id="view-week-content" style="display:none">
+            <div class="week-grid-wrap" id="week-grid-wrap">
+              <div id="week-header-row" class="week-header-row">
+                <div class="week-axis-spacer"></div>
+              </div>
+              <div class="week-body">
+                <div id="week-axis" class="week-axis"></div>
+                <div id="week-day-cols" class="week-day-cols"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Month view -->
+          <div id="view-month-content" style="display:none">
+            <div class="month-grid" id="month-grid"></div>
+          </div>
+
+        </div><!-- /agenda-content -->
+      </div><!-- /agenda-body -->
+
+    </div><!-- /view-agenda -->
+
+  </main>
+</div><!-- /app-layout -->
+
+<!-- Mobile nav -->
+<nav class="mobile-nav" aria-label="Navegación principal">
+  <a href="/inicio.html" class="mobile-nav-item">
+    <svg class="mobile-nav-icon" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M2 8L8 2L14 8V14H10V10H6V14H2V8Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+    </svg>
+    Inicio
+  </a>
+  <a href="/dashboard.html" class="mobile-nav-item">
+    <svg class="mobile-nav-icon" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <line x1="2" y1="4" x2="14" y2="4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="2" y1="8" x2="14" y2="8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="2" y1="12" x2="14" y2="12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      <circle cx="5" cy="4" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+      <circle cx="10" cy="8" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+      <circle cx="6" cy="12" r="1.8" fill="var(--surface)" stroke="currentColor" stroke-width="1.4"/>
+    </svg>
+    Config
+  </a>
+  <a href="/conversations.html" class="mobile-nav-item">
+    <svg class="mobile-nav-icon" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M2 3C2 2 3 1 4 1H12C13 1 14 2 14 3V9C14 10 13 11 12 11H7L4 14V11C3 11 2 10 2 9V3Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+    </svg>
+    Conversaciones
+  </a>
+  <a href="/agenda.html" class="mobile-nav-item active" aria-current="page">
+    <svg class="mobile-nav-icon" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="2" y="3" width="12" height="11" rx="1" stroke="currentColor" stroke-width="1.4"/>
+      <line x1="5" y1="1" x2="5" y2="5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="11" y1="1" x2="11" y2="5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="2" y1="7" x2="14" y2="7" stroke="currentColor" stroke-width="1.4"/>
+    </svg>
+    Agenda
+  </a>
+</nav>
+
+<button class="mobile-corner-logout" id="btn-logout-mobile" type="button">Salir</button>
+
+<!-- FAB (mobile) -->
+<button class="add-apt-fab" id="btn-add-apt-fab" aria-label="Agregar turno" type="button">+</button>
+
+<!-- Detail panel (desktop) -->
+<div id="detail-panel" class="detail-panel" role="complementary" aria-label="Detalle del turno">
+  <div class="detail-panel-header">
+    <span class="detail-panel-title" id="detail-panel-title">Turno</span>
+    <button class="detail-close-btn" id="detail-panel-close" aria-label="Cerrar" type="button">&#215;</button>
+  </div>
+  <div id="detail-panel-body"></div>
+</div>
+
+<!-- Bottom sheet (mobile) -->
+<div class="sheet-backdrop" id="sheet-backdrop"></div>
+<div class="sheet" id="apt-sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <span class="sheet-title" id="sheet-title">Turno</span>
+    <button class="detail-close-btn" id="sheet-close" aria-label="Cerrar" type="button">&#215;</button>
+  </div>
+  <div class="sheet-body" id="sheet-body"></div>
+</div>
+
+<!-- Add / Reschedule modal -->
+<div class="modal-backdrop" id="modal-backdrop"></div>
+<div class="modal" id="apt-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal-header">
+    <span class="modal-title" id="modal-title">Agregar turno</span>
+    <button class="detail-close-btn" id="modal-close" aria-label="Cerrar" type="button">&#215;</button>
+  </div>
+  <div id="modal-body">
+    <div class="field">
+      <label for="m-phone">Teléfono del cliente</label>
+      <input type="tel" id="m-phone" placeholder="598912345678" />
+    </div>
+    <div class="field">
+      <label for="m-name">Nombre</label>
+      <input type="text" id="m-name" placeholder="Nombre del cliente" />
+    </div>
+    <div class="field">
+      <label for="m-svc">Servicio</label>
+      <select id="m-svc"><option value="">Sin servicio especificado</option></select>
+    </div>
+    <div class="field">
+      <label for="m-date">Fecha</label>
+      <input type="date" id="m-date" />
+    </div>
+    <div class="field">
+      <label for="m-time">Hora</label>
+      <input type="time" id="m-time" step="300" />
+    </div>
+    <div id="modal-error" class="modal-error"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-modal-cancel" id="modal-cancel">Cancelar</button>
+      <button type="button" class="btn-modal-save"   id="modal-save">Guardar turno</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+document.getElementById('btn-retry').addEventListener('click', () => window.location.reload());
+
+(async () => {
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  const meRes = await fetch('/auth/me');
+  if (!meRes.ok) { window.location.href = '/login.html'; return; }
+
+  const bizRes = await fetch('/api/business');
+  const biz = bizRes.ok ? await bizRes.json() : null;
+  if (!biz) { window.location.href = '/login.html'; return; }
+
+  const LABELS = { arranque: 'Arranque', crecimiento: 'Crecimiento', a_medida: 'A medida' };
+  const badge  = document.getElementById('plan-badge');
+  if (biz.plan && LABELS[biz.plan]) { badge.textContent = LABELS[biz.plan]; badge.style.display = 'inline-block'; }
+  document.getElementById('user-email').textContent = (await meRes.json()).email || '';
+
+  async function doLogout() { await fetch('/auth/logout', { method: 'POST' }); window.location.href = '/login.html'; }
+  document.getElementById('btn-logout').addEventListener('click', doLogout);
+  document.getElementById('btn-logout-mobile').addEventListener('click', doLogout);
+
+  // ── Plan gating ───────────────────────────────────────────────────────────
+  const planOk = biz.plan_cortesia || biz.plan === 'crecimiento' || biz.plan === 'a_medida';
+
+  function showView(id) {
+    ['view-upsell','view-disabled','view-no-hours','view-error','view-agenda'].forEach(v => {
+      document.getElementById(v).style.display = v === id ? '' : 'none';
+    });
+  }
+
+  if (!planOk) { showView('view-upsell'); loadUpsellApts(); return; }
+  if (!biz.agenda_enabled) { showView('view-disabled'); loadUpsellApts('view-disabled-apts'); return; }
+
+  let _bh = null;
+  try { _bh = typeof biz.business_hours === 'string' ? JSON.parse(biz.business_hours) : biz.business_hours; } catch (_) {}
+  if (!_bh) { showView('view-no-hours'); return; }
+
+  showView('view-agenda');
+  document.getElementById('btn-add-apt-header').style.display = 'inline-flex';
+  document.getElementById('btn-add-apt-fab').style.display = 'flex';
+  document.getElementById('btn-add-apt-empty').style.display = '';
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const TZ          = 'America/Montevideo';
+  const DOW_ES      = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const DOW_ES_FULL = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const MONTHS_FULL = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const PX_H        = 72;
+
+  function mvdDateStr(date = new Date()) {
+    return new Intl.DateTimeFormat('sv-SE', { timeZone: TZ }).format(date);
+  }
+  function addDays(dateStr, n) {
+    const d = new Date(`${dateStr}T12:00:00-03:00`);
+    d.setUTCDate(d.getUTCDate() + n);
+    return new Intl.DateTimeFormat('sv-SE', { timeZone: TZ }).format(d);
+  }
+  function mvdDow(dateStr) {
+    return new Date(`${dateStr}T12:00:00-03:00`).getUTCDay();
+  }
+  function mvdDateOfUtc(utcIso) {
+    return new Intl.DateTimeFormat('sv-SE', { timeZone: TZ }).format(new Date(utcIso));
+  }
+  function utcToMvdHHMM(utcIso) {
+    const p = new Intl.DateTimeFormat(undefined, {
+      timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(new Date(utcIso));
+    return (p.find(x=>x.type==='hour')?.value??'00').padStart(2,'0') + ':' +
+           (p.find(x=>x.type==='minute')?.value??'00').padStart(2,'0');
+  }
+  function formatPhone(raw) {
+    if (!raw) return 'Desconocido';
+    const d = raw.replace(/\D/g, '');
+    if (d.startsWith('598') && d.length === 11) return `+598 ${d.slice(3,5)} ${d.slice(5,8)} ${d.slice(8)}`;
+    return '+' + d;
+  }
+  function formatMin(m) {
+    const h = Math.floor(m/60), r = m%60;
+    if (!h) return m + ' min';
+    if (!r) return h === 1 ? '1 hora' : h + ' horas';
+    return h + ' hora' + (h>1?'s':'') + ' ' + r + ' min';
+  }
+  function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+
+  function periodTitle(view, dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (view === 'month') {
+      return MONTHS_FULL[m-1] + ' de ' + y;
+    }
+    if (view === 'week') {
+      const monStr = getWeekStartMon(dateStr);
+      const sunStr = addDays(monStr, 6);
+      const [,fm,fd] = monStr.split('-').map(Number);
+      const [sy,sm,sd] = sunStr.split('-').map(Number);
+      if (fm === sm) return `${parseInt(fd)} – ${parseInt(sd)} de ${MONTHS_FULL[fm-1]} de ${y}`;
+      return `${parseInt(fd)} de ${MONTHS_FULL[fm-1]} – ${parseInt(sd)} de ${MONTHS_FULL[sm-1]} de ${sy}`;
+    }
+    // day
+    const dow = mvdDow(dateStr);
+    return `${DOW_ES_FULL[dow]} ${d} de ${MONTHS_FULL[m-1]} de ${y}`;
+  }
+
+  function dayLabel(dateStr) {
+    const [,mo,d] = dateStr.split('-');
+    const dow = mvdDow(dateStr);
+    return `${DOW_ES_FULL[dow]} ${parseInt(d)} de ${MONTHS_FULL[parseInt(mo)-1]}`;
+  }
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  const today      = mvdDateStr();
+  let currentDate  = today;
+  let currentApts  = [];
+  let services     = [];
+  let showCancelled = false;
+  let sheetApt     = null;
+
+  let currentView = 'day';
+  try {
+    const sv = localStorage.getItem('daxos-agenda-view');
+    if (sv === 'week' || sv === 'day' || sv === 'month') currentView = sv;
+  } catch (_) {}
+  if (window.innerWidth < 1024 && currentView === 'week') currentView = 'day';
+
+  // Mini cal state
+  const todayParts = today.split('-').map(Number);
+  let miniCalYear  = todayParts[0];
+  let miniCalMonth = todayParts[1] - 1; // 0-indexed
+  const miniCalCache = {}; // `year-month` → { dateStr: count }
+
+  // ── Load services ─────────────────────────────────────────────────────────
+  async function loadServices() {
+    const r = await fetch('/api/agenda/services');
+    if (r.ok) services = await r.json();
+  }
+  await loadServices();
+
+  function populateSvcSelect() {
+    const sel = document.getElementById('m-svc');
+    sel.innerHTML = '<option value="">Sin servicio especificado</option>';
+    services.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = `${s.name} (${formatMin(s.duration_min)})`;
+      sel.appendChild(opt);
+    });
+  }
+  populateSvcSelect();
+
+  // ── Business hours ────────────────────────────────────────────────────────
+  function getBhForDay(dateStr) {
+    const dow = mvdDow(dateStr);
+    return (_bh && _bh[String(dow)]) || [];
+  }
+
+  function dayHourRange(dateStr, apts) {
+    const intervals = getBhForDay(dateStr);
+    let startH = 8, endH = 20;
+    if (intervals.length > 0) {
+      startH = Math.min(...intervals.map(([s]) => parseInt(s.split(':')[0])));
+      endH   = Math.max(...intervals.map(([,e]) => { const [h,m] = e.split(':').map(Number); return m > 0 ? h+1 : h; }));
+    }
+    apts.forEach(a => {
+      const t = utcToMvdHHMM(a.starts_at), eh = utcToMvdHHMM(a.ends_at);
+      startH = Math.min(startH, parseInt(t.split(':')[0]));
+      const [eh2,em2] = eh.split(':').map(Number);
+      endH = Math.max(endH, em2 > 0 ? eh2+1 : eh2);
+    });
+    return { startH: Math.max(0, startH), endH: Math.min(24, endH) };
+  }
+
+  function weekHourRange(weekMonStr, byDate) {
+    let startH = 24, endH = 0, anyOpen = false;
+    for (let i = 0; i < 7; i++) {
+      const ds = addDays(weekMonStr, i);
+      const intervals = getBhForDay(ds);
+      if (intervals.length > 0) {
+        anyOpen = true;
+        startH = Math.min(startH, Math.min(...intervals.map(([s]) => parseInt(s.split(':')[0]))));
+        endH   = Math.max(endH,   Math.max(...intervals.map(([,e]) => { const [h,m] = e.split(':').map(Number); return m>0?h+1:h; })));
+      }
+      (byDate[ds] || []).forEach(a => {
+        const t = utcToMvdHHMM(a.starts_at), et = utcToMvdHHMM(a.ends_at);
+        startH = Math.min(startH, parseInt(t.split(':')[0]));
+        const [eh2,em2] = et.split(':').map(Number);
+        endH = Math.max(endH, em2>0?eh2+1:eh2);
+      });
+    }
+    if (!anyOpen || startH >= endH) { startH = 8; endH = 20; }
+    return { startH: Math.max(0, startH), endH: Math.min(24, endH) };
+  }
+
+  // ── Subtitle ──────────────────────────────────────────────────────────────
+  async function updateSubtitle() {
+    const el = document.getElementById('agenda-subtitle');
+    if (!el) return;
+    try {
+      const r = await fetch(`/api/agenda/appointments?date=${today}`);
+      if (!r.ok) { el.textContent = ''; return; }
+      const apts = await r.json();
+      const count = apts.filter(a => a.status === 'confirmed').length;
+      el.textContent = count === 0 ? 'Sin turnos hoy'
+        : count === 1 ? 'Hoy tenés 1 turno'
+        : `Hoy tenés ${count} turnos`;
+    } catch { el.textContent = ''; }
+  }
+
+  // ── Week strip (mobile) ───────────────────────────────────────────────────
+  function getWeekStartMon(dateStr) {
+    const dow = mvdDow(dateStr);
+    return addDays(dateStr, dow === 0 ? -6 : -(dow - 1));
+  }
+
+  async function renderWeekStrip(selectedDate) {
+    const strip = document.getElementById('week-strip');
+    const monStr = getWeekStartMon(selectedDate);
+    const weekApts = {};
+    const r = await fetch(`/api/agenda/appointments?from=${monStr}&to=${addDays(monStr,6)}`);
+    const all = r.ok ? await r.json() : [];
+    for (let i = 0; i < 7; i++) {
+      const ds = addDays(monStr, i);
+      weekApts[ds] = all.filter(x => x.status === 'confirmed' && mvdDateOfUtc(x.starts_at) === ds).length;
+    }
+    strip.innerHTML = '';
+    for (let i = 0; i < 7; i++) {
+      const ds = addDays(monStr, i), dow = mvdDow(ds);
+      const [,,dd] = ds.split('-');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'week-day-btn'
+        + (ds === selectedDate ? ' active' : '')
+        + (ds === today ? ' today-day' : '')
+        + (weekApts[ds] ? ' has-apts' : '');
+      btn.innerHTML = `<span>${DOW_ES[dow]}</span><span class="wd-num">${parseInt(dd)}</span><span class="wd-dot"></span>`;
+      btn.setAttribute('aria-label', dayLabel(ds));
+      btn.addEventListener('click', () => navigateTo(ds));
+      strip.appendChild(btn);
+    }
+  }
+
+  // ── Now line ──────────────────────────────────────────────────────────────
+  function getNowMvd() {
+    const parts = new Intl.DateTimeFormat(undefined, { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
+    return {
+      h: parseInt(parts.find(p=>p.type==='hour')?.value??'0'),
+      m: parseInt(parts.find(p=>p.type==='minute')?.value??'0'),
+    };
+  }
+
+  function renderNowLine(tl, startH, endH) {
+    const {h, m} = getNowMvd();
+    if (h < startH || h >= endH) return;
+    const line = document.createElement('div');
+    line.className = 'now-line';
+    line.style.top = ((h + m/60 - startH) * PX_H) + 'px';
+    tl.appendChild(line);
+  }
+
+  // ── Timeline rendering ────────────────────────────────────────────────────
+  function renderTimeline(dateStr, apts) {
+    const tl = document.getElementById('timeline');
+    const { startH, endH } = dayHourRange(dateStr, apts);
+    const noApts = document.getElementById('view-no-apts');
+    const confirmedApts = apts.filter(a => a.status === 'confirmed');
+    noApts.style.display = (showCancelled ? apts : confirmedApts).length === 0 ? '' : 'none';
+    if (endH <= startH) { tl.innerHTML = ''; return; }
+
+    let html = '';
+    for (let h = startH; h < endH; h++) {
+      const label = h.toString().padStart(2,'0') + ':00';
+      html += `<div class="timeline-hour">
+        <div class="timeline-hour-label">${label}</div>
+        <div class="timeline-hour-col" data-hour="${h}"></div>
+      </div>`;
+    }
+    tl.innerHTML = html;
+
+    apts.forEach(apt => {
+      const startTime = utcToMvdHHMM(apt.starts_at);
+      const [sh, sm] = startTime.split(':').map(Number);
+      const endTime  = utcToMvdHHMM(apt.ends_at);
+      const [eh, em] = endTime.split(':').map(Number);
+      const startFrac = sh + sm/60, endFrac = eh + em/60;
+      const col = tl.querySelector(`[data-hour="${Math.floor(startFrac)}"]`);
+      if (!col) return;
+      const topPx = (startFrac - Math.floor(startFrac)) * PX_H;
+      const heightPx = Math.max(20, (endFrac - startFrac) * PX_H - 2);
+      const compact  = heightPx < 40;
+      const div = document.createElement('div');
+      div.className = 'apt-block' + (apt.status === 'cancelled' ? ' cancelled' : '') + (compact ? ' compact' : '');
+      div.style.cssText = `top:${topPx}px;height:${heightPx}px`;
+      div.innerHTML = compact
+        ? `<div class="ab-name">${startTime} ${apt.client_name || formatPhone(apt.customer_phone)}</div>`
+        : `<div class="ab-time">${startTime}</div>
+           <div class="ab-name">${apt.client_name || formatPhone(apt.customer_phone)}</div>
+           ${apt.service_name ? `<div class="ab-svc">${apt.service_name}</div>` : ''}`;
+      div.addEventListener('click', () => openSheet(apt));
+      col.appendChild(div);
+    });
+
+    if (dateStr === today) renderNowLine(tl, startH, endH);
+
+    // Scroll to show current time or first appointment
+    const wrap = document.getElementById('timeline-wrap');
+    if (wrap) {
+      const {h: nowH} = getNowMvd();
+      const target = Math.max(0, (Math.max(startH, nowH - 1) - startH) * PX_H);
+      wrap.scrollTop = target;
+    }
+  }
+
+  // ── Week grid rendering ───────────────────────────────────────────────────
+  function renderWeekGrid(weekMonStr, byDate) {
+    const { startH, endH } = weekHourRange(weekMonStr, byDate);
+    const numHours = endH - startH;
+
+    const headerRow = document.getElementById('week-header-row');
+    headerRow.innerHTML = '<div class="week-axis-spacer"></div>';
+    for (let i = 0; i < 7; i++) {
+      const ds = addDays(weekMonStr, i), dow = mvdDow(ds);
+      const [,,dd] = ds.split('-');
+      const hdr = document.createElement('div');
+      hdr.className = 'week-day-header' + (ds === today ? ' wdh-today' : '');
+      hdr.innerHTML = `<span class="wdh-dow">${DOW_ES[dow]}</span><span class="wdh-num">${parseInt(dd)}</span>`;
+      hdr.addEventListener('click', () => { setView('day'); navigateTo(ds); });
+      headerRow.appendChild(hdr);
+    }
+
+    const axisEl = document.getElementById('week-axis');
+    axisEl.innerHTML = '';
+    for (let h = startH; h < endH; h++) {
+      const tick = document.createElement('div');
+      tick.className = 'week-axis-tick';
+      tick.textContent = h.toString().padStart(2,'0') + ':00';
+      axisEl.appendChild(tick);
+    }
+
+    const dayColsEl = document.getElementById('week-day-cols');
+    dayColsEl.innerHTML = '';
+    const {h: nowH, m: nowM} = getNowMvd();
+
+    for (let i = 0; i < 7; i++) {
+      const ds = addDays(weekMonStr, i);
+      const isClosed = getBhForDay(ds).length === 0;
+      const isToday_ = ds === today;
+      const dayApts  = byDate[ds] || [];
+
+      const col = document.createElement('div');
+      col.className = 'week-day-col';
+
+      const bg = document.createElement('div');
+      bg.className = 'week-day-col-bg';
+      for (let h = 0; h < numHours; h++) {
+        const row = document.createElement('div');
+        row.className = 'week-hour-row';
+        bg.appendChild(row);
+      }
+      col.appendChild(bg);
+
+      if (isClosed) {
+        const overlay = document.createElement('div');
+        overlay.className = 'week-closed-overlay';
+        col.appendChild(overlay);
+      }
+
+      const layer = document.createElement('div');
+      layer.className = 'week-apts-layer';
+      dayApts.forEach(apt => {
+        const startTime = utcToMvdHHMM(apt.starts_at);
+        const [sh, sm] = startTime.split(':').map(Number);
+        const endTime  = utcToMvdHHMM(apt.ends_at);
+        const [eh, em] = endTime.split(':').map(Number);
+        const startFrac = sh + sm/60, endFrac = eh + em/60;
+        const topPx    = (startFrac - startH) * PX_H;
+        const heightPx = Math.max(20, (endFrac - startFrac) * PX_H - 2);
+        const compact  = heightPx < 40;
+        const div = document.createElement('div');
+        div.className = 'apt-block' + (apt.status === 'cancelled' ? ' cancelled' : '') + (compact ? ' compact' : '');
+        div.style.cssText = `top:${topPx}px;height:${heightPx}px`;
+        div.innerHTML = compact
+          ? `<div class="ab-name">${startTime} ${apt.client_name || formatPhone(apt.customer_phone)}</div>`
+          : `<div class="ab-time">${startTime}</div>
+             <div class="ab-name">${apt.client_name || formatPhone(apt.customer_phone)}</div>
+             ${apt.service_name ? `<div class="ab-svc">${apt.service_name}</div>` : ''}`;
+        div.addEventListener('click', () => openSheet(apt));
+        layer.appendChild(div);
+      });
+      col.appendChild(layer);
+
+      if (isToday_ && nowH >= startH && nowH < endH) {
+        const line = document.createElement('div');
+        line.className = 'week-now-line';
+        line.style.top = ((nowH + nowM/60 - startH) * PX_H) + 'px';
+        col.appendChild(line);
+      }
+
+      dayColsEl.appendChild(col);
+    }
+
+    // Scroll to current time
+    const gridWrap = document.getElementById('week-grid-wrap');
+    if (gridWrap) {
+      setTimeout(() => {
+        const target = Math.max(0, (Math.max(startH, nowH - 1) - startH) * PX_H);
+        gridWrap.scrollTop = target;
+      }, 0);
+    }
+  }
+
+  // ── Month grid rendering ──────────────────────────────────────────────────
+  async function loadMonthRange(year, month) {
+    const mo = String(month).padStart(2,'0');
+    const lastDay = new Date(year, month, 0).getDate();
+    const from = `${year}-${mo}-01`, to = `${year}-${mo}-${String(lastDay).padStart(2,'0')}`;
+    const r = await fetch(`/api/agenda/appointments?from=${from}&to=${to}`);
+    return r.ok ? await r.json() : [];
+  }
+
+  function renderMonthGrid(year, month, apts) {
+    const grid = document.getElementById('month-grid');
+    const byDate = {};
+    apts.forEach(a => {
+      if (a.status !== 'confirmed') return;
+      const ds = mvdDateOfUtc(a.starts_at);
+      (byDate[ds] = byDate[ds] || []).push(a);
+    });
+
+    const firstDate = new Date(`${year}-${String(month).padStart(2,'0')}-01T12:00:00-03:00`);
+    const startDow  = firstDate.getUTCDay();
+    const startOffset = startDow === 0 ? 6 : startDow - 1; // Mon-first
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const prevLastDay = new Date(year, month - 1, 0).getDate();
+    const totalCells  = Math.ceil((startOffset + daysInMonth) / 7) * 7;
+    const mo = String(month).padStart(2,'0');
+
+    let html = '';
+    // Day-of-week headers
+    ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].forEach(d => {
+      html += `<div class="month-dow-hdr">${d}</div>`;
+    });
+
+    for (let i = 0; i < totalCells; i++) {
+      const dayNum = i - startOffset + 1;
+      let dateStr, isOther, displayNum;
+      if (dayNum < 1) {
+        const pm = month === 1 ? 12 : month - 1, py = month === 1 ? year - 1 : year;
+        const pd = prevLastDay + dayNum;
+        dateStr = `${py}-${String(pm).padStart(2,'0')}-${String(pd).padStart(2,'0')}`;
+        displayNum = pd;
+        isOther = true;
+      } else if (dayNum > daysInMonth) {
+        const nm = month === 12 ? 1 : month + 1, ny = month === 12 ? year + 1 : year;
+        const nd = dayNum - daysInMonth;
+        dateStr = `${ny}-${String(nm).padStart(2,'0')}-${String(nd).padStart(2,'0')}`;
+        displayNum = nd;
+        isOther = true;
+      } else {
+        dateStr = `${year}-${mo}-${String(dayNum).padStart(2,'0')}`;
+        displayNum = dayNum;
+        isOther = false;
+      }
+
+      const dayApts = byDate[dateStr] || [];
+      const shown   = dayApts.slice(0, 3);
+      const more    = dayApts.length - shown.length;
+      const cls = ['month-cell',
+        isOther ? 'mc-other' : '',
+        dateStr === today ? 'mc-today' : '',
+      ].filter(Boolean).join(' ');
+
+      const dots = dayApts.slice(0,5).map(()=>'<span class="mc-dot"></span>').join('');
+      html += `<div class="${cls}" data-date="${dateStr}">
+        <span class="mc-day-num">${displayNum}</span>
+        <div class="mc-dots">${dots}</div>
+        ${shown.map(a => `<span class="mc-apt-line">${utcToMvdHHMM(a.starts_at)} ${a.client_name || formatPhone(a.customer_phone)}</span>`).join('')}
+        ${more > 0 ? `<span class="mc-apt-more">+${more} más</span>` : ''}
+      </div>`;
+    }
+
+    grid.innerHTML = html;
+    grid.querySelectorAll('.month-cell[data-date]').forEach(cell => {
+      cell.addEventListener('click', () => { setView('day'); navigateTo(cell.dataset.date); });
+    });
+  }
+
+  // ── Mini calendar ─────────────────────────────────────────────────────────
+  async function renderMiniCal(year, month0) { // month0 = 0-indexed
+    const m1 = month0 + 1;
+    const key = `${year}-${m1}`;
+
+    if (!miniCalCache[key]) {
+      const mo = String(m1).padStart(2,'0');
+      const lastDay = new Date(year, m1, 0).getDate();
+      const from = `${year}-${mo}-01`, to = `${year}-${mo}-${String(lastDay).padStart(2,'0')}`;
+      try {
+        const r = await fetch(`/api/agenda/appointments?from=${from}&to=${to}`);
+        const all = r.ok ? await r.json() : [];
+        const counts = {};
+        all.filter(a => a.status === 'confirmed').forEach(a => {
+          const ds = mvdDateOfUtc(a.starts_at);
+          counts[ds] = (counts[ds] || 0) + 1;
+        });
+        miniCalCache[key] = counts;
+      } catch { miniCalCache[key] = {}; }
+    }
+
+    const counts = miniCalCache[key];
+    const monthName = MONTHS_FULL[month0];
+    document.getElementById('mini-cal-label').textContent = capitalize(monthName) + ' ' + year;
+
+    const firstDate   = new Date(`${year}-${String(m1).padStart(2,'0')}-01T12:00:00-03:00`);
+    const startDow    = firstDate.getUTCDay();
+    const startOffset = startDow === 0 ? 6 : startDow - 1;
+    const daysInMonth = new Date(year, m1, 0).getDate();
+    const totalCells  = Math.ceil((startOffset + daysInMonth) / 7) * 7;
+
+    const grid = document.getElementById('mini-cal-grid');
+    let html = '';
+
+    for (let i = 0; i < totalCells; i++) {
+      const dayNum = i - startOffset + 1;
+      if (dayNum < 1 || dayNum > daysInMonth) {
+        html += '<div class="mini-cal-day mcd-empty"></div>';
+        continue;
+      }
+      const ds = `${year}-${String(m1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
+      const isToday_   = ds === today;
+      const isSelected = ds === currentDate;
+      const isOther_   = month0 !== (currentDate.split('-')[1] - 1) && false; // never other-month in mini cal
+      const hasApts    = !!counts[ds];
+      const cls = ['mini-cal-day',
+        isToday_ ? 'mcd-today' : '',
+        isSelected && !isToday_ ? 'mcd-selected' : '',
+        hasApts ? 'mcd-has-apts' : '',
+      ].filter(Boolean).join(' ');
+      html += `<div class="${cls}" data-date="${ds}">
+        <span class="mini-cal-day-num">${dayNum}</span>
+        <span class="mini-cal-dot"></span>
+      </div>`;
+    }
+
+    grid.innerHTML = html;
+    grid.querySelectorAll('.mini-cal-day[data-date]').forEach(day => {
+      day.addEventListener('click', () => {
+        if (currentView === 'month') setView('day');
+        navigateTo(day.dataset.date);
+      });
+    });
+  }
+
+  // ── Load helpers ──────────────────────────────────────────────────────────
+  async function loadDay(dateStr) {
+    const r = await fetch(`/api/agenda/appointments?date=${dateStr}`);
+    currentApts = r.ok ? await r.json() : [];
+    renderTimeline(dateStr, currentApts);
+  }
+
+  async function loadWeekRange(fromStr, toStr) {
+    const r = await fetch(`/api/agenda/appointments?from=${fromStr}&to=${toStr}`);
+    return r.ok ? await r.json() : [];
+  }
+
+  // ── View switcher ─────────────────────────────────────────────────────────
+  function setView(view) {
+    currentView = view;
+    try { localStorage.setItem('daxos-agenda-view', view); } catch (_) {}
+    document.getElementById('btn-view-day').classList.toggle('active',   view === 'day');
+    document.getElementById('btn-view-week').classList.toggle('active',  view === 'week');
+    document.getElementById('btn-view-month').classList.toggle('active', view === 'month');
+    document.getElementById('view-day-content').style.display   = view === 'day'   ? '' : 'none';
+    document.getElementById('view-week-content').style.display  = view === 'week'  ? '' : 'none';
+    document.getElementById('view-month-content').style.display = view === 'month' ? '' : 'none';
+    const stripWrap = document.getElementById('week-strip-wrap');
+    stripWrap.style.display = (view === 'day' && window.innerWidth < 1024) ? '' : 'none';
+  }
+
+  // ── Navigate ──────────────────────────────────────────────────────────────
+  async function navigateTo(dateStr) {
+    currentDate = dateStr;
+    closeSheet();
+
+    const [y, m] = dateStr.split('-').map(Number);
+
+    // Sync mini cal month if changed
+    if (miniCalYear !== y || miniCalMonth !== m - 1) {
+      miniCalYear  = y;
+      miniCalMonth = m - 1;
+    }
+
+    document.getElementById('agenda-date-label').textContent = periodTitle(currentView, dateStr);
+
+    if (currentView === 'month') {
+      const apts = await loadMonthRange(y, m);
+      renderMonthGrid(y, m, apts);
+    } else if (currentView === 'week') {
+      const monStr  = getWeekStartMon(dateStr);
+      const toStr   = addDays(monStr, 6);
+      const allApts = await loadWeekRange(monStr, toStr);
+      const byDate  = {};
+      for (let i = 0; i < 7; i++) {
+        const ds = addDays(monStr, i);
+        byDate[ds] = allApts.filter(a => mvdDateOfUtc(a.starts_at) === ds);
+      }
+      renderWeekGrid(monStr, byDate);
+    } else {
+      await loadDay(dateStr);
+      if (window.innerWidth < 1024) await renderWeekStrip(dateStr);
+    }
+
+    // Render mini cal (desktop only, but run always — it's a no-op if element is hidden)
+    await renderMiniCal(miniCalYear, miniCalMonth);
+  }
+
+  // ── Initial render ────────────────────────────────────────────────────────
+  try {
+    setView(currentView);
+    await navigateTo(currentDate);
+    await updateSubtitle();
+  } catch (err) {
+    console.error('[agenda] initial load failed:', err);
+    document.getElementById('view-error-msg').textContent =
+      (err?.message?.includes('fetch') || err instanceof TypeError)
+        ? 'Sin conexión. Revisá tu red e intentá de nuevo.'
+        : 'Error inesperado al cargar la agenda.';
+    document.getElementById('view-error-detail').textContent = err ? `${err.name}: ${err.message}` : '';
+    showView('view-error');
+    return;
+  }
+
+  // ── Navigation handlers ───────────────────────────────────────────────────
+  document.getElementById('btn-prev').addEventListener('click', () => {
+    if (currentView === 'week') navigateTo(addDays(getWeekStartMon(currentDate), -7));
+    else if (currentView === 'month') {
+      const [y, m] = currentDate.split('-').map(Number);
+      const nm = m === 1 ? 12 : m - 1, ny = m === 1 ? y - 1 : y;
+      navigateTo(`${ny}-${String(nm).padStart(2,'0')}-01`);
+    } else navigateTo(addDays(currentDate, -1));
+  });
+  document.getElementById('btn-next').addEventListener('click', () => {
+    if (currentView === 'week') navigateTo(addDays(getWeekStartMon(currentDate), 7));
+    else if (currentView === 'month') {
+      const [y, m] = currentDate.split('-').map(Number);
+      const nm = m === 12 ? 1 : m + 1, ny = m === 12 ? y + 1 : y;
+      navigateTo(`${ny}-${String(nm).padStart(2,'0')}-01`);
+    } else navigateTo(addDays(currentDate, 1));
+  });
+  document.getElementById('btn-today').addEventListener('click', () => navigateTo(today));
+
+  // ── View toggle handlers ──────────────────────────────────────────────────
+  // _premonthDate: the day-level date active before entering month view.
+  // When switching month → day via the button, restore it so the user lands on
+  // the day they were on, not on the 1st of the month that navigateTo() used.
+  let _premonthDate = null;
+
+  document.getElementById('btn-view-day').addEventListener('click', () => {
+    if (currentView !== 'day') {
+      const wasMonth = currentView === 'month';
+      setView('day');
+      const target = (_premonthDate && wasMonth) ? _premonthDate : currentDate;
+      _premonthDate = null;
+      navigateTo(target);
+    }
+  });
+  document.getElementById('btn-view-week').addEventListener('click', () => {
+    if (window.innerWidth < 1024) return;
+    if (currentView !== 'week') { setView('week'); navigateTo(currentDate); }
+  });
+  document.getElementById('btn-view-month').addEventListener('click', () => {
+    if (currentView !== 'month') {
+      _premonthDate = currentDate;   // save before overwriting with the 1st
+      setView('month');
+      const [y, m] = currentDate.split('-').map(Number);
+      navigateTo(`${y}-${String(m).padStart(2,'0')}-01`);
+    }
+  });
+
+  // ── Mini cal navigation ───────────────────────────────────────────────────
+  document.getElementById('mini-cal-prev').addEventListener('click', async () => {
+    miniCalMonth--;
+    if (miniCalMonth < 0) { miniCalMonth = 11; miniCalYear--; }
+    await renderMiniCal(miniCalYear, miniCalMonth);
+  });
+  document.getElementById('mini-cal-next').addEventListener('click', async () => {
+    miniCalMonth++;
+    if (miniCalMonth > 11) { miniCalMonth = 0; miniCalYear++; }
+    await renderMiniCal(miniCalYear, miniCalMonth);
+  });
+
+  // ── Cancelled toggle ──────────────────────────────────────────────────────
+  function onCancelledToggle(checked) {
+    showCancelled = checked;
+    document.getElementById('view-agenda').classList.toggle('show-cancelled', showCancelled);
+    document.getElementById('chk-show-cancelled').checked = checked;
+    document.getElementById('chk-show-cancelled-mobile').checked = checked;
+    if (currentView === 'day') renderTimeline(currentDate, currentApts);
+  }
+  document.getElementById('chk-show-cancelled').addEventListener('change', function() { onCancelledToggle(this.checked); });
+  document.getElementById('chk-show-cancelled-mobile').addEventListener('change', function() { onCancelledToggle(this.checked); });
+
+  // ── Detail content builder ────────────────────────────────────────────────
+  function buildDetailHTML(apt) {
+    const waLink       = `https://wa.me/${apt.customer_phone?.replace(/\D/g,'')}`;
+    const notifyFailed = apt.wa_notify_status === 'failed';
+    const notifyOk     = apt.wa_notify_status === 'ok';
+    const isConfirmed  = apt.status === 'confirmed';
+    return `
+      ${notifyFailed ? `<div class="apt-detail-warn">⚠ No se pudo avisar al cliente por WhatsApp${apt.wa_notify_reason ? ': <em>' + apt.wa_notify_reason + '</em>' : ''}. <a href="${waLink}" target="_blank" rel="noopener">Avisale vos directamente</a>.</div>` : ''}
+      <div class="apt-detail-row"><span class="apt-detail-label">Cliente</span><span class="apt-detail-val">${apt.client_name || '—'}</span></div>
+      <div class="apt-detail-row"><span class="apt-detail-label">Teléfono</span><span class="apt-detail-val"><a href="${waLink}" target="_blank" rel="noopener">${formatPhone(apt.customer_phone)}</a></span></div>
+      ${apt.service_name ? `<div class="apt-detail-row"><span class="apt-detail-label">Servicio</span><span class="apt-detail-val">${apt.service_name}</span></div>` : ''}
+      <div class="apt-detail-row"><span class="apt-detail-label">Hora</span><span class="apt-detail-val">${utcToMvdHHMM(apt.starts_at)} – ${utcToMvdHHMM(apt.ends_at)}</span></div>
+      <div class="apt-detail-row"><span class="apt-detail-label">Estado</span><span class="apt-detail-val"><span class="status-chip ${isConfirmed ? 'confirmed' : 'cancelled'}">${isConfirmed ? '✓ Confirmado' : '✗ Cancelado'}</span></span></div>
+      ${notifyOk ? `<div class="apt-detail-row"><span class="apt-detail-label">Aviso WA</span><span class="apt-detail-val" style="color:#2a9966">✓ Enviado</span></div>` : ''}
+      ${isConfirmed ? `
+        <div class="apt-detail-actions">
+          <button type="button" class="btn-detail btn-detail-danger" id="btn-detail-cancel">Cancelar turno</button>
+          <button type="button" class="btn-detail btn-detail-outline" id="btn-detail-move">Mover</button>
+        </div>` : ''}
+    `;
+  }
+
+  function attachDetailActions(apt) {
+    document.getElementById('btn-detail-cancel')?.addEventListener('click', async () => {
+      if (!confirm('¿Cancelar este turno? Se avisará al cliente por WhatsApp.')) return;
+      const res = await fetch(`/api/agenda/appointments/${apt.id}/cancel`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      });
+      if (res.ok) {
+        closeSheet();
+        await navigateTo(currentDate);
+        await updateSubtitle();
+        showToast('Turno cancelado.', 'success');
+      } else {
+        const d = await res.json().catch(()=>({}));
+        showToast(d.error || 'Error al cancelar.', 'error');
+      }
+    });
+    document.getElementById('btn-detail-move')?.addEventListener('click', () => {
+      closeSheet();
+      openModal({ mode: 'reschedule', apt });
+    });
+  }
+
+  // ── Detail sheet / panel ──────────────────────────────────────────────────
+  function openSheet(apt) {
+    sheetApt = apt;
+    const title = apt.status === 'cancelled' ? 'Turno cancelado' : 'Turno';
+    const html  = buildDetailHTML(apt);
+    if (window.innerWidth >= 1024) {
+      document.getElementById('detail-panel-title').textContent = title;
+      document.getElementById('detail-panel-body').innerHTML = html;
+      document.getElementById('detail-panel').classList.add('open');
+    } else {
+      document.getElementById('sheet-title').textContent = title;
+      document.getElementById('sheet-body').innerHTML = html;
+      document.getElementById('sheet-backdrop').classList.add('open');
+      document.getElementById('apt-sheet').classList.add('open');
+    }
+    attachDetailActions(apt);
+  }
+
+  function closeSheet() {
+    document.getElementById('sheet-backdrop').classList.remove('open');
+    document.getElementById('apt-sheet').classList.remove('open');
+    document.getElementById('detail-panel').classList.remove('open');
+    sheetApt = null;
+  }
+  document.getElementById('sheet-close').addEventListener('click', closeSheet);
+  document.getElementById('sheet-backdrop').addEventListener('click', closeSheet);
+  document.getElementById('detail-panel-close').addEventListener('click', closeSheet);
+
+  // ── Add / Reschedule modal ────────────────────────────────────────────────
+  function openModal({ mode = 'create', apt = null } = {}) {
+    const isResched = mode === 'reschedule';
+    document.getElementById('modal-title').textContent = isResched ? 'Mover turno' : 'Agregar turno';
+    document.getElementById('m-phone').value = isResched ? (apt?.customer_phone || '') : '';
+    document.getElementById('m-name').value  = isResched ? (apt?.client_name || '') : '';
+    document.getElementById('m-svc').value   = isResched ? (apt?.service_id ?? '') : '';
+    document.getElementById('m-date').value  = currentDate;
+    document.getElementById('m-time').value  = isResched ? utcToMvdHHMM(apt?.starts_at || '') : '';
+    document.getElementById('modal-error').style.display = 'none';
+    ['m-phone','m-name','m-svc'].forEach(id => { document.getElementById(id).disabled = isResched; });
+    document.getElementById('modal-save').dataset.mode  = mode;
+    document.getElementById('modal-save').dataset.aptId = apt?.id ?? '';
+    document.getElementById('modal-backdrop').classList.add('open');
+    document.getElementById('apt-modal').classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('modal-backdrop').classList.remove('open');
+    document.getElementById('apt-modal').classList.remove('open');
+  }
+  document.getElementById('btn-add-apt-header').addEventListener('click', () => openModal());
+  document.getElementById('btn-add-apt-fab').addEventListener('click', () => openModal());
+  document.getElementById('btn-add-apt-empty').addEventListener('click', () => openModal());
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-cancel').addEventListener('click', closeModal);
+  document.getElementById('modal-backdrop').addEventListener('click', closeModal);
+
+  document.getElementById('modal-save').addEventListener('click', async () => {
+    const btn   = document.getElementById('modal-save');
+    const mode  = btn.dataset.mode;
+    const aptId = btn.dataset.aptId;
+    const errEl = document.getElementById('modal-error');
+    errEl.style.display = 'none';
+
+    const date = document.getElementById('m-date').value;
+    const time = document.getElementById('m-time').value;
+    if (!date || !time) { errEl.textContent = 'Ingresá fecha y hora.'; errEl.style.display = ''; return; }
+    btn.disabled = true;
+
+    if (mode === 'reschedule') {
+      const res = await fetch(`/api/agenda/appointments/${aptId}/reschedule`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, time }),
+      });
+      btn.disabled = false;
+      if (res.ok) {
+        closeModal();
+        await navigateTo(date);
+        await updateSubtitle();
+        showToast('Turno movido.', 'success');
+      } else {
+        const d = await res.json().catch(()=>({}));
+        errEl.textContent = d.error || 'Error al mover.';
+        errEl.style.display = '';
+      }
+    } else {
+      const phone = document.getElementById('m-phone').value.trim();
+      const name  = document.getElementById('m-name').value.trim();
+      const svcId = document.getElementById('m-svc').value || null;
+      if (!phone) { btn.disabled = false; errEl.textContent = 'Ingresá el teléfono.'; errEl.style.display = ''; return; }
+      const res = await fetch('/api/agenda/appointments', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceId: svcId ? Number(svcId) : null, customerPhone: phone, clientName: name || null, date, time }),
+      });
+      btn.disabled = false;
+      if (res.ok) {
+        closeModal();
+        await navigateTo(date);
+        await updateSubtitle();
+        showToast('Turno agregado.', 'success');
+      } else {
+        const d = await res.json().catch(()=>({}));
+        errEl.textContent = d.error || 'Error al agregar.';
+        errEl.style.display = '';
+      }
+    }
+  });
+
+  // ── Esc key ───────────────────────────────────────────────────────────────
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (document.getElementById('apt-modal').classList.contains('open')) closeModal();
+    else closeSheet();
+  });
+
+  // ── Upsell view ───────────────────────────────────────────────────────────
+  async function loadUpsellApts(containerId = 'view-upsell-apts') {
+    const todayStr = mvdDateStr();
+    const results = [];
+    for (let i = 0; i < 14; i++) {
+      const ds = addDays(todayStr, i);
+      const r  = await fetch(`/api/agenda/appointments?date=${ds}`);
+      if (r.ok) {
+        const a = await r.json();
+        a.filter(x => x.status === 'confirmed').forEach(x => results.push({ ds, ...x }));
+      }
+    }
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    if (!results.length) { el.innerHTML = '<p style="color:var(--muted-2);font-size:13px">No hay turnos próximos.</p>'; return; }
+    el.innerHTML = '<h3>Próximos turnos</h3>' +
+      results.map(a => `
+        <div class="upsell-apt-row">
+          <span class="upsell-apt-info">${a.client_name || formatPhone(a.customer_phone)}${a.service_name ? ' — ' + a.service_name : ''}</span>
+          <span class="upsell-apt-time">${dayLabel(a.ds)} ${utcToMvdHHMM(a.starts_at)}</span>
+        </div>
+      `).join('');
+  }
+
+})().catch(err => {
+  console.error('[agenda] fatal error:', err);
+  try {
+    document.getElementById('view-error-msg').textContent =
+      err instanceof TypeError ? 'Sin conexión. Revisá tu red e intentá de nuevo.' : 'Error inesperado al cargar la agenda.';
+    document.getElementById('view-error-detail').textContent = err ? `${err.name}: ${err.message}` : '';
+    ['view-upsell','view-disabled','view-no-hours','view-agenda'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.style.display = 'none';
+    });
+    document.getElementById('view-error').style.display = '';
+  } catch (_) {}
+});
+</script>
+
+</body>
+</html>

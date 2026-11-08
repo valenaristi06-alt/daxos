@@ -2,6 +2,16 @@
 // If dotenv or any library mutates process.env later, this value is safe.
 globalThis.__DAXOS_ENV = Object.freeze({ ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY });
 
+// Safety: test harness MUST NOT run in a Railway (production) environment.
+// Fail fast with a clear message rather than silently continuing with open endpoints.
+if (process.env.NODE_ENV === 'test' && process.env.RAILWAY_ENVIRONMENT) {
+  process.stderr.write(
+    '[FATAL] NODE_ENV=test with RAILWAY_ENVIRONMENT is forbidden. ' +
+    'The test harness must never run on Railway. Exiting.\n'
+  );
+  process.exit(1);
+}
+
 require('dotenv').config({ path: '.env.local' });
 
 const _apiKey = process.env.ANTHROPIC_API_KEY;
@@ -91,7 +101,14 @@ const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserByI
   getExcludedContacts, bulkAddExcludedContacts,
   ownerAlertRecentlySent, adminAlertRecentlySent, recordOwnerAlert,
   businessOwnerAlertRecentlySent, recordRuntimeConfigAudit,
-  getLastMailTest, recordMailTest } = require('./db');
+  getLastMailTest, recordMailTest,
+  cancelBooking,
+  getAgendaServices, deactivateAgendaService, createAgendaService,
+  getUpcomingAppointmentsForPhone, getAppointmentsForBusiness, getAppointmentById,
+  createAppointment, cancelAppointment, rescheduleAppointment,
+  rescheduleAppointmentByOwner, setAgendaEnabled, setAgendaCancelMinBefore,
+  updateAppointmentNotification,
+} = require('./db');
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -105,7 +122,7 @@ const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = 
 const { handleDemoFlow, processFollowups } = require('./demo-flow');
 const { sendWeeklySummaries } = require('./weekly');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
-const { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail, sendSpendingCapEmail, sendOwnerBotStoppedEmail, sendClaudeErrorAdminEmail, sendSaleIntentEmail, sendBookingNotificationEmail } = require('./email');
+const { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail, sendSpendingCapEmail, sendOwnerBotStoppedEmail, sendClaudeErrorAdminEmail, sendSaleIntentEmail, sendBookingNotificationEmail, sendAgendaNewAppointmentEmail } = require('./email');
 const { runBackup, maybeScheduledBackup, maybeSilenceAlert, startupBackupCheck, getLatestBackupMeta, listAllBackups } = require('./backup');
 
 const urgentAlertThrottle = new Map(); // conversationId → ms timestamp, resets on server restart
@@ -234,9 +251,26 @@ async function extractTextFromFile(buffer, mimetype, originalname) {
 }
 
 const fs = require('fs');
-const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, markReadAndTyping, downloadKapsoMedia, downloadMetaMedia, parseSplitParts, splitAndSend } = require('./whatsapp');
+const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, markReadAndTyping, downloadKapsoMedia, downloadMetaMedia, parseSplitParts, splitAndSend, sanitizeForClient } = require('./whatsapp');
+const { getFreeSlots, formatSlotsForPrompt, formatSlotsForClient, formatAppointmentsBlock, getMaxBookingDate, isSlotsMapFresh, utcIsoToMvdHHMM, getMvdDow, DOW_LABELS } = require('./agenda');
 const { generateAudioBuffer, transcribeAudio } = require('./elevenlabs');
 const { convertToOgg } = require('./audio');
+
+// "120" → "2 horas", "90" → "1 hora 30 min", "45" → "45 min"
+function _formatMinutes(m) {
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  if (h === 0) return `${m} min`;
+  if (r === 0) return h === 1 ? '1 hora' : `${h} horas`;
+  return `${h} hora${h > 1 ? 's' : ''} ${r} min`;
+}
+
+// Format a UTC ISO timestamp as "Lun 03/11 a las 09:00" (Montevideo TZ)
+function _agendaApptSummary(startsAt) {
+  const d = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Montevideo' }).format(new Date(startsAt));
+  const [, mm, dd] = d.split('-');
+  return `${DOW_LABELS[getMvdDow(d)]} ${dd}/${mm} a las ${utcIsoToMvdHHMM(startsAt)}`;
+}
 
 fs.mkdirSync(path.join(__dirname, '../data/uploads'), { recursive: true });
 
@@ -488,6 +522,7 @@ const OWNER_BUSINESS_FIELDS = new Set([
   'urgent_keywords', 'urgent_alert_enabled',
   'business_hours', 'after_hours_instructions', 'urgent_phone', 'owner_rules',
   'booking_enabled', 'weekly_summary_enabled',
+  'agenda_enabled', 'agenda_slot_min', 'agenda_cancel_min_before',
   'billing_requires_invoice', 'billing_legal_name', 'billing_rut', 'billing_address', 'billing_email', 'billing_updated_at',
   'spending_cap_hit_today',
 ]);
@@ -886,6 +921,235 @@ app.patch('/api/business/split-messages', requireAuth, (req, res) => {
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   setStyleProfile(user.business_id, { mensajes_separados: enabled });
   res.json({ ok: true, mensajes_separados: enabled });
+});
+
+// ── Agenda routes ─────────────────────────────────────────────────────────────
+
+function _agendaPlanOk(biz) {
+  return !!biz.plan_cortesia || biz.plan === 'crecimiento' || biz.plan === 'a_medida';
+}
+
+app.patch('/api/business/agenda-enabled', requireAuth, (req, res) => {
+  const { enabled } = req.body;
+  if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be boolean' });
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'No business' });
+  const biz = getBusinessById(user.business_id);
+  if (!_agendaPlanOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
+  if (enabled && !biz.business_hours)
+    return res.status(400).json({ error: 'Cargá los horarios de atención antes de activar la agenda.', code: 'NO_BUSINESS_HOURS' });
+  setAgendaEnabled(user.business_id, enabled);
+  res.json({ ok: true, agenda_enabled: enabled });
+});
+
+app.patch('/api/business/agenda-cancel-min', requireAuth, (req, res) => {
+  const { minutes } = req.body;
+  if (typeof minutes !== 'number' || minutes < 0 || !Number.isInteger(minutes))
+    return res.status(400).json({ error: 'minutes debe ser entero >= 0' });
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'No business' });
+  const biz = getBusinessById(user.business_id);
+  if (!_agendaPlanOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
+  setAgendaCancelMinBefore(user.business_id, minutes);
+  res.json({ ok: true, agenda_cancel_min_before: minutes });
+});
+
+app.get('/api/agenda/services', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'No business' });
+  res.json(getAgendaServices(user.business_id));
+});
+
+app.post('/api/agenda/services', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'No business' });
+  const biz = getBusinessById(user.business_id);
+  if (!_agendaPlanOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
+  const { name, duration_min } = req.body;
+  if (!name || typeof name !== 'string' || !name.trim())
+    return res.status(400).json({ error: 'name requerido' });
+  const dur = typeof duration_min === 'number' && duration_min > 0 ? Math.round(duration_min) : 30;
+  const svcs = getAgendaServices(user.business_id);
+  createAgendaService(user.business_id, { name: name.trim(), durationMin: dur, sortOrder: svcs.length });
+  res.json({ ok: true, services: getAgendaServices(user.business_id) });
+});
+
+app.delete('/api/agenda/services/:id', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'No business' });
+  deactivateAgendaService(Number(req.params.id), user.business_id);
+  res.json({ ok: true });
+});
+
+app.get('/api/agenda/appointments', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'No business' });
+  const { date, from, to } = req.query;
+  if (from !== undefined || to !== undefined) {
+    if (!from || !to || !/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to))
+      return res.status(400).json({ error: 'from y to requeridos (YYYY-MM-DD)' });
+    const fromDate = new Date(`${from}T00:00:00-03:00`);
+    const toDate   = new Date(`${to}T00:00:00-03:00`);
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime()))
+      return res.status(400).json({ error: 'Fechas inválidas.' });
+    if (toDate < fromDate)
+      return res.status(400).json({ error: 'to debe ser igual o posterior a from.' });
+    if ((toDate - fromDate) > 62 * 86_400_000)
+      return res.status(400).json({ error: 'El rango no puede superar los 62 días.' });
+    const fromUtc = fromDate.toISOString();
+    const toEnd   = new Date(toDate.getTime());
+    toEnd.setUTCDate(toEnd.getUTCDate() + 1);
+    return res.json(getAppointmentsForBusiness(user.business_id, fromUtc, toEnd.toISOString()));
+  }
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
+    return res.status(400).json({ error: 'date requerido (YYYY-MM-DD)' });
+  const fromUtc = new Date(`${date}T00:00:00-03:00`).toISOString();
+  const toUtc   = new Date(`${date}T00:00:00-03:00`);
+  toUtc.setUTCDate(toUtc.getUTCDate() + 1);
+  res.json(getAppointmentsForBusiness(user.business_id, fromUtc, toUtc.toISOString()));
+});
+
+app.post('/api/agenda/appointments', requireAuth, async (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'No business' });
+  const biz = getBusinessById(user.business_id);
+  if (!_agendaPlanOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
+  if (!biz.agenda_enabled) return res.status(403).json({ error: 'La agenda está apagada.' });
+
+  const { serviceId, customerPhone, clientName, date, time, notes } = req.body;
+  if (!customerPhone || !date || !time)
+    return res.status(400).json({ error: 'customerPhone, date y time son requeridos' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time))
+    return res.status(400).json({ error: 'date debe ser YYYY-MM-DD, time HH:MM' });
+
+  const svcs = getAgendaServices(user.business_id);
+  const svc  = serviceId ? svcs.find(s => s.id === Number(serviceId)) : null;
+  const dur  = svc?.duration_min ?? biz.agenda_slot_min ?? 30;
+  const startsAt = new Date(`${date}T${time}:00-03:00`).toISOString();
+  const endsAt   = new Date(new Date(startsAt).getTime() + dur * 60_000).toISOString();
+
+  const normPhone = normalizeContactPhone(customerPhone);
+  if (!normPhone) return res.status(400).json({ error: 'customerPhone inválido' });
+
+  let apt;
+  try {
+    apt = createAppointment({
+      businessId:     user.business_id,
+      conversationId: null,
+      serviceId:      svc?.id ?? null,
+      customerPhone:  normPhone,
+      clientName:     clientName ? String(clientName).trim() : null,
+      notes:          notes ? String(notes).trim() : null,
+      startsAt, endsAt,
+    });
+  } catch (err) {
+    if (err.message === 'SLOT_TAKEN') return res.status(409).json({ error: 'Ese horario ya tiene un turno confirmado.' });
+    logError('agenda-create-manual', { message: err.message, stack: err.stack || '' });
+    return res.status(500).json({ error: 'Error al crear el turno.' });
+  }
+
+  const waCredsPanelLookup = biz.wa_provider === 'kapso'
+    ? { phoneNumberId: biz.phone_number_id, provider: 'kapso' }
+    : biz.phone_number_id
+      ? { phoneNumberId: biz.phone_number_id, wabaId: biz.waba_id, provider: biz.wa_provider || 'meta' }
+      : null;
+  if (waCredsPanelLookup) {
+    const svcLabel  = svc?.name ? svc.name + ', ' : '';
+    const clientMsg = `Tu turno quedó agendado:\n${svcLabel}${_agendaApptSummary(startsAt)}.\nSi no podés venir, avisanos por acá.`;
+    sendWhatsAppMessage(normPhone, clientMsg, waCredsPanelLookup)
+      .then(() => updateAppointmentNotification(apt.id, { clientNotifiedAt: new Date().toISOString(), waNotifyStatus: 'ok' }))
+      .catch(err => {
+        updateAppointmentNotification(apt.id, { waNotifyStatus: 'failed', waNotifyReason: err.message.slice(0, 120) });
+        logError('agenda-notify-error', { message: `create apt=${apt.id}: ${err.message}`, stack: '' });
+      });
+  }
+  res.json(apt);
+});
+
+app.patch('/api/agenda/appointments/:id/cancel', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'No business' });
+  const biz = getBusinessById(user.business_id);
+  if (!_agendaPlanOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
+  if (!biz.agenda_enabled) return res.status(403).json({ error: 'La agenda está apagada.' });
+
+  const apt = getAppointmentById(Number(req.params.id));
+  if (!apt || apt.business_id !== user.business_id)
+    return res.status(404).json({ error: 'Turno no encontrado.' });
+  if (apt.status !== 'confirmed')
+    return res.status(409).json({ error: 'El turno ya fue cancelado.' });
+
+  const ok = cancelAppointment(apt.id, 'owner', req.body?.reason ?? null);
+  if (!ok) return res.status(409).json({ error: 'El turno ya fue cancelado.' });
+
+  const waCredsPanelLookup = biz.wa_provider === 'kapso'
+    ? { phoneNumberId: biz.phone_number_id, provider: 'kapso' }
+    : biz.phone_number_id
+      ? { phoneNumberId: biz.phone_number_id, wabaId: biz.waba_id, provider: biz.wa_provider || 'meta' }
+      : null;
+  if (waCredsPanelLookup && apt.customer_phone) {
+    const svcLabel  = apt.service_name ? ' (' + apt.service_name + ')' : '';
+    const clientMsg = `Tu turno del ${_agendaApptSummary(apt.starts_at)}${svcLabel} fue cancelado. Si querés reagendar, escribinos.`;
+    sendWhatsAppMessage(apt.customer_phone, clientMsg, waCredsPanelLookup)
+      .then(() => updateAppointmentNotification(apt.id, { clientNotifiedAt: new Date().toISOString(), waNotifyStatus: 'ok' }))
+      .catch(err => {
+        updateAppointmentNotification(apt.id, { waNotifyStatus: 'failed', waNotifyReason: err.message.slice(0, 120) });
+        logError('agenda-notify-error', { message: `cancel apt=${apt.id}: ${err.message}`, stack: '' });
+      });
+  }
+  res.json({ ok: true });
+});
+
+app.patch('/api/agenda/appointments/:id/reschedule', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'No business' });
+  const biz = getBusinessById(user.business_id);
+  if (!_agendaPlanOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
+  if (!biz.agenda_enabled) return res.status(403).json({ error: 'La agenda está apagada.' });
+
+  const { date, time } = req.body;
+  if (!date || !time || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time))
+    return res.status(400).json({ error: 'date (YYYY-MM-DD) y time (HH:MM) requeridos' });
+
+  const oldApt = getAppointmentById(Number(req.params.id));
+  if (!oldApt || oldApt.business_id !== user.business_id)
+    return res.status(404).json({ error: 'Turno no encontrado.' });
+  if (oldApt.status !== 'confirmed')
+    return res.status(409).json({ error: 'Solo se pueden mover turnos confirmados.' });
+
+  const dur      = oldApt.service_duration_min ?? biz.agenda_slot_min ?? 30;
+  const startsAt = new Date(`${date}T${time}:00-03:00`).toISOString();
+  const endsAt   = new Date(new Date(startsAt).getTime() + dur * 60_000).toISOString();
+
+  let newApt;
+  try {
+    newApt = rescheduleAppointmentByOwner({
+      oldId: oldApt.id, businessId: user.business_id,
+      serviceId: oldApt.service_id, startsAt, endsAt,
+    });
+  } catch (err) {
+    if (err.message === 'SLOT_TAKEN')     return res.status(409).json({ error: 'Ese horario ya tiene un turno confirmado.' });
+    if (err.message === 'APPOINTMENT_NOT_FOUND') return res.status(404).json({ error: 'Turno no encontrado.' });
+    logError('agenda-reschedule-owner', { message: err.message, stack: err.stack || '' });
+    return res.status(500).json({ error: 'Error al mover el turno.' });
+  }
+
+  const waCredsPanelLookup = biz.wa_provider === 'kapso'
+    ? { phoneNumberId: biz.phone_number_id, provider: 'kapso' }
+    : biz.phone_number_id
+      ? { phoneNumberId: biz.phone_number_id, wabaId: biz.waba_id, provider: biz.wa_provider || 'meta' }
+      : null;
+  if (waCredsPanelLookup && oldApt.customer_phone) {
+    const svcLabel  = newApt.service_name ? newApt.service_name + ', ' : '';
+    const clientMsg = `Tu turno se movió al ${_agendaApptSummary(startsAt)}${svcLabel ? ' (' + svcLabel.replace(', ', '') + ')' : ''}.`;
+    sendWhatsAppMessage(oldApt.customer_phone, clientMsg, waCredsPanelLookup)
+      .then(() => updateAppointmentNotification(newApt.id, { clientNotifiedAt: new Date().toISOString(), waNotifyStatus: 'ok' }))
+      .catch(err => {
+        updateAppointmentNotification(newApt.id, { waNotifyStatus: 'failed', waNotifyReason: err.message.slice(0, 120) });
+        logError('agenda-notify-error', { message: `reschedule newApt=${newApt.id}: ${err.message}`, stack: '' });
+      });
+  }
+  res.json(newApt);
 });
 
 // Exact consent text — stored verbatim for legal record
@@ -1498,6 +1762,8 @@ app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
       reply = reply.replace(/^\[SEND_DOC\]\s*/m, '');
     }
     reply = reply.replace(/\[INTERES_COMPRA\]\n?/g, '');
+    // Strip any remaining internal markers (agenda tags, etc.) before returning to panel
+    reply = sanitizeForClient(reply, logError);
     reply = reply.trim();
     // Split-mode: parse parts and clean ||| so the client never sees the delimiter
     const _pvSplitEnabled = business.style_profile?.mensajes_separados === true;
@@ -2055,7 +2321,7 @@ function isMsgStale(business, msgTimestamp) {
   return null;
 }
 
-async function processIncomingMessage(business, waCredentials, { msgId, customerPhone, text, msgTimestamp, msgTimestampField, imageData = null, claudeText = null }) {
+async function processIncomingMessage(business, waCredentials, { msgId, customerPhone, text, msgTimestamp, msgTimestampField, imageData = null, claudeText = null, waProfileName = null }) {
   if (!customerPhone) {
     logError('process-incoming', { message: `customerPhone missing — skipping outbound or malformed message msgId=${msgId} business=${business.id}`, stack: '' });
     return;
@@ -2474,10 +2740,42 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   const delayMs  = (business.response_delay ?? 5) * 1000;
   const _delayEnd = Date.now() + delayMs;
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-  const currentBookingState = business.booking_enabled ? getBookingState(conversation.id) : null;
+  const agendaOk = !!business.agenda_enabled &&
+    (['crecimiento', 'a_medida'].includes(business.plan) || !!business.plan_cortesia);
+  const currentBookingState = (agendaOk || business.booking_enabled) ? getBookingState(conversation.id) : null;
   const businessImages = getBusinessImages(business.id);
   const businessDocs   = getBusinessDocumentTexts(business.id);
   const _hoursResult = isOpenNow(business);
+
+  // Build agenda context (slotsMap, appointments, client name) before generating reply
+  let agendaCtx = null;
+  let agendaState = null;
+  if (agendaOk) {
+    agendaState = (currentBookingState?.mode === 'agenda') ? currentBookingState : { mode: 'agenda' };
+    // Seed client name from WA profile when not yet stored
+    if (!agendaState.clientName && waProfileName) {
+      agendaState = { ...agendaState, clientName: waProfileName };
+    }
+    const _svcs = getAgendaServices(business.id);
+    const _upcomingApts = getUpcomingAppointmentsForPhone(business.id, customerPhone);
+    const _aptMap = {};
+    _upcomingApts.forEach((a, i) => { _aptMap[`A${i + 1}`] = a; });
+    const _maxDate = getMaxBookingDate(business);
+    const _slotsText = (agendaState.slotsMap && agendaState.selectedService &&
+      isSlotsMapFresh(agendaState.slotsGeneratedAt))
+      ? agendaState.slotsText : null;
+    agendaCtx = {
+      services: _svcs.map((s, i) => ({ code: `S${i + 1}`, id: s.id, name: s.name, duration: s.duration_min })),
+      appointmentsMap: _aptMap,
+      appointmentsText: formatAppointmentsBlock(_upcomingApts),
+      maxDate: _maxDate,
+      selectedService: agendaState.selectedService ?? null,
+      slotsText: _slotsText,
+      clientName: agendaState.clientName ?? null,
+      slotsGeneratedAt: agendaState.slotsGeneratedAt ?? null,
+    };
+  }
+
   const runtimeCtx = {
     now: getMvdDate(),
     needsHuman: !!conversation.needs_human,
@@ -2486,6 +2784,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     isOpenResult: _hoursResult,
     afterHoursInstructions: _hoursResult.open === false ? (business.after_hours_instructions || null) : null,
     urgentPhone: _hoursResult.open === false ? (business.urgent_phone || null) : null,
+    agenda: agendaCtx,
   };
   logError('webhook-claude-call', {
     message: `business_id=${business.id} customer=****${customerPhone.slice(-4)}`,
@@ -2494,8 +2793,8 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   let rawReply;
   try {
     rawReply = await generateReply(business, history, claudeText ?? text, conversation.label || null, {
-      enabled: !!business.booking_enabled,
-      state: currentBookingState,
+      enabled: !!business.booking_enabled && !agendaOk,
+      state: agendaOk ? null : currentBookingState,
     }, runtimeCtx, conversation.id, imageData);
     logError('webhook-claude-ok', { message: `business_id=${business.id} reply_length=${rawReply.length}`, stack: '' });
     incrementAnthropicCall(business.id);
@@ -2588,7 +2887,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   }
 
   // Booking state machine — parse tags, update state, strip tags from reply
-  if (business.booking_enabled) {
+  if (business.booking_enabled && !agendaOk) {
     let nextBookingState = currentBookingState;
 
     if (/\[WANTS_BOOKING\]/.test(reply)) {
@@ -2659,18 +2958,278 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
 
   reply = reply.trim();
 
-  // Safety net: strip any unprocessed internal markers before touching WhatsApp
-  function sanitizeForClient(txt) {
-    if (!txt) return txt;
-    const cleaned = txt.replace(/\[[A-Z][A-Z_0-9]*(?::[^\]]+)?\]/g, '').replace(/[ \t]{2,}/g, ' ').trim();
-    if (cleaned !== txt) {
-      logError('marker-leak', { message: `stripped from client text: ${JSON.stringify(txt.slice(0, 300))}`, stack: '' });
+  // ── Agenda tag processing ─────────────────────────────────────────────────
+  if (agendaOk) {
+    let nextAgendaState = { ...agendaState };
+    let _serverReply    = null;
+
+    const _cancelMinBefore = business.agenda_cancel_min_before ?? 120;
+
+    const _agNameMatch = reply.match(/\[AGENDA_CLIENT_NAME:\s*([^\]]+)\]/);
+    if (_agNameMatch) {
+      nextAgendaState = { ...nextAgendaState, clientName: _agNameMatch[1].trim() };
+      console.log(`[agenda] client name: "${nextAgendaState.clientName}" conv=${conversation.id}`);
     }
-    return cleaned;
+
+    const _svcMatch = reply.match(/\[AGENDA_SERVICE:(S\d+)\]/);
+    if (_svcMatch) {
+      const _sCode = _svcMatch[1];
+      const _svc   = agendaCtx.services.find(s => s.code === _sCode);
+      if (_svc) {
+        const _r         = getFreeSlots(business, _svc.duration);
+        const _promptTxt = formatSlotsForPrompt(_r.slotsByDay);
+        const _clientTxt = formatSlotsForClient(_r.slotsByDay);
+        nextAgendaState = {
+          ...nextAgendaState,
+          selectedService:  { code: _svc.code, id: _svc.id, name: _svc.name, duration: _svc.duration },
+          slotsMap:         _r.slotsMap,
+          slotsText:        _promptTxt,
+          slotsClientText:  _clientTxt,
+          slotsGeneratedAt: _r.generatedAt,
+        };
+        const _textPart = reply.replace(/\[AGENDA_SERVICE:[^\]]+\]\n?/g, '').trim();
+        reply = _textPart ? `${_textPart}\n\n${_clientTxt}` : _clientTxt;
+        console.log(`[agenda] service=${_svc.name} slots appended conv=${conversation.id}`);
+      } else {
+        logError('agenda-svc-notfound', { message: `code=${_sCode} biz=${business.id}`, stack: '' });
+      }
+    }
+
+    const _bookMatch = reply.match(/\[BOOK_SLOT:(T\d+)\]/);
+    if (_bookMatch) {
+      const _tCode = _bookMatch[1];
+      const _slot  = nextAgendaState.slotsMap?.[_tCode];
+      if (_slot) {
+        try {
+          const _apt   = createAppointment({
+            businessId:     business.id,
+            conversationId: conversation.id,
+            serviceId:      nextAgendaState.selectedService?.id ?? null,
+            customerPhone,
+            clientName:     nextAgendaState.clientName ?? null,
+            startsAt:       _slot.startsAt,
+            endsAt:         _slot.endsAt,
+          });
+          const _svcName = nextAgendaState.selectedService?.name || null;
+          _serverReply = `Tu turno quedó confirmado:\n${_svcName ? _svcName + ', ' : ''}${_agendaApptSummary(_slot.startsAt)}.\nSi no podés venir, avisanos por acá.`;
+          logError('agenda-audit', { message: `tag=BOOK_SLOT result=confirmed biz=${business.id} conv=${conversation.id} msg="${(text||'').slice(0,200)}"`, stack: '' });
+          console.log(`[agenda] created apt id=${_apt.id} conv=${conversation.id}`);
+          // Suppress sale-intent alert for 12h after booking
+          recordOwnerAlert(business.id, conversation.id, 'booking_created');
+          // Notify owner via WA; email fallback if WA fails and owner has email
+          (async () => {
+            const _owner = getUserByBusinessId(business.id);
+            const _ownerPhone = _owner?.phone ? normalizeContactPhone(_owner.phone) : null;
+            const _panelUrl = `${process.env.APP_URL || 'https://daxos.lat'}/agenda.html`;
+            if (_ownerPhone && waCredentials) {
+              const _ownerMsg = `📅 Nuevo turno: ${nextAgendaState.clientName || customerPhone}${_svcName ? ', ' + _svcName : ''}, ${_agendaApptSummary(_slot.startsAt)}. Ver: ${_panelUrl}`;
+              try {
+                await sendWhatsAppMessage(_ownerPhone, _ownerMsg, waCredentials);
+                updateAppointmentNotification(_apt.id, { ownerNotifiedAt: new Date().toISOString(), waNotifyStatus: 'ok' });
+              } catch (_nErr) {
+                updateAppointmentNotification(_apt.id, { waNotifyStatus: 'failed', waNotifyReason: _nErr.message.slice(0, 120) });
+                logError('agenda-notify-owner', { message: _nErr.message, stack: '' });
+                if (_owner?.email) {
+                  sendAgendaNewAppointmentEmail({
+                    to: _owner.email,
+                    businessName: business.name,
+                    clientName: nextAgendaState.clientName || customerPhone,
+                    serviceName: _svcName,
+                    summary: _agendaApptSummary(_slot.startsAt),
+                    panelUrl: _panelUrl,
+                  })
+                    .then(() => updateAppointmentNotification(_apt.id, { ownerNotifiedAt: new Date().toISOString() }))
+                    .catch(_eErr => logError('agenda-notify-owner-email', { message: _eErr.message, stack: '' }));
+                }
+              }
+            } else if (_owner?.email) {
+              sendAgendaNewAppointmentEmail({
+                to: _owner.email,
+                businessName: business.name,
+                clientName: nextAgendaState.clientName || customerPhone,
+                serviceName: _svcName,
+                summary: _agendaApptSummary(_slot.startsAt),
+                panelUrl: _panelUrl,
+              })
+                .then(() => updateAppointmentNotification(_apt.id, { ownerNotifiedAt: new Date().toISOString() }))
+                .catch(_eErr => logError('agenda-notify-owner-email', { message: _eErr.message, stack: '' }));
+            } else {
+              logError('agenda-notify-owner', { message: `apt=${_apt.id} biz=${business.id}: no WA creds and no owner email — owner not notified`, stack: '' });
+            }
+          })();
+          nextAgendaState = { ...nextAgendaState, selectedService: null, slotsMap: null, slotsText: null, slotsClientText: null, slotsGeneratedAt: null, pendingReschedule: null };
+        } catch (_bookErr) {
+          if (_bookErr.message === 'SLOT_TAKEN') {
+            const _r2        = getFreeSlots(business, nextAgendaState.selectedService?.duration ?? 30);
+            const _promptTxt = formatSlotsForPrompt(_r2.slotsByDay);
+            const _clientTxt = formatSlotsForClient(_r2.slotsByDay);
+            nextAgendaState  = { ...nextAgendaState, slotsMap: _r2.slotsMap, slotsText: _promptTxt, slotsClientText: _clientTxt, slotsGeneratedAt: _r2.generatedAt };
+            _serverReply     = `Ese horario ya no está disponible. Elegí otro:\n\n${_clientTxt}`;
+            logError('agenda-slot-taken', { message: `code=${_tCode} biz=${business.id} conv=${conversation.id}`, stack: '' });
+            logError('agenda-audit', { message: `tag=BOOK_SLOT result=slot_taken biz=${business.id} conv=${conversation.id} msg="${(text||'').slice(0,200)}"`, stack: '' });
+          } else {
+            logError('agenda-book-error', { message: _bookErr.message, stack: _bookErr.stack || '' });
+            _serverReply = 'Hubo un problema al confirmar tu turno. Alguien del equipo te va a contactar.';
+            setNeedsHuman(conversation.id, 1);
+            logError('agenda-audit', { message: `tag=BOOK_SLOT result=error:${_bookErr.message} biz=${business.id} conv=${conversation.id} msg="${(text||'').slice(0,200)}"`, stack: '' });
+          }
+        }
+      } else {
+        logError('agenda-slot-notfound', { message: `code=${_tCode} biz=${business.id} conv=${conversation.id}`, stack: '' });
+        logError('agenda-audit', { message: `tag=BOOK_SLOT result=unknown_code code=${_tCode} biz=${business.id} conv=${conversation.id} msg="${(text||'').slice(0,200)}"`, stack: '' });
+        const _fallbackSlots = nextAgendaState.slotsClientText || '';
+        _serverReply = `No pude identificar ese horario. Elegí uno de la lista:${_fallbackSlots ? '\n\n' + _fallbackSlots : ''}`;
+      }
+    }
+
+    const _cancelMatch = reply.match(/\[CANCEL_APPOINTMENT:(A\d+)\]/);
+    if (_cancelMatch) {
+      const _aCode = _cancelMatch[1];
+      const _apt   = nextAgendaState.appointmentsMap?.[_aCode];
+      if (_apt && String(_apt.business_id) === String(business.id) && _apt.customer_phone === customerPhone) {
+        const _startsMs = new Date(_apt.starts_at).getTime();
+        const _nowMs    = Date.now();
+        if (_startsMs < _nowMs) {
+          _serverReply = 'Ese turno ya empezó o pasó — no es posible cancelarlo.';
+          logError('agenda-audit', { message: `tag=CANCEL_APPOINTMENT result=past biz=${business.id} conv=${conversation.id} msg="${(text||'').slice(0,200)}"`, stack: '' });
+        } else if (_startsMs - _nowMs < _cancelMinBefore * 60 * 1000) {
+          _serverReply = `No podés cancelar con menos de ${_formatMinutes(_cancelMinBefore)} de anticipación. Si necesitás ayuda, contactanos directamente.`;
+          logError('agenda-audit', { message: `tag=CANCEL_APPOINTMENT result=in_window biz=${business.id} conv=${conversation.id} msg="${(text||'').slice(0,200)}"`, stack: '' });
+        } else {
+          const _ok = cancelAppointment(_apt.id, 'client');
+          if (_ok) {
+            const _svcName = _apt.service_name || null;
+            _serverReply = `Tu turno del ${_agendaApptSummary(_apt.starts_at)}${_svcName ? ' (' + _svcName + ')' : ''} fue cancelado.`;
+            logError('agenda-audit', { message: `tag=CANCEL_APPOINTMENT result=cancelled biz=${business.id} conv=${conversation.id} msg="${(text||'').slice(0,200)}"`, stack: '' });
+            console.log(`[agenda] cancelled apt id=${_apt.id} conv=${conversation.id}`);
+          } else {
+            logError('agenda-cancel-already', { message: `id=${_apt.id} conv=${conversation.id}`, stack: '' });
+            _serverReply = 'Ese turno ya estaba cancelado.';
+          }
+        }
+      } else if (_apt) {
+        logError('agenda-cancel-ownership', {
+          message: `aCode=${_aCode} apt.biz=${_apt.business_id} req.biz=${business.id} apt.phone=${_apt.customer_phone} req.phone=${customerPhone}`,
+          stack: '',
+        });
+      } else {
+        logError('agenda-cancel-notfound', { message: `aCode=${_aCode} conv=${conversation.id}`, stack: '' });
+      }
+    }
+
+    const _wantReschedMatch = reply.match(/\[WANT_RESCHEDULE:(A\d+)\]/);
+    if (_wantReschedMatch) {
+      const _aCode = _wantReschedMatch[1];
+      const _apt   = nextAgendaState.appointmentsMap?.[_aCode];
+      if (_apt && String(_apt.business_id) === String(business.id) && _apt.customer_phone === customerPhone) {
+        const _startsMs = new Date(_apt.starts_at).getTime();
+        const _nowMs    = Date.now();
+        if (_startsMs < _nowMs) {
+          _serverReply = 'Ese turno ya empezó o pasó — no es posible modificarlo.';
+        } else if (_startsMs - _nowMs < _cancelMinBefore * 60 * 1000) {
+          _serverReply = `No podés cambiar el turno con menos de ${_formatMinutes(_cancelMinBefore)} de anticipación. Si necesitás ayuda, contactanos directamente.`;
+        } else {
+          const _svcForResched = agendaCtx.services.find(s => s.id === _apt.service_id) || agendaCtx.services[0];
+          const _r         = getFreeSlots(business, _svcForResched?.duration || 30);
+          const _promptTxt = formatSlotsForPrompt(_r.slotsByDay);
+          const _clientTxt = formatSlotsForClient(_r.slotsByDay);
+          nextAgendaState  = {
+            ...nextAgendaState,
+            selectedService:  { code: _svcForResched.code, id: _svcForResched.id, name: _svcForResched.name, duration: _svcForResched.duration },
+            slotsMap:         _r.slotsMap,
+            slotsText:        _promptTxt,
+            slotsClientText:  _clientTxt,
+            slotsGeneratedAt: _r.generatedAt,
+            pendingReschedule: { oldId: _apt.id, startsAt: _apt.starts_at, svcName: _apt.service_name || _svcForResched.name || null },
+          };
+          _serverReply = `Acá te muestro los horarios disponibles para el cambio de turno:\n\n${_clientTxt}`;
+          logError('agenda-audit', { message: `tag=WANT_RESCHEDULE result=slots_loaded biz=${business.id} conv=${conversation.id} msg="${(text||'').slice(0,200)}"`, stack: '' });
+          console.log(`[agenda] want-reschedule apt=${_apt.id} svc=${_svcForResched.name} conv=${conversation.id}`);
+        }
+      } else if (_apt) {
+        logError('agenda-wantresched-ownership', { message: `aCode=${_aCode} conv=${conversation.id}`, stack: '' });
+      } else {
+        logError('agenda-wantresched-notfound', { message: `aCode=${_aCode} conv=${conversation.id}`, stack: '' });
+      }
+    }
+
+    const _bookReschedMatch = reply.match(/\[BOOK_RESCHEDULE:(T\d+)\]/);
+    if (_bookReschedMatch) {
+      const _tCode    = _bookReschedMatch[1];
+      const _slot     = nextAgendaState.slotsMap?.[_tCode];
+      const _pending  = nextAgendaState.pendingReschedule;
+      if (_pending && _slot) {
+        const _pendingStartsMs = new Date(_pending.startsAt).getTime();
+        const _nowMs = Date.now();
+        if (_pendingStartsMs < _nowMs) {
+          _serverReply = 'Ese turno ya empezó o pasó — no es posible modificarlo.';
+        } else if (_pendingStartsMs - _nowMs < _cancelMinBefore * 60 * 1000) {
+          _serverReply = `No podés cambiar el turno con menos de ${_formatMinutes(_cancelMinBefore)} de anticipación.`;
+        } else {
+          try {
+            const _newApt = rescheduleAppointment({
+              oldId:          _pending.oldId,
+              businessId:     business.id,
+              customerPhone,
+              conversationId: conversation.id,
+              serviceId:      nextAgendaState.selectedService?.id ?? null,
+              clientName:     nextAgendaState.clientName ?? null,
+              startsAt:       _slot.startsAt,
+              endsAt:         _slot.endsAt,
+            });
+            const _svcName = _pending.svcName || nextAgendaState.selectedService?.name || null;
+            _serverReply   = `Tu turno fue actualizado:\n${_svcName ? _svcName + ', ' : ''}${_agendaApptSummary(_slot.startsAt)}.`;
+            logError('agenda-audit', { message: `tag=BOOK_RESCHEDULE result=confirmed biz=${business.id} conv=${conversation.id} msg="${(text||'').slice(0,200)}"`, stack: '' });
+            console.log(`[agenda] rescheduled old=${_pending.oldId} new=${_newApt.id} conv=${conversation.id}`);
+            nextAgendaState = { ...nextAgendaState, selectedService: null, slotsMap: null, slotsText: null, slotsClientText: null, slotsGeneratedAt: null, pendingReschedule: null };
+          } catch (_rErr) {
+            if (_rErr.message === 'SLOT_TAKEN') {
+              const _r3        = getFreeSlots(business, nextAgendaState.selectedService?.duration ?? 30);
+              const _promptTxt = formatSlotsForPrompt(_r3.slotsByDay);
+              const _clientTxt = formatSlotsForClient(_r3.slotsByDay);
+              nextAgendaState  = { ...nextAgendaState, slotsMap: _r3.slotsMap, slotsText: _promptTxt, slotsClientText: _clientTxt, slotsGeneratedAt: _r3.generatedAt };
+              _serverReply     = `Ese horario ya no está disponible. Elegí otro:\n\n${_clientTxt}`;
+              logError('agenda-reschedule-taken', { message: `biz=${business.id} conv=${conversation.id}`, stack: '' });
+              logError('agenda-audit', { message: `tag=BOOK_RESCHEDULE result=slot_taken biz=${business.id} conv=${conversation.id} msg="${(text||'').slice(0,200)}"`, stack: '' });
+            } else {
+              logError('agenda-reschedule-error', { message: _rErr.message, stack: _rErr.stack || '' });
+              _serverReply = 'Hubo un problema al cambiar tu turno. Alguien del equipo te va a contactar.';
+              setNeedsHuman(conversation.id, 1);
+              logError('agenda-audit', { message: `tag=BOOK_RESCHEDULE result=error:${_rErr.message} biz=${business.id} conv=${conversation.id} msg="${(text||'').slice(0,200)}"`, stack: '' });
+            }
+          }
+        }
+      } else if (!_pending) {
+        logError('agenda-bookresched-no-pending', { message: `tCode=${_tCode} conv=${conversation.id}`, stack: '' });
+      } else {
+        logError('agenda-bookresched-slot-notfound', { message: `tCode=${_tCode} conv=${conversation.id}`, stack: '' });
+        const _fallbackSlots = nextAgendaState.slotsClientText || '';
+        _serverReply = `No pude identificar ese horario. Elegí uno de la lista:${_fallbackSlots ? '\n\n' + _fallbackSlots : ''}`;
+      }
+    }
+
+    reply = reply
+      .replace(/\[AGENDA_SERVICE:[^\]]+\]\n?/g, '')
+      .replace(/\[BOOK_SLOT:[^\]]+\]\n?/g, '')
+      .replace(/\[CANCEL_APPOINTMENT:[^\]]+\]\n?/g, '')
+      .replace(/\[WANT_RESCHEDULE:[^\]]+\]\n?/g, '')
+      .replace(/\[BOOK_RESCHEDULE:[^\]]+\]\n?/g, '')
+      .replace(/\[RESCHEDULE_APPOINTMENT:[^\]]+\]\n?/g, '')
+      .replace(/\[AGENDA_CLIENT_NAME:[^\]]*\]\n?/g, '')
+      .trim();
+
+    if (_serverReply !== null) reply = _serverReply;
+
+    if (JSON.stringify(nextAgendaState) !== JSON.stringify(agendaState)) {
+      setBookingState(conversation.id, nextAgendaState);
+    }
   }
-  reply        = sanitizeForClient(reply);
-  imgTextBefore = sanitizeForClient(imgTextBefore);
-  imgTextAfter  = sanitizeForClient(imgTextAfter);
+
+  // Safety net: strip any unprocessed internal markers before touching WhatsApp
+  // (sanitizeForClient defined and exported from src/whatsapp.js)
+  reply        = sanitizeForClient(reply, logError);
+  imgTextBefore = sanitizeForClient(imgTextBefore, logError);
+  imgTextAfter  = sanitizeForClient(imgTextAfter, logError);
 
   // ── Split-message mode ──────────────────────────────────────────────────
   // parseSplitParts returns null if no "|||" or only one non-empty part.
@@ -2847,7 +3406,10 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     }
   }
 
-  if (isSaleIntent) {
+  // With agenda active, [INTERES_COMPRA] is suppressed in the prompt; if the model
+  // emits it anyway the tag is already stripped above, but we also skip the sale_intent
+  // notification — the booking flow handles conversion signals via BOOK_SLOT instead.
+  if (isSaleIntent && !agendaOk) {
     const _saleOwner = getUserByBusinessId(business.id);
     notifyOwnerSaleIntent(business, _saleOwner, conversation, history.slice(-3), customerPhone)
       .catch(err => logError('sale-intent-notify', { message: err.message, stack: err.stack || '' }));
@@ -2894,6 +3456,16 @@ function _checkMetaSig(req, logTag) {
     stack: '',
   });
   return mode !== 'enforce';
+}
+
+// ── Test harness (never in production) ───────────────────────────────────────
+// All three conditions must hold: NODE_ENV=test, DAXOS_TEST_HARNESS=1, no RAILWAY_ENVIRONMENT.
+// The startup guard above already hard-exits if NODE_ENV=test + RAILWAY_ENVIRONMENT,
+// so the !RAILWAY_ENVIRONMENT check here is a belt-and-suspenders defence.
+if (process.env.NODE_ENV === 'test' &&
+    process.env.DAXOS_TEST_HARNESS === '1' &&
+    !process.env.RAILWAY_ENVIRONMENT) {
+  require('./test-harness').register(app, processIncomingMessage, getBusinessById);
 }
 
 app.get('/webhook', (req, res) => {
@@ -2986,6 +3558,12 @@ app.post('/webhook', async (req, res) => {
 
         const waCredentials = { phoneNumberId: business.phone_number_id, accessToken: business.wa_access_token, provider: business.wa_provider || 'meta' };
 
+        // Build phone→profileName map for this webhook batch (used by agenda client name)
+        const _waProfileMap = {};
+        for (const c of value.contacts || []) {
+          if (c.wa_id && c.profile?.name) _waProfileMap[c.wa_id] = c.profile.name;
+        }
+
         for (const msg of messages) {
           const msgType = msg.type;
 
@@ -3000,6 +3578,7 @@ app.post('/webhook', async (req, res) => {
             logError('msg-discard', { message: `reason=no_from type=${msgType} business_id=${business.id} msg_id=${msg.id || 'none'}`, stack: '' });
             continue;
           }
+          const waProfileName = _waProfileMap[customerPhone] || null;
 
           // Dedup — primary: wamid string. Secondary (cross-provider): raw WA ID
           // extracted from the wamid envelope. Baileys stores msg.key.id = raw WA ID.
@@ -3080,7 +3659,7 @@ app.post('/webhook', async (req, res) => {
                     msgId: msg.id, customerPhone,
                     text: storedText,
                     msgTimestamp, msgTimestampField: 'msg.timestamp',
-                    imageData,
+                    imageData, waProfileName,
                   });
                 } catch (err) {
                   if (msg.id) deleteProcessedMessage(business.id, msg.id);
@@ -3236,6 +3815,7 @@ app.post('/webhook', async (req, res) => {
               await processIncomingMessage(business, waCredentials, {
                 msgId: msg.id, customerPhone, text,
                 msgTimestamp, msgTimestampField: 'msg.timestamp',
+                waProfileName,
               });
             } catch (err) {
               // Rollback both dedup marks so Meta retry can reprocess

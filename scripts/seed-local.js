@@ -16,7 +16,7 @@ const TEST_PASS  = 'prueba1234';
 
 // Validate --estado
 const ESTADO = process.env.SEED_ESTADO || 'activo';
-const ESTADOS_VALIDOS = ['activo', 'vacio', 'desconectado', 'prueba', 'tope'];
+const ESTADOS_VALIDOS = ['activo', 'vacio', 'desconectado', 'prueba', 'tope', 'agenda'];
 if (!ESTADOS_VALIDOS.includes(ESTADO)) {
   console.error('  [seed] ERROR: SEED_ESTADO="' + ESTADO + '" no válido. Opciones: ' + ESTADOS_VALIDOS.join(', '));
   process.exit(1);
@@ -30,11 +30,12 @@ if (!ESTADOS_VALIDOS.includes(ESTADO)) {
 //   subscriptionStatus: valor de subscription_status
 //   seedConvs: si cargar las 4 conversaciones de ejemplo
 const ESTADO_CFG = {
-  activo:       { phone_number_id: 'pid-local-test', planPaid: true,  trialDaysAgo: null, trialEnded: false, subscriptionStatus: 'active',    seedConvs: true  },
-  vacio:        { phone_number_id: 'pid-local-test', planPaid: true,  trialDaysAgo: null, trialEnded: false, subscriptionStatus: 'active',    seedConvs: false },
-  desconectado: { phone_number_id: null,             planPaid: true,  trialDaysAgo: null, trialEnded: false, subscriptionStatus: 'active',    seedConvs: false },
-  prueba:       { phone_number_id: 'pid-local-test', planPaid: false, trialDaysAgo: 30,   trialEnded: true,  subscriptionStatus: 'cancelled', seedConvs: false },
-  tope:         { phone_number_id: 'pid-local-test', planPaid: true,  trialDaysAgo: null, trialEnded: false, subscriptionStatus: 'active',    seedConvs: false },
+  activo:       { phone_number_id: 'pid-local-test', planPaid: true,  trialDaysAgo: null, trialEnded: false, subscriptionStatus: 'active',    seedConvs: true,  seedAgenda: false },
+  vacio:        { phone_number_id: 'pid-local-test', planPaid: true,  trialDaysAgo: null, trialEnded: false, subscriptionStatus: 'active',    seedConvs: false, seedAgenda: false },
+  desconectado: { phone_number_id: null,             planPaid: true,  trialDaysAgo: null, trialEnded: false, subscriptionStatus: 'active',    seedConvs: false, seedAgenda: false },
+  prueba:       { phone_number_id: 'pid-local-test', planPaid: false, trialDaysAgo: 30,   trialEnded: true,  subscriptionStatus: 'cancelled', seedConvs: false, seedAgenda: false },
+  tope:         { phone_number_id: 'pid-local-test', planPaid: true,  trialDaysAgo: null, trialEnded: false, subscriptionStatus: 'active',    seedConvs: false, seedAgenda: false },
+  agenda:       { phone_number_id: 'pid-local-test', planPaid: true,  trialDaysAgo: null, trialEnded: false, subscriptionStatus: 'active',    seedConvs: false, seedAgenda: true  },
 };
 const cfg = ESTADO_CFG[ESTADO];
 
@@ -44,6 +45,8 @@ db.pragma('journal_mode = WAL');
 // UTC helpers (SQLite stores datetimes as UTC text without Z)
 function utcMinsAgo(m)  { return new Date(Date.now() - m * 60000).toISOString().replace('T', ' ').slice(0, 19); }
 function utcDaysAgo(d)  { return new Date(Date.now() - d * 86400000).toISOString().replace('T', ' ').slice(0, 19); }
+// MVD (UTC-3) date+time → UTC ISO for agenda_appointments
+function mvdToUtc(dateStr, hhmm) { return new Date(`${dateStr}T${hhmm}:00-03:00`).toISOString(); }
 
 // ── 1. Usuario ────────────────────────────────────────────────────────────────
 let user = db.prepare('SELECT * FROM users WHERE email = ?').get(TEST_EMAIL);
@@ -133,6 +136,75 @@ if (ESTADO === 'tope') {
 
   db.close();
   console.log('  [seed] Listo. Estado=tope — alerta roja visible en Inicio.\n');
+  process.exit(0);
+}
+
+// ── 4b. Estado "agenda": plan Crecimiento, agenda activa, servicios y turnos ──
+if (cfg.seedAgenda) {
+  db.prepare('UPDATE businesses SET plan = ? WHERE id = ?').run('crecimiento', bizId);
+  const bh = JSON.stringify({ 1:[['09:00','18:00']], 2:[['09:00','18:00']], 3:[['09:00','18:00']], 4:[['09:00','18:00']], 5:[['09:00','18:00']], 6:[['09:00','13:00']] });
+  db.prepare('UPDATE businesses SET business_hours = ?, agenda_enabled = 1, agenda_slot_min = 30, agenda_cancel_min_before = 120 WHERE id = ?').run(bh, bizId);
+
+  const svcs = [
+    { name: 'Corte de pelo', duration_min: 30 },
+    { name: 'Corte + lavado', duration_min: 45 },
+    { name: 'Coloración', duration_min: 120 },
+  ];
+  db.prepare('DELETE FROM agenda_appointments WHERE business_id = ?').run(bizId);
+  db.prepare('DELETE FROM agenda_services WHERE business_id = ?').run(bizId);
+  svcs.forEach((s, i) => {
+    db.prepare('INSERT INTO agenda_services (business_id, name, duration_min, sort_order) VALUES (?, ?, ?, ?)').run(bizId, s.name, s.duration_min, i);
+  });
+  const svcRows = db.prepare('SELECT id, name, duration_min FROM agenda_services WHERE business_id = ? AND active = 1 ORDER BY sort_order').all(bizId);
+
+  function mvdDay(offset) {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() + offset);
+    return new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Montevideo' }).format(d);
+  }
+  const D = n => mvdDay(n);
+
+  const allApts = [
+    { date: D(-1),  phone: '59891000001', name: 'Roberto Silva',    svc: svcRows[2], time: '11:00' },
+    { date: D(-1),  phone: '59891000002', name: 'Elena Fernández',  svc: svcRows[0], time: '16:00' },
+    { date: D(0),   phone: '59891234567', name: 'María González',   svc: svcRows[0], time: '09:00' },
+    { date: D(0),   phone: '59892345678', name: 'Carlos López',     svc: svcRows[1], time: '10:00' },
+    { date: D(0),   phone: '59893456789', name: 'Ana Martínez',     svc: svcRows[2], time: '11:00' },
+    { date: D(0),   phone: '59891000003', name: 'Pedro Ramírez',    svc: svcRows[0], time: '14:30' },
+    { date: D(0),   phone: '59891000004', name: 'Laura Díaz',       svc: svcRows[1], time: '15:00', cancelled: true },
+    { date: D(1),   phone: '59894567890', name: 'Luis García',      svc: svcRows[0], time: '09:30' },
+    { date: D(1),   phone: '59895678901', name: 'Sofía Rodríguez',  svc: svcRows[1], time: '11:00' },
+    { date: D(1),   phone: '59891000005', name: 'Diego Herrera',    svc: svcRows[2], time: '14:00' },
+    { date: D(2),   phone: '59891000006', name: 'Valentina Castro', svc: svcRows[0], time: '10:00' },
+    { date: D(2),   phone: '59891000007', name: 'Martín Flores',    svc: svcRows[1], time: '16:00' },
+    { date: D(3),   phone: '59891000008', name: 'Camila Torres',    svc: svcRows[0], time: '09:00' },
+    { date: D(3),   phone: '59891000009', name: 'Nicolás Morales',  svc: svcRows[2], time: '15:30' },
+    { date: D(6),   phone: '59891000010', name: 'Fernanda Pereira', svc: svcRows[1], time: '10:00' },
+    { date: D(6),   phone: '59891000011', name: 'Sergio Álvarez',   svc: svcRows[0], time: '14:00' },
+    { date: D(8),   phone: '59891000012', name: 'Julia Ramos',      svc: svcRows[2], time: '09:00' },
+    { date: D(8),   phone: '59891000013', name: 'Gustavo Méndez',   svc: svcRows[0], time: '16:00' },
+    { date: D(11),  phone: '59891000014', name: 'Patricia Vidal',   svc: svcRows[1], time: '11:00' },
+    { date: D(11),  phone: '59891000015', name: 'Emilio Suárez',    svc: svcRows[0], time: '15:00' },
+    { date: D(14),  phone: '59891000016', name: 'Santiago Ruiz',    svc: svcRows[2], time: '10:00' },
+    { date: D(14),  phone: '59891000017', name: 'Carmen Ibáñez',    svc: svcRows[1], time: '13:00' },
+    { date: D(17),  phone: '59891000018', name: 'Beatriz Sosa',     svc: svcRows[0], time: '09:30' },
+    { date: D(21),  phone: '59891000019', name: 'Ramón Cabrera',    svc: svcRows[2], time: '11:00' },
+    { date: D(24),  phone: '59891000020', name: 'Luisa Benítez',    svc: svcRows[1], time: '10:30' },
+  ];
+
+  allApts.forEach(a => {
+    const dur      = a.svc?.duration_min ?? 30;
+    const startsAt = mvdToUtc(a.date, a.time);
+    const endsAt   = new Date(new Date(startsAt).getTime() + dur * 60_000).toISOString();
+    db.prepare(`
+      INSERT OR IGNORE INTO agenda_appointments (business_id, service_id, customer_phone, client_name, starts_at, ends_at, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(bizId, a.svc?.id ?? null, a.phone, a.name, startsAt, endsAt, a.cancelled ? 'cancelled' : 'confirmed');
+    console.log(`  [seed] Turno ${a.cancelled ? '(cancelado) ' : ''}${a.name || a.phone} ${a.date} ${a.time}`);
+  });
+
+  db.close();
+  console.log(`  [seed] Listo. Plan=Crecimiento, agenda activa, 3 servicios, ${allApts.length} turnos.\n`);
   process.exit(0);
 }
 

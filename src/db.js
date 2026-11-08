@@ -618,6 +618,68 @@ db.exec(`
     }
   } catch (e) { console.warn('[migration 020] mail_test_log:', e.message); }
 
+  // Migration 021: agenda tables + business columns for appointment scheduling
+  try {
+    if (!applied('021_agenda')) {
+      const bizCols021 = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+      if (!bizCols021.includes('agenda_enabled'))
+        db.exec('ALTER TABLE businesses ADD COLUMN agenda_enabled INTEGER NOT NULL DEFAULT 0');
+      if (!bizCols021.includes('agenda_slot_min'))
+        db.exec('ALTER TABLE businesses ADD COLUMN agenda_slot_min INTEGER NOT NULL DEFAULT 30');
+      if (!bizCols021.includes('agenda_cancel_min_before'))
+        db.exec('ALTER TABLE businesses ADD COLUMN agenda_cancel_min_before INTEGER NOT NULL DEFAULT 120');
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS agenda_services (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          business_id  INTEGER NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+          name         TEXT NOT NULL,
+          duration_min INTEGER NOT NULL DEFAULT 30,
+          sort_order   INTEGER NOT NULL DEFAULT 0,
+          active       INTEGER NOT NULL DEFAULT 1,
+          created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(business_id, name)
+        );
+
+        CREATE TABLE IF NOT EXISTS agenda_appointments (
+          id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+          business_id         INTEGER NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+          conversation_id     INTEGER REFERENCES conversations(id),
+          service_id          INTEGER REFERENCES agenda_services(id),
+          customer_phone      TEXT NOT NULL,
+          client_name         TEXT,
+          notes               TEXT,
+          starts_at           TEXT NOT NULL,
+          ends_at             TEXT NOT NULL,
+          status              TEXT NOT NULL DEFAULT 'confirmed'
+                              CHECK(status IN ('confirmed','cancelled')),
+          cancelled_by        TEXT CHECK(cancelled_by IN ('client','owner')),
+          cancel_reason       TEXT,
+          client_notified_at  TEXT,
+          owner_notified_at   TEXT,
+          wa_notify_status    TEXT,
+          wa_notify_reason    TEXT,
+          reminder_sent_at    TEXT,
+          created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_apt_biz_start
+        ON agenda_appointments (business_id, starts_at)
+        WHERE status = 'confirmed';
+
+        CREATE INDEX IF NOT EXISTS idx_apt_phone
+        ON agenda_appointments (business_id, customer_phone, starts_at);
+      `);
+      const aptCols021 = db.prepare('PRAGMA table_info(agenda_appointments)').all().map(c => c.name);
+      if (!aptCols021.includes('wa_notify_reason'))
+        db.exec('ALTER TABLE agenda_appointments ADD COLUMN wa_notify_reason TEXT');
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('021_agenda');
+      console.log('[migration 021] agenda tables + business columns created');
+    }
+  } catch (e) { console.warn('[migration 021] agenda:', e.message); }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -1588,6 +1650,223 @@ function expireBooking(bookingId) {
   console.log(`[booking] expired id=${bookingId}`);
 }
 
+function cancelBooking(bookingId) {
+  db.prepare(`
+    UPDATE pending_bookings
+    SET status = 'rejected', updated_at = datetime('now')
+    WHERE id = ? AND status = 'pending'
+  `).run(bookingId);
+  console.log(`[booking] cancelled-by-client id=${bookingId}`);
+}
+
+// ── Agenda ────────────────────────────────────────────────────────────────────
+
+function createAgendaService(businessId, { name, durationMin = 30, sortOrder = 0 }) {
+  return db.prepare(`
+    INSERT INTO agenda_services (business_id, name, duration_min, sort_order)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(business_id, name) DO UPDATE SET
+      duration_min = excluded.duration_min,
+      sort_order   = excluded.sort_order,
+      active       = 1
+  `).run(businessId, name, durationMin, sortOrder);
+}
+
+function getAgendaServices(businessId) {
+  return db.prepare(`
+    SELECT * FROM agenda_services
+    WHERE business_id = ? AND active = 1
+    ORDER BY sort_order, id
+  `).all(businessId);
+}
+
+function deactivateAgendaService(serviceId, businessId) {
+  db.prepare(`
+    UPDATE agenda_services SET active = 0
+    WHERE id = ? AND business_id = ?
+  `).run(serviceId, businessId);
+}
+
+function getAppointmentById(id) {
+  return db.prepare(`
+    SELECT aa.*, ags.name AS service_name, ags.duration_min AS service_duration_min
+    FROM agenda_appointments aa
+    LEFT JOIN agenda_services ags ON ags.id = aa.service_id
+    WHERE aa.id = ?
+  `).get(id);
+}
+
+function getUpcomingAppointmentsForPhone(businessId, customerPhone) {
+  const now = new Date().toISOString();
+  return db.prepare(`
+    SELECT aa.*, ags.name AS service_name
+    FROM agenda_appointments aa
+    LEFT JOIN agenda_services ags ON ags.id = aa.service_id
+    WHERE aa.business_id = ? AND aa.customer_phone = ?
+      AND aa.status = 'confirmed' AND aa.starts_at > ?
+    ORDER BY aa.starts_at
+    LIMIT 5
+  `).all(businessId, customerPhone, now);
+}
+
+function getConfirmedAppointmentsInRange(businessId, fromUtc, toUtc) {
+  return db.prepare(`
+    SELECT id, starts_at, ends_at FROM agenda_appointments
+    WHERE business_id = ? AND status = 'confirmed'
+      AND starts_at < ? AND ends_at > ?
+    ORDER BY starts_at
+  `).all(businessId, toUtc, fromUtc);
+}
+
+function getAppointmentsForBusiness(businessId, fromUtc, toUtc) {
+  return db.prepare(`
+    SELECT aa.*, ags.name AS service_name
+    FROM agenda_appointments aa
+    LEFT JOIN agenda_services ags ON ags.id = aa.service_id
+    WHERE aa.business_id = ?
+      AND aa.starts_at >= ? AND aa.starts_at < ?
+    ORDER BY aa.starts_at
+  `).all(businessId, fromUtc, toUtc);
+}
+
+const createAppointment = db.transaction(({
+  businessId, conversationId, serviceId, customerPhone,
+  clientName, notes, startsAt, endsAt,
+}) => {
+  const conflict = db.prepare(`
+    SELECT id FROM agenda_appointments
+    WHERE business_id = ? AND status = 'confirmed'
+      AND starts_at < ? AND ends_at > ?
+  `).get(businessId, endsAt, startsAt);
+  if (conflict) {
+    const err = new Error('SLOT_TAKEN');
+    err.conflictId = conflict.id;
+    throw err;
+  }
+  const r = db.prepare(`
+    INSERT INTO agenda_appointments
+      (business_id, conversation_id, service_id, customer_phone,
+       client_name, notes, starts_at, ends_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    businessId, conversationId ?? null, serviceId ?? null, customerPhone,
+    clientName ?? null, notes ?? null, startsAt, endsAt,
+  );
+  console.log(`[agenda] created id=${r.lastInsertRowid} biz=${businessId} phone=${customerPhone} starts=${startsAt}`);
+  return getAppointmentById(r.lastInsertRowid);
+});
+
+function cancelAppointment(id, cancelledBy, reason = null) {
+  const r = db.prepare(`
+    UPDATE agenda_appointments
+    SET status = 'cancelled',
+        cancelled_by = ?,
+        cancel_reason = ?,
+        updated_at = datetime('now')
+    WHERE id = ? AND status = 'confirmed'
+  `).run(cancelledBy, reason, id);
+  console.log(`[agenda] cancelled id=${id} by=${cancelledBy} rows=${r.changes}`);
+  return r.changes > 0;
+}
+
+const rescheduleAppointment = db.transaction(({
+  oldId, businessId, customerPhone, conversationId, serviceId,
+  clientName, notes, startsAt, endsAt,
+}) => {
+  const old = db.prepare(`
+    SELECT id FROM agenda_appointments
+    WHERE id = ? AND business_id = ? AND customer_phone = ? AND status = 'confirmed'
+  `).get(oldId, businessId, customerPhone);
+  if (!old) {
+    throw Object.assign(new Error('APPOINTMENT_NOT_FOUND'), { appointmentId: oldId });
+  }
+  const conflict = db.prepare(`
+    SELECT id FROM agenda_appointments
+    WHERE business_id = ? AND status = 'confirmed'
+      AND starts_at < ? AND ends_at > ?
+      AND id != ?
+  `).get(businessId, endsAt, startsAt, oldId);
+  if (conflict) {
+    throw Object.assign(new Error('SLOT_TAKEN'), { conflictId: conflict.id });
+  }
+  const r = db.prepare(`
+    INSERT INTO agenda_appointments
+      (business_id, conversation_id, service_id, customer_phone,
+       client_name, notes, starts_at, ends_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    businessId, conversationId ?? null, serviceId ?? null, customerPhone,
+    clientName ?? null, notes ?? null, startsAt, endsAt,
+  );
+  db.prepare(`
+    UPDATE agenda_appointments
+    SET status = 'cancelled', cancelled_by = 'client',
+        cancel_reason = 'rescheduled', updated_at = datetime('now')
+    WHERE id = ?
+  `).run(oldId);
+  console.log(`[agenda] rescheduled oldId=${oldId} → newId=${r.lastInsertRowid} biz=${businessId}`);
+  return getAppointmentById(r.lastInsertRowid);
+});
+
+function setAgendaEnabled(businessId, enabled) {
+  db.prepare('UPDATE businesses SET agenda_enabled = ? WHERE id = ?').run(enabled ? 1 : 0, businessId);
+}
+
+function setAgendaCancelMinBefore(businessId, minutes) {
+  db.prepare('UPDATE businesses SET agenda_cancel_min_before = ? WHERE id = ?').run(minutes, businessId);
+}
+
+const rescheduleAppointmentByOwner = db.transaction(({
+  oldId, businessId, serviceId, startsAt, endsAt,
+}) => {
+  const old = db.prepare(`
+    SELECT id, customer_phone, conversation_id, client_name, notes
+    FROM agenda_appointments
+    WHERE id = ? AND business_id = ? AND status = 'confirmed'
+  `).get(oldId, businessId);
+  if (!old) throw Object.assign(new Error('APPOINTMENT_NOT_FOUND'), { appointmentId: oldId });
+
+  const conflict = db.prepare(`
+    SELECT id FROM agenda_appointments
+    WHERE business_id = ? AND status = 'confirmed'
+      AND starts_at < ? AND ends_at > ? AND id != ?
+  `).get(businessId, endsAt, startsAt, oldId);
+  if (conflict) throw Object.assign(new Error('SLOT_TAKEN'), { conflictId: conflict.id });
+
+  const r = db.prepare(`
+    INSERT INTO agenda_appointments
+      (business_id, conversation_id, service_id, customer_phone, client_name, notes, starts_at, ends_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(businessId, old.conversation_id ?? null, serviceId ?? null, old.customer_phone,
+    old.client_name ?? null, old.notes ?? null, startsAt, endsAt);
+
+  db.prepare(`
+    UPDATE agenda_appointments
+    SET status = 'cancelled', cancelled_by = 'owner',
+        cancel_reason = 'rescheduled', updated_at = datetime('now')
+    WHERE id = ?
+  `).run(oldId);
+
+  console.log(`[agenda] owner-rescheduled oldId=${oldId} → newId=${r.lastInsertRowid} biz=${businessId}`);
+  return getAppointmentById(r.lastInsertRowid);
+});
+
+function updateAppointmentNotification(id, fields = {}) {
+  const { clientNotifiedAt, ownerNotifiedAt, waNotifyStatus, waNotifyReason, reminderSentAt } = fields;
+  if (clientNotifiedAt !== undefined)
+    db.prepare(`UPDATE agenda_appointments SET client_notified_at = ?, updated_at = datetime('now') WHERE id = ?`).run(clientNotifiedAt, id);
+  if (ownerNotifiedAt !== undefined)
+    db.prepare(`UPDATE agenda_appointments SET owner_notified_at = ?, updated_at = datetime('now') WHERE id = ?`).run(ownerNotifiedAt, id);
+  if (waNotifyStatus !== undefined)
+    db.prepare(`UPDATE agenda_appointments SET wa_notify_status = ?, updated_at = datetime('now') WHERE id = ?`).run(waNotifyStatus, id);
+  if (waNotifyReason !== undefined)
+    db.prepare(`UPDATE agenda_appointments SET wa_notify_reason = ?, updated_at = datetime('now') WHERE id = ?`).run(waNotifyReason, id);
+  if (reminderSentAt !== undefined)
+    db.prepare(`UPDATE agenda_appointments SET reminder_sent_at = ?, updated_at = datetime('now') WHERE id = ?`).run(reminderSentAt, id);
+}
+
+// ── End Agenda ─────────────────────────────────────────────────────────────────
+
 function markBookingNotified(bookingId) {
   db.prepare(`
     UPDATE pending_bookings SET notified_at = datetime('now'), updated_at = datetime('now') WHERE id = ?
@@ -1863,7 +2142,23 @@ module.exports = {
   getPendingBookingsByBusiness,
   confirmBooking,
   rejectBooking,
+  cancelBooking,
   expireBooking,
+  // agenda
+  createAgendaService,
+  getAgendaServices,
+  deactivateAgendaService,
+  getAppointmentById,
+  getUpcomingAppointmentsForPhone,
+  getConfirmedAppointmentsInRange,
+  getAppointmentsForBusiness,
+  createAppointment,
+  cancelAppointment,
+  rescheduleAppointment,
+  setAgendaEnabled,
+  setAgendaCancelMinBefore,
+  rescheduleAppointmentByOwner,
+  updateAppointmentNotification,
   markBookingNotified,
   markBookingReminderSent,
   getBookingsNeedingTimeout,
@@ -2124,11 +2419,16 @@ function logError(context, err) {
   } catch (_) {}
 }
 
+// Audit contexts are high-volume and excluded from default error views.
+// Query explicitly with ?context=agenda-audit to inspect them.
+const _AUDIT_CONTEXTS = ['agenda-audit'];
+const _AUDIT_EXCLUDE  = _AUDIT_CONTEXTS.map(c => `'${c}'`).join(', ');
+
 function getRecentErrors(limit = 20) {
-  return db.prepare('SELECT * FROM error_log ORDER BY id DESC LIMIT ?').all(limit);
+  return db.prepare(`SELECT * FROM error_log WHERE context NOT IN (${_AUDIT_EXCLUDE}) ORDER BY id DESC LIMIT ?`).all(limit);
 }
 
-const stmtErrorsAll     = db.prepare('SELECT id, context, message, created_at FROM error_log ORDER BY id DESC LIMIT ?');
+const stmtErrorsAll     = db.prepare(`SELECT id, context, message, created_at FROM error_log WHERE context NOT IN (${_AUDIT_EXCLUDE}) ORDER BY id DESC LIMIT ?`);
 const stmtErrorsByCtx   = db.prepare('SELECT id, context, message, created_at FROM error_log WHERE context = ? ORDER BY id DESC LIMIT ?');
 function getErrorsFiltered(context, limit) {
   return context

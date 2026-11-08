@@ -27,10 +27,11 @@ function assert(label, cond) {
 // ── Suite K: tag never reaches client ─────────────────────────────────────────
 console.log('\nSuite K: [INTERES_COMPRA] never reaches client');
 {
-  // 1. sanitizeForClient strips it (regex covers all uppercase bracket tags)
-  const serverSrc = fs.readFileSync(path.join(__dirname, '../src/server.js'), 'utf8');
-  assert('K1: sanitizeForClient uses generic uppercase-tag regex',
-    /\\\[A-Z\]/.test(serverSrc) || /\[A-Z\]\[A-Z_/.test(serverSrc) || serverSrc.includes('[A-Z][A-Z_0-9]'));
+  // 1. sanitizeForClient (defined in whatsapp.js) strips uppercase bracket tags
+  const serverSrc   = fs.readFileSync(path.join(__dirname, '../src/server.js'), 'utf8');
+  const whatsappSrc = fs.readFileSync(path.join(__dirname, '../src/whatsapp.js'), 'utf8');
+  assert('K1: sanitizeForClient uses generic uppercase-tag regex (whatsapp.js)',
+    /\\\[A-Z\]/.test(whatsappSrc) || /\[A-Z\]\[A-Z_/.test(whatsappSrc) || whatsappSrc.includes('[A-Z][A-Z_0-9]'));
 
   // 2. preview endpoint explicitly strips [INTERES_COMPRA]
   assert('K2: preview endpoint strips [INTERES_COMPRA]',
@@ -40,9 +41,11 @@ console.log('\nSuite K: [INTERES_COMPRA] never reaches client');
   assert('K3: main processing extracts isSaleIntent and strips tag',
     serverSrc.includes('isSaleIntent = true') && serverSrc.includes("reply.replace(/\\[INTERES_COMPRA\\]\\n?/g, '')"));
 
-  // 4. The generic sanitizeForClient regex would catch it anyway as a final safety net
-  const sanitizeMatch = serverSrc.match(/function sanitizeForClient[\s\S]{0,200}replace\(\/(.+?)\/g/);
-  assert('K4: sanitizeForClient regex present in server source', !!sanitizeMatch);
+  // 4. sanitizeForClient is defined in whatsapp.js and imported into server.js
+  const sanitizeMatch = whatsappSrc.match(/function sanitizeForClient[\s\S]{0,200}replace\(\/(.+?)\/g/);
+  assert('K4: sanitizeForClient regex present in whatsapp.js', !!sanitizeMatch);
+  assert('K5: server.js imports sanitizeForClient from whatsapp',
+    /sanitizeForClient[,\s}][\s\S]{0,500}require\('\.\/whatsapp'\)/.test(serverSrc));
 }
 
 // ── Suite L: 12h rate limit ────────────────────────────────────────────────────

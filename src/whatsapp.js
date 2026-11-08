@@ -482,4 +482,11 @@ async function splitAndSend(parts, { customerPhone, waCredentials, msgId, _sendF
   return { sentParts, fullySent: true };
 }
 
-module.exports = { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, markReadAndTyping, downloadKapsoMedia, downloadMetaMedia, isAllowedKapsoHost, parseSplitParts, splitAndSend };
+function sanitizeForClient(txt, logFn) {
+  if (!txt) return txt;
+  const cleaned = txt.replace(/\[[A-Z][A-Z_0-9]*(?::[^\]]+)?\]/g, '').replace(/[ \t]{2,}/g, ' ').trim();
+  if (cleaned !== txt && logFn) logFn('marker-leak', { message: `stripped from client text: ${JSON.stringify(txt.slice(0, 300))}`, stack: '' });
+  return cleaned;
+}
+
+module.exports = { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, markReadAndTyping, downloadKapsoMedia, downloadMetaMedia, isAllowedKapsoHost, parseSplitParts, splitAndSend, sanitizeForClient };

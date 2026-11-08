@@ -648,4 +648,31 @@ function sendClaudeErrorAdminEmail({ errorType, businessId, businessName, errorM
   });
 }
 
-module.exports = { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail, sendSpendingCapEmail, sendOwnerBotStoppedEmail, sendClaudeErrorAdminEmail, sendSaleIntentEmail };
+async function sendAgendaNewAppointmentEmail({ to, businessName, clientName, serviceName, summary, panelUrl }) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) { console.warn('[resend] RESEND_API_KEY not set, skipping agenda new-apt email'); return; }
+  const body = {
+    from: 'Daxos <notificaciones@daxos.lat>',
+    to: [to],
+    subject: `📅 Nuevo turno confirmado — ${businessName}`,
+    html: `
+      <p>Hola,</p>
+      <p>Se confirmó un nuevo turno en <strong>${escapeHtml(businessName)}</strong>.</p>
+      <table style="border-collapse:collapse;margin:16px 0">
+        <tr><td style="padding:4px 12px 4px 0;color:#666">Cliente</td><td>${escapeHtml(clientName || '—')}</td></tr>
+        ${serviceName ? `<tr><td style="padding:4px 12px 4px 0;color:#666">Servicio</td><td>${escapeHtml(serviceName)}</td></tr>` : ''}
+        <tr><td style="padding:4px 12px 4px 0;color:#666">Horario</td><td>${escapeHtml(summary)}</td></tr>
+      </table>
+      <p><a href="${escapeHtml(panelUrl)}" style="background:#C45C1A;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:8px">Ver en la agenda</a></p>
+      <p style="color:#666;font-size:12px">No se pudo enviar el aviso por WhatsApp — revisá la conexión de tu cuenta.</p>
+    `,
+  };
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
+}
+
+module.exports = { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendBookingNotificationEmail, sendWeeklySummaryEmail, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail, sendSpendingCapEmail, sendOwnerBotStoppedEmail, sendClaudeErrorAdminEmail, sendSaleIntentEmail, sendAgendaNewAppointmentEmail };
