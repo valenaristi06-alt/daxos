@@ -497,7 +497,7 @@ async function _connect() {
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
       if (type !== 'notify') return;
       for (const msg of messages) {
-        await _handleMessage(msg, { logError, getBusinessById, processIncomingMessage, tryMarkProcessed, deleteProcessedMessage })
+        await _handleMessage(msg, sock, { logError, getBusinessById, processIncomingMessage, tryMarkProcessed, deleteProcessedMessage })
           .catch(err => logError('baileys-msg-error', { message: err.message, stack: err.stack || '' }));
       }
     });
@@ -516,7 +516,7 @@ async function _connect() {
 
 // ── Message handler ───────────────────────────────────────────────────────────
 
-async function _handleMessage(msg, { logError, getBusinessById, processIncomingMessage, tryMarkProcessed, deleteProcessedMessage }) {
+async function _handleMessage(msg, eventSock, { logError, getBusinessById, processIncomingMessage, tryMarkProcessed, deleteProcessedMessage }) {
   // Drop immediately if Baileys is stopping/stopped — socket is null, cannot respond.
   // Prevents: tryMarkProcessed marking message as done while response cannot be sent.
   if (_state === 'STOPPED') {
@@ -535,14 +535,74 @@ async function _handleMessage(msg, { logError, getBusinessById, processIncomingM
   const msgId = msg.key.id;
   if (!msgId)                                        return;
 
-  // Only process direct messages from @s.whatsapp.net JIDs.
-  // @lid JIDs are WhatsApp Linked Account IDs — a privacy feature that hides
-  // the real phone number. They are NOT phone numbers and must not be used as
-  // customer identifiers. @broadcast and other non-peer JIDs are filtered above
-  // or via shouldIgnoreJid. Being explicit here prevents silent data corruption.
-  if (!msg.key.remoteJid.endsWith('@s.whatsapp.net')) {
+  // Resolve customer phone number from the message JID.
+  // @s.whatsapp.net: extract digits directly.
+  // @lid: WhatsApp privacy-mode JID — resolve to real PN via remoteJidAlt (embedded
+  //       in the stanza by WA, decode-wa-message.js:77) or via signalRepository LID
+  //       mapping store (async, persisted from sync actions, lid-mapping.js:199).
+  //       The original @lid remoteJid is kept in waCredentials so Baileys routes
+  //       the reply correctly (messages-send.js:590 handles @lid outbound).
+  // Other JIDs: shouldIgnoreJid already filtered groups and broadcast; this is an
+  //       explicit second-layer guard for any remaining unsupported types.
+  // NOTE: tryMarkProcessed is NOT yet called here — no rollback needed on drop.
+  let customerPhone;
+  if (msg.key.remoteJid.endsWith('@s.whatsapp.net')) {
+    customerPhone = msg.key.remoteJid.split('@')[0];
+  } else if (msg.key.remoteJid.endsWith('@lid')) {
+    // Strip optional device suffix (e.g. "59891234567:0@s.whatsapp.net" → "59891234567")
+    // and validate the result contains only digits of plausible length.
+    const _extractPhone = (jid) => {
+      if (!jid || typeof jid !== 'string') return null;
+      const digits = jid.split('@')[0].split(':')[0];
+      return /^\d+$/.test(digits) && digits.length >= 7 ? digits : null;
+    };
+
+    let resolvedPn   = null;
+    let resolveSource = null;
+
+    // Source 1: PN JID embedded in the stanza (synchronous — preferred path)
+    const altJid = msg.key.remoteJidAlt;
+    if (altJid && altJid.endsWith('@s.whatsapp.net')) {
+      resolvedPn = _extractPhone(altJid);
+      if (resolvedPn) resolveSource = 'remoteJidAlt';
+    }
+
+    // Source 2: persisted LID→PN mapping store (async fallback).
+    // Uses eventSock — the exact socket object that emitted this 'messages.upsert' event.
+    // This prevents cross-socket contamination: a stale event from a previous connection
+    // cannot accidentally query the new socket's mapping store (which may have different
+    // or incomplete LID data). signalRepository exposed on WASocket (socket.js:977).
+    if (!resolvedPn && eventSock?.signalRepository?.lidMapping) {
+      try {
+        const pnJid = await eventSock.signalRepository.lidMapping.getPNForLID(msg.key.remoteJid);
+        if (pnJid && typeof pnJid === 'string') {
+          resolvedPn = _extractPhone(pnJid);
+          if (resolvedPn) resolveSource = 'mapping_store';
+        }
+      } catch (e) {
+        logError('baileys-lid-lookup-error', {
+          message: `msgId=${msgId} lid=${msg.key.remoteJid} err=${e.message}`,
+          stack: e.stack || '',
+        });
+      }
+    }
+
+    if (!resolvedPn) {
+      logError('baileys-jid-unresolvable', {
+        message: `msgId=${msgId} lid=${msg.key.remoteJid} remoteJidAlt=${altJid ?? 'none'} — PN not resolvable, dropping`,
+        stack: '',
+      });
+      return;
+    }
+
+    logError('baileys-lid-resolved', {
+      message: `msgId=${msgId} lid=${msg.key.remoteJid} pn=****${resolvedPn.slice(-4)} source=${resolveSource}`,
+      stack: '',
+    });
+    customerPhone = resolvedPn;
+  } else {
     logError('baileys-jid-skip', {
-      message: `msgId=${msgId} jid_type=${msg.key.remoteJid.split('@')[1] ?? 'unknown'} — only @s.whatsapp.net supported`,
+      message: `msgId=${msgId} jid_type=${msg.key.remoteJid.split('@')[1] ?? 'unknown'} — unsupported JID type`,
       stack: '',
     });
     return;
@@ -578,11 +638,15 @@ async function _handleMessage(msg, { logError, getBusinessById, processIncomingM
     return;
   }
 
-  // Safe: remoteJid is guaranteed @s.whatsapp.net at this point (filtered above)
-  const customerPhone = msg.key.remoteJid.slice(0, -'@s.whatsapp.net'.length);
   const msgTimestamp  = msg.messageTimestamp ? Number(msg.messageTimestamp) : null;
 
-  const waCredentials = { provider: 'baileys', socket: _socket, businessId: BAILEYS_BUSINESS_ID, remoteJid: msg.key.remoteJid };
+  // Lazy getter: reads _socket at the moment each send actually executes, not at handler
+  // entry. processIncomingMessage can take 10-30s (AI + DB); _socket may have changed.
+  // Guard: _socket is assigned at makeWASocket() (line 355) but is not safe to send on
+  // until connection.update 'open' fires (_state = 'CONNECTED', line 389). Returning null
+  // when not CONNECTED lets whatsapp.js throw "socket not available" cleanly instead of
+  // hitting Baileys internal errors from a not-yet-authenticated WebSocket.
+  const waCredentials = { provider: 'baileys', get socket() { return _state === 'CONNECTED' ? _socket : null; }, businessId: BAILEYS_BUSINESS_ID, remoteJid: msg.key.remoteJid };
 
   const msgContent = msg.message;
   const msgType    = Object.keys(msgContent)[0];
@@ -824,6 +888,7 @@ const _forTest = IS_PROD ? null : {
   getQrTimedOut:      () => _qrTimedOut,
   getQrTimeoutTimer:  () => _qrTimeoutTimer,
   handleMessage:      _handleMessage,
+  setSocket:          (s) => { _socket = s; },
   acquireLock,
   releaseLock,
   stopBaileys,

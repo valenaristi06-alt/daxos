@@ -62,11 +62,12 @@ function makeWAMsg(overrides = {}) {
     messageTimestamp: now,
     message: { conversation: 'hola' },
   };
-  if (overrides.fromMe !== undefined)        base.key.fromMe    = overrides.fromMe;
-  if (overrides.remoteJid !== undefined)     base.key.remoteJid = overrides.remoteJid;
-  if (overrides.id !== undefined)            base.key.id        = overrides.id;
+  if (overrides.fromMe !== undefined)        base.key.fromMe       = overrides.fromMe;
+  if (overrides.remoteJid !== undefined)     base.key.remoteJid    = overrides.remoteJid;
+  if (overrides.remoteJidAlt !== undefined)  base.key.remoteJidAlt = overrides.remoteJidAlt;
+  if (overrides.id !== undefined)            base.key.id           = overrides.id;
   if (overrides.messageTimestamp !== undefined) base.messageTimestamp = overrides.messageTimestamp;
-  if (overrides.message !== undefined)       base.message        = overrides.message;
+  if (overrides.message !== undefined)       base.message           = overrides.message;
   return base;
 }
 
@@ -92,6 +93,7 @@ assert('_forTest.replayThreshold is a number', typeof _forTest.replayThreshold =
 assert('_forTest.shutdownFile is a string path', typeof _forTest.shutdownFile === 'string' && _forTest.shutdownFile.endsWith('last_shutdown.json'));
 assert('_forTest.sessionDir is a string path', typeof _forTest.sessionDir === 'string' && _forTest.sessionDir.endsWith('baileys-session'));
 assert('_forTest.handleMessage is a function', typeof _forTest.handleMessage === 'function');
+assert('_forTest.setSocket is a function', typeof _forTest.setSocket === 'function');
 assert('_forTest.acquireLock is a function', typeof _forTest.acquireLock === 'function');
 assert('_forTest.releaseLock is a function', typeof _forTest.releaseLock === 'function');
 assert('_forTest.lockFile is a string path', typeof _forTest.lockFile === 'string' && _forTest.lockFile.endsWith('baileys.lock'));
@@ -123,31 +125,31 @@ async function testReplayGuard() {
 
   // 2a. Message from 60s before threshold → dropped
   const oldMsg = makeWAMsg({ messageTimestamp: replayThreshold - 60, id: 'OLD_1' });
-  await handleMessage(oldMsg, deps);
+  await handleMessage(oldMsg, null, deps);
   assert('Replay guard drops message from 60s before threshold', calls.length === 0);
 
   // 2b. Message from 31s before threshold → dropped (outside 30s grace)
   const justOutside = makeWAMsg({ messageTimestamp: replayThreshold - 31, id: 'OLD_2' });
-  await handleMessage(justOutside, deps);
+  await handleMessage(justOutside, null, deps);
   assert('Replay guard drops message from 31s before threshold', calls.length === 0);
 
   // 2c. Message at exactly -30s boundary → allowed (on the grace boundary)
   const graceBoundary = makeWAMsg({ messageTimestamp: replayThreshold - 30, id: 'GRACE_1' });
-  await handleMessage(graceBoundary, deps);
+  await handleMessage(graceBoundary, null, deps);
   assert('Replay guard allows message at exactly -30s boundary', calls.length === 1,
     `calls=${calls.length}`);
   calls.length = 0;
 
   // 2d. Message from 5s before threshold → allowed (within grace)
   const recentMsg = makeWAMsg({ messageTimestamp: replayThreshold - 5, id: 'RECENT_1' });
-  await handleMessage(recentMsg, deps);
+  await handleMessage(recentMsg, null, deps);
   assert('Replay guard allows message within 30s grace window', calls.length === 1,
     `calls=${calls.length}`);
   calls.length = 0;
 
   // 2e. Message from after threshold → allowed
   const nowMsg = makeWAMsg({ messageTimestamp: replayThreshold + 10, id: 'NOW_1' });
-  await handleMessage(nowMsg, deps);
+  await handleMessage(nowMsg, null, deps);
   assert('Replay guard allows message from after threshold', calls.length === 1,
     `calls=${calls.length}`);
   calls.length = 0;
@@ -155,7 +157,7 @@ async function testReplayGuard() {
   // 2f. Message with null timestamp → allowed (conservative: process if unknown)
   const noTs = makeWAMsg({ id: 'NOTS_1' });
   delete noTs.messageTimestamp;
-  await handleMessage(noTs, deps);
+  await handleMessage(noTs, null, deps);
   assert('Replay guard allows message with null timestamp (conservative)', calls.length === 1,
     `calls=${calls.length}`);
   calls.length = 0;
@@ -168,7 +170,7 @@ async function testReplayGuard() {
     messageTimestamp: processStartedAt + 5,
     id: 'RECONNECT_1',
   });
-  await handleMessage(reconnectWindowMsg, deps);
+  await handleMessage(reconnectWindowMsg, null, deps);
   assert('Replay guard allows message from reconnect window (threshold fixed at process start)', calls.length === 1,
     `calls=${calls.length}`);
   calls.length = 0;
@@ -248,23 +250,23 @@ async function testPreFilters() {
 
   // fromMe = true → ignored, no processIncomingMessage
   const fromMeMsg = makeWAMsg({ fromMe: true });
-  await handleMessage(fromMeMsg, deps);
+  await handleMessage(fromMeMsg, null, deps);
   assert('fromMe=true message is ignored', calls.length === 0);
 
   // Group JID → ignored
   const groupMsg = makeWAMsg({ remoteJid: '120363000000000001@g.us' });
-  await handleMessage(groupMsg, deps);
+  await handleMessage(groupMsg, null, deps);
   assert('Group JID message is ignored', calls.length === 0);
 
   // No message field → ignored
   const emptyMsg = makeWAMsg({ message: null });
-  await handleMessage(emptyMsg, deps);
+  await handleMessage(emptyMsg, null, deps);
   assert('Message with null message field is ignored', calls.length === 0);
 
   // No key.id → ignored
   const noId = makeWAMsg({ id: '' });
   noId.key.id = '';
-  await handleMessage(noId, deps);
+  await handleMessage(noId, null, deps);
   assert('Message with empty id is ignored', calls.length === 0);
 
   fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -291,12 +293,12 @@ async function testDedup() {
   const msg1 = makeWAMsg({ id: msgId, messageTimestamp: processStartedAt + 5 });
 
   // First call: tryMarkProcessed returns true → processIncomingMessage called
-  await handleMessage(msg1, deps);
+  await handleMessage(msg1, null, deps);
   assert('Dedup: first message is processed', calls.length === 1, `calls=${calls.length}`);
 
   // Second call: same msgId → tryMarkProcessed returns false → not processed again
   const msg2 = makeWAMsg({ id: msgId, messageTimestamp: processStartedAt + 5 });
-  await handleMessage(msg2, deps);
+  await handleMessage(msg2, null, deps);
   assert('Dedup: duplicate message is discarded', calls.length === 1, `calls=${calls.length}`);
 
   // Different business, same msg_id → independent dedup per business
@@ -311,7 +313,7 @@ async function testDedup() {
   // deleteProcessedMessage allows reprocessing
   deleteProcessedMessage(BAILEYS_BUSINESS_ID, msgId);
   const msg3 = makeWAMsg({ id: msgId, messageTimestamp: processStartedAt + 5 });
-  await handleMessage(msg3, deps);
+  await handleMessage(msg3, null, deps);
   assert('Dedup: after deleteProcessedMessage, same message can be reprocessed', calls.length === 2,
     `calls=${calls.length}`);
 
@@ -339,7 +341,7 @@ async function testRemoteJid() {
 
   const jid = '5491199999999@s.whatsapp.net';
   const msg = makeWAMsg({ remoteJid: jid, messageTimestamp: processStartedAt + 10 });
-  await handleMessage(msg, deps);
+  await handleMessage(msg, null, deps);
 
   assert('waCredentials.provider is baileys', receivedCreds[0]?.provider === 'baileys',
     receivedCreds[0]?.provider);
@@ -597,14 +599,14 @@ async function testDuplicatePrevention() {
 
   // Baileys delivers same message: tryMarkProcessed returns false → no response
   const msg = makeWAMsg({ id: msgId, messageTimestamp: ts });
-  await handleMessage(msg, deps);
+  await handleMessage(msg, null, deps);
   assert('Dedup: Baileys loses when Meta already processed same msg (no duplicate response)',
     calls.length === 0, `calls=${calls.length}`);
 
   // Reverse: Baileys wins first
   const msgId2 = 'DUP_SCENARIO2_' + Date.now();
   const msg2 = makeWAMsg({ id: msgId2, messageTimestamp: ts });
-  await handleMessage(msg2, deps);
+  await handleMessage(msg2, null, deps);
   assert('Dedup: Baileys wins first (processes message)', calls.length === 1, `calls=${calls.length}`);
 
   // Meta tries same message: tryMarkProcessed returns false → Meta would skip
@@ -812,7 +814,7 @@ async function testStoppedStateGuard() {
   _forTest.setState('STOPPED');
 
   const msg = makeWAMsg({ id: 'STOPPED_TEST_1' });
-  await handleMessage(msg, deps);
+  await handleMessage(msg, null, deps);
 
   assert('handleMessage returns without calling processIncomingMessage when state=STOPPED',
     calls.length === 0, `calls=${calls.length}`);
@@ -860,20 +862,195 @@ async function testJidFiltering() {
     deleteProcessedMessage: dpm,
   };
 
-  // @lid JID — WhatsApp Linked Account ID (privacy feature) — not a phone number
+  // @lid JID — no remoteJidAlt, no mapping store (_socket=null) → unresolvable, dropped
   const lidMsg = makeWAMsg({ remoteJid: 'LIDABCDEF12345678@lid', messageTimestamp: processStartedAt + 10 });
-  await handleMessage(lidMsg, deps);
-  assert('@lid JID: processIncomingMessage NOT called', calls.length === 0, `calls=${calls.length}`);
-  assert('@lid JID: baileys-jid-skip logged',
-    errors.some(e => e.tag === 'baileys-jid-skip'), `tags=${errors.map(e => e.tag).join(',')}`);
-  assert('@lid JID: message NOT marked as processed (no dedup entry)',
+  await handleMessage(lidMsg, null, deps);
+  assert('@lid JID (no alt): processIncomingMessage NOT called', calls.length === 0, `calls=${calls.length}`);
+  assert('@lid JID (no alt): baileys-jid-unresolvable logged',
+    errors.some(e => e.tag === 'baileys-jid-unresolvable'), `tags=${errors.map(e => e.tag).join(',')}`);
+  assert('@lid JID (no alt): message NOT marked as processed (no dedup entry)',
     tms(BAILEYS_BUSINESS_ID, lidMsg.key.id) === true, // true = first insert = was NOT previously marked
     'LID message was incorrectly marked as processed');
   errors.length = 0;
 
+  // @lid JID — valid remoteJidAlt present → resolves to real PN, processes normally
+  calls.length = 0;
+  const lidMsgWithAlt = makeWAMsg({
+    remoteJid:    'LIDABCDEF12345678@lid',
+    remoteJidAlt: '5491100000099@s.whatsapp.net',
+    messageTimestamp: processStartedAt + 10,
+  });
+  await handleMessage(lidMsgWithAlt, null, deps);
+  assert('@lid JID (with remoteJidAlt): processIncomingMessage called', calls.length === 1, `calls=${calls.length}`);
+  assert('@lid JID (with remoteJidAlt): baileys-lid-resolved logged',
+    errors.some(e => e.tag === 'baileys-lid-resolved'), `tags=${errors.map(e => e.tag).join(',')}`);
+  assert('@lid JID (with remoteJidAlt): source=remoteJidAlt in log',
+    errors.some(e => e.tag === 'baileys-lid-resolved' && e.data.message.includes('source=remoteJidAlt')),
+    `msg=${errors.find(e => e.tag === 'baileys-lid-resolved')?.data.message}`);
+  assert('@lid JID (with remoteJidAlt): customerPhone is correct digits',
+    calls[0]?.[2]?.customerPhone === '5491100000099',
+    `customerPhone=${calls[0]?.[2]?.customerPhone}`);
+  assert('@lid JID (with remoteJidAlt): waCredentials.remoteJid is original @lid',
+    calls[0]?.[1]?.remoteJid === 'LIDABCDEF12345678@lid',
+    `remoteJid=${calls[0]?.[1]?.remoteJid}`);
+  errors.length = 0; calls.length = 0;
+
+  // @lid JID — remoteJidAlt with device suffix (:0) → phone normalised correctly
+  const lidMsgDeviceSuffix = makeWAMsg({
+    remoteJid:    'LIDABCDEF99999999@lid',
+    remoteJidAlt: '5491100000077:0@s.whatsapp.net',
+    messageTimestamp: processStartedAt + 10,
+  });
+  await handleMessage(lidMsgDeviceSuffix, null, deps);
+  assert('@lid JID (device suffix :0): customerPhone strips :0',
+    calls[0]?.[2]?.customerPhone === '5491100000077',
+    `customerPhone=${calls[0]?.[2]?.customerPhone}`);
+  errors.length = 0; calls.length = 0;
+
+  // @lid JID — no remoteJidAlt, getPNForLID returns pn with device suffix → customerPhone stripped
+  {
+    const mockSock = {
+      signalRepository: {
+        lidMapping: {
+          getPNForLID: async () => '5491100000077:0@s.whatsapp.net',
+        },
+      },
+    };
+    const lidMsgMapping = makeWAMsg({
+      remoteJid: 'LIDABCDEF77777777@lid',
+      messageTimestamp: processStartedAt + 10,
+    });
+    await handleMessage(lidMsgMapping, mockSock, deps);
+    assert('@lid JID (mapping store hit): processIncomingMessage called', calls.length === 1, `calls=${calls.length}`);
+    assert('@lid JID (mapping store hit): baileys-lid-resolved logged',
+      errors.some(e => e.tag === 'baileys-lid-resolved'), `tags=${errors.map(e => e.tag).join(',')}`);
+    assert('@lid JID (mapping store hit): source=mapping_store in log',
+      errors.some(e => e.tag === 'baileys-lid-resolved' && e.data.message.includes('source=mapping_store')),
+      `msg=${errors.find(e => e.tag === 'baileys-lid-resolved')?.data.message}`);
+    assert('@lid JID (mapping store hit): customerPhone strips device suffix',
+      calls[0]?.[2]?.customerPhone === '5491100000077',
+      `customerPhone=${calls[0]?.[2]?.customerPhone}`);
+    errors.length = 0; calls.length = 0;
+  }
+
+  // @lid JID — no remoteJidAlt, getPNForLID returns null → unresolvable, dropped
+  {
+    const mockSockNull = {
+      signalRepository: {
+        lidMapping: {
+          getPNForLID: async () => null,
+        },
+      },
+    };
+    const lidMsgNullMapping = makeWAMsg({
+      remoteJid: 'LIDABCDEF88888888@lid',
+      messageTimestamp: processStartedAt + 10,
+    });
+    await handleMessage(lidMsgNullMapping, mockSockNull, deps);
+    assert('@lid JID (mapping null): processIncomingMessage NOT called', calls.length === 0, `calls=${calls.length}`);
+    assert('@lid JID (mapping null): baileys-jid-unresolvable logged',
+      errors.some(e => e.tag === 'baileys-jid-unresolvable'), `tags=${errors.map(e => e.tag).join(',')}`);
+    errors.length = 0; calls.length = 0;
+  }
+
+  // @lid JID — no remoteJidAlt, getPNForLID throws → lookup-error logged, dropped
+  {
+    const mockSockThrow = {
+      signalRepository: {
+        lidMapping: {
+          getPNForLID: async () => { throw new Error('simulated LID mapping failure'); },
+        },
+      },
+    };
+    const lidMsgThrow = makeWAMsg({
+      remoteJid: 'LIDABCDEF99999900@lid',
+      messageTimestamp: processStartedAt + 10,
+    });
+    await handleMessage(lidMsgThrow, mockSockThrow, deps);
+    assert('@lid JID (mapping throws): processIncomingMessage NOT called', calls.length === 0, `calls=${calls.length}`);
+    assert('@lid JID (mapping throws): baileys-lid-lookup-error logged',
+      errors.some(e => e.tag === 'baileys-lid-lookup-error'), `tags=${errors.map(e => e.tag).join(',')}`);
+    assert('@lid JID (mapping throws): baileys-jid-unresolvable also logged',
+      errors.some(e => e.tag === 'baileys-jid-unresolvable'), `tags=${errors.map(e => e.tag).join(',')}`);
+    errors.length = 0; calls.length = 0;
+  }
+
+  // Dual-socket: sockA receives @lid event, sockB is now _socket (reconnected, CONNECTED).
+  // Verify: (a) LID mapping queried only on sockA (event socket).
+  //         (b) waCredentials.socket resolves to sockB (lazy getter reads _state=CONNECTED).
+  {
+    let sockAQueried = false;
+    let sockBQueried = false;
+    const sockA = {
+      signalRepository: {
+        lidMapping: {
+          getPNForLID: async () => { sockAQueried = true; return '5491100000011:0@s.whatsapp.net'; },
+        },
+      },
+    };
+    const sockB = {
+      signalRepository: {
+        lidMapping: {
+          getPNForLID: async () => { sockBQueried = true; return '9999999999@s.whatsapp.net'; },
+        },
+      },
+    };
+    _forTest.setState('CONNECTED');
+    _forTest.setSocket(sockB);  // sockB is active global socket (reconnected + open)
+    const lidMsgDual = makeWAMsg({
+      remoteJid: 'LIDABCDEF11111111@lid',
+      messageTimestamp: processStartedAt + 10,
+    });
+    await handleMessage(lidMsgDual, sockA, deps);  // sockA emitted this event
+    // Read lazy getter while _state=CONNECTED and _socket=sockB (before reset)
+    const resolvedSendSocket = calls[0]?.[1]?.socket;
+    _forTest.setState('IDLE');
+    _forTest.setSocket(null);
+
+    assert('@lid dual-socket: LID looked up only on sockA (event socket)', sockAQueried && !sockBQueried,
+      `sockAQueried=${sockAQueried} sockBQueried=${sockBQueried}`);
+    assert('@lid dual-socket: processIncomingMessage called', calls.length === 1, `calls=${calls.length}`);
+    assert('@lid dual-socket: customerPhone from sockA mapping',
+      calls[0]?.[2]?.customerPhone === '5491100000011',
+      `customerPhone=${calls[0]?.[2]?.customerPhone}`);
+    assert('@lid dual-socket: waCredentials.socket is sockB (lazy getter — CONNECTED state)',
+      resolvedSendSocket === sockB,
+      `socket match: ${resolvedSendSocket === sockB}`);
+    errors.length = 0; calls.length = 0;
+  }
+
+  // Socket state guard: _state=CONNECTING → waCredentials.socket returns null (not-yet-open socket blocked).
+  // Scenario: Baileys created sockB (makeWASocket returned) but connection.update 'open' hasn't fired yet.
+  // Any send attempt gets clean "socket not available" rather than a Baileys internal error.
+  {
+    const halfOpenSock = { signalRepository: { lidMapping: { getPNForLID: async () => null } } };
+    _forTest.setState('CONNECTING');
+    _forTest.setSocket(halfOpenSock);
+    const connectingMsg = makeWAMsg({ remoteJid: '5491100000022@s.whatsapp.net', messageTimestamp: processStartedAt + 10 });
+    await handleMessage(connectingMsg, null, deps);
+    // Read socket from waCredentials while still in CONNECTING state
+    const socketWhileConnecting = calls[0]?.[1]?.socket;
+    _forTest.setState('IDLE');
+    _forTest.setSocket(null);
+
+    assert('CONNECTING state: processIncomingMessage still called', calls.length === 1, `calls=${calls.length}`);
+    assert('CONNECTING state: waCredentials.socket is null (send blocked until CONNECTED)',
+      socketWhileConnecting === null,
+      `socket=${socketWhileConnecting}`);
+    errors.length = 0; calls.length = 0;
+  }
+
+  // Normal @s.whatsapp.net with eventSock=null — socket not needed for PN resolution
+  {
+    const normalEvSock = makeWAMsg({ remoteJid: '5491100000055@s.whatsapp.net', messageTimestamp: processStartedAt + 10 });
+    await handleMessage(normalEvSock, null, deps);
+    assert('@s.whatsapp.net (eventSock=null): processIncomingMessage called', calls.length === 1, `calls=${calls.length}`);
+    errors.length = 0; calls.length = 0;
+  }
+
   // @newsletter JID — also non-peer, should be skipped
   const nlMsg = makeWAMsg({ remoteJid: '123456789@newsletter', messageTimestamp: processStartedAt + 10 });
-  await handleMessage(nlMsg, deps);
+  await handleMessage(nlMsg, null, deps);
   assert('@newsletter JID: processIncomingMessage NOT called', calls.length === 0, `calls=${calls.length}`);
   assert('@newsletter JID: baileys-jid-skip logged',
     errors.some(e => e.tag === 'baileys-jid-skip'), `tags=${errors.map(e => e.tag).join(',')}`);
@@ -881,7 +1058,7 @@ async function testJidFiltering() {
 
   // @s.whatsapp.net JID — should pass through to processIncomingMessage
   const validMsg = makeWAMsg({ remoteJid: '5491100000001@s.whatsapp.net', messageTimestamp: processStartedAt + 10 });
-  await handleMessage(validMsg, deps);
+  await handleMessage(validMsg, null, deps);
   assert('@s.whatsapp.net JID: processIncomingMessage called', calls.length === 1, `calls=${calls.length}`);
 
   fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -1165,7 +1342,7 @@ async function testDedupRollback() {
   const msg1 = makeWAMsg({ id: 'BAILEYS_ROLLBACK_1', messageTimestamp: ts });
 
   // Baileys handleMessage: marks msgId, processIncomingMessage throws, rollback deletes it
-  await _forTest.handleMessage(msg1, deps)
+  await _forTest.handleMessage(msg1, null, deps)
     .catch(() => {}); // error is rethrown — catch here to let test continue
 
   // After rollback: same msgId should be insertable again (first insert = true)
@@ -1195,7 +1372,7 @@ async function testDedupRollback() {
     deleteProcessedMessage,
   };
   const msg2 = makeWAMsg({ id: 'BAILEYS_ROLLBACK_2', messageTimestamp: ts });
-  await _forTest.handleMessage(msg2, depsNoBiz);
+  await _forTest.handleMessage(msg2, null, depsNoBiz);
   const canRetryBiz = tryMarkProcessed(BAILEYS_BUSINESS_ID, 'BAILEYS_ROLLBACK_2');
   assert('Baileys rollback: msgId deleted when getBusinessById returns null (retryable)', canRetryBiz === true,
     `canRetryBiz=${canRetryBiz}`);
