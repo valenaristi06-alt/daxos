@@ -103,7 +103,8 @@ const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserByI
   businessOwnerAlertRecentlySent, recordRuntimeConfigAudit,
   getLastMailTest, recordMailTest,
   cancelBooking,
-  getAgendaServices, deactivateAgendaService, createAgendaService,
+  getAgendaServices, getAgendaServiceById, getFutureAppointmentsForService,
+  deactivateAgendaService, createAgendaService,
   getUpcomingAppointmentsForPhone, getAppointmentsForBusiness, getAppointmentById,
   createAppointment, cancelAppointment, rescheduleAppointment,
   rescheduleAppointmentByOwner, setAgendaEnabled, setAgendaCancelMinBefore,
@@ -1117,8 +1118,16 @@ app.post('/api/agenda/services', requireAuth, (req, res) => {
 app.delete('/api/agenda/services/:id', requireAuth, (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
-  deactivateAgendaService(Number(req.params.id), user.business_id);
-  res.json({ ok: true });
+  const biz = getBusinessById(user.business_id);
+  if (!_agendaAccessOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
+  const id = Number(req.params.id);
+  const svc = getAgendaServiceById(id, user.business_id);
+  if (!svc) return res.status(404).json({ error: 'Servicio no encontrado.' });
+  const future = getFutureAppointmentsForService(id, user.business_id);
+  if (future.length > 0)
+    return res.status(400).json({ error: `Este servicio tiene ${future.length} turno${future.length === 1 ? '' : 's'} próximo${future.length === 1 ? '' : 's'}. Cancelalos antes de eliminarlo.` });
+  deactivateAgendaService(id, user.business_id);
+  res.json({ ok: true, services: getAgendaServices(user.business_id) });
 });
 
 app.get('/api/agenda/appointments', requireAuth, (req, res) => {

@@ -453,6 +453,53 @@
     .agenda-state-wrap h2 { font-family: var(--serif); font-size: 22px; font-weight: 400; margin: 0 0 10px; color: var(--text); }
     .agenda-state-wrap p  { color: var(--muted-2); font-size: 14px; margin: 0 0 24px; line-height: 1.6; }
 
+    /* ── Activation step blocks ──────────────────────────────────────────── */
+    .activate-step-block {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .activate-step-hdr {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      background: var(--surface-2, rgba(0,0,0,.03));
+      border-bottom: 1px solid var(--border);
+    }
+    .activate-step-num {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: var(--muted-2, #999); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    @media (max-width: 767px) {
+      #view-disabled .icard {
+        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 80px) !important;
+      }
+    }
+    .activate-step-hdr strong { font-size: 15px; font-weight: 600; color: var(--text); }
+    .activate-step-body { padding: 14px; }
+    .dur-chip {
+      display: inline-flex; align-items: center;
+      padding: 7px 13px; border: 1.5px solid var(--border); border-radius: 20px;
+      background: transparent; color: var(--text); font-size: 14px;
+      cursor: pointer; transition: all 0.15s; white-space: nowrap;
+    }
+    .dur-chip.active { background: var(--accent,#2e7d32); color: #fff; border-color: var(--accent,#2e7d32); }
+    .activate-svc-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px;
+    }
+    .activate-svc-row:last-child { border-bottom: none; }
+    .activate-svc-del {
+      background: none; border: none; color: var(--muted-2); cursor: pointer;
+      font-size: 20px; padding: 0 2px; line-height: 1; flex-shrink: 0;
+    }
+    .activate-svc-del:hover { color: var(--warn,#c05000); }
+
     /* ── FAB ─────────────────────────────────────────────────────────────── */
     .add-apt-fab {
       position: fixed;
@@ -999,37 +1046,58 @@
     <div id="view-disabled" style="display:none">
       <h1 class="page-title">Agenda</h1>
       <div class="agenda-state-wrap">
-        <div class="icard" style="max-width:480px;text-align:left">
-          <span class="state-icon">📅</span>
-          <h2 style="margin-bottom:8px">Activá la agenda</h2>
-          <p style="color:var(--text-secondary);margin-bottom:20px">Tu asistente va a proponer horarios disponibles, confirmar turnos y cancelar o reprogramar cuando el cliente lo pida.<br>Solo tres pasos para empezar.</p>
-          <ol id="activate-steps" style="list-style:none;padding:0;margin:0 0 20px;display:flex;flex-direction:column;gap:12px">
-            <li id="step-hours" style="display:flex;align-items:center;gap:10px">
-              <span id="step-hours-check" style="font-size:18px;min-width:22px;text-align:center">○</span>
-              <span>Cargá tus <a href="/dashboard.html#card-horarios" style="color:var(--accent)">horarios de atención</a></span>
-            </li>
-            <li id="step-service" style="display:flex;align-items:center;gap:10px">
-              <span id="step-service-check" style="font-size:18px;min-width:22px;text-align:center">○</span>
-              <span id="step-service-label">Creá al menos un servicio — podés hacerlo abajo</span>
-            </li>
-            <li style="display:flex;align-items:center;gap:10px;opacity:0.5" id="step-activate-row">
-              <span style="font-size:18px;min-width:22px;text-align:center">→</span>
-              <span>Activá la agenda</span>
-            </li>
-          </ol>
-          <p id="activate-block-reason" style="color:var(--warn,#c05000);font-size:13px;margin-bottom:12px;display:none"></p>
-          <button class="btn-agenda-add" id="btn-activate-agenda" type="button" disabled style="opacity:0.5;cursor:not-allowed">Activar</button>
-          <!-- Inline service form for step 2 -->
-          <div id="activate-service-form" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
-            <p style="font-size:13px;color:var(--text-secondary);margin-bottom:10px">Agregá un servicio para continuar:</p>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <input id="activate-svc-name" type="text" placeholder="Nombre del servicio" style="flex:1;min-width:140px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;background:var(--surface);color:var(--text)">
-              <input id="activate-svc-dur" type="number" min="5" max="480" placeholder="Min" style="width:70px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;background:var(--surface);color:var(--text)">
-              <button id="btn-activate-svc-add" type="button" class="btn-agenda-add" style="white-space:nowrap">Agregar</button>
+        <div class="icard" style="max-width:480px;text-align:left;padding:24px 20px">
+          <span class="state-icon" style="font-size:28px;margin-bottom:10px">📅</span>
+          <h2 style="margin-bottom:6px">Activá la agenda</h2>
+          <p style="margin-bottom:18px">Tu asistente va a proponer horarios, confirmar turnos y cancelar cuando el cliente lo pida.</p>
+
+          <!-- PASO 1 -->
+          <div class="activate-step-block">
+            <div class="activate-step-hdr">
+              <span class="activate-step-num" id="step1-num">1</span>
+              <strong>Tus horarios de atención</strong>
             </div>
-            <p id="activate-svc-error" style="color:var(--warn,#c05000);font-size:12px;margin-top:6px;display:none"></p>
-            <div id="activate-svc-list" style="margin-top:10px;font-size:13px;color:var(--text-secondary)"></div>
+            <div class="activate-step-body" id="activate-body-1"><!-- filled by JS --></div>
           </div>
+
+          <!-- PASO 2 -->
+          <div class="activate-step-block">
+            <div class="activate-step-hdr">
+              <span class="activate-step-num" id="step2-num">2</span>
+              <strong>¿Qué ofrecés?</strong>
+            </div>
+            <div class="activate-step-body">
+              <input id="activate-svc-name" type="text" placeholder="Ej: Corte de pelo" autocomplete="off"
+                style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);margin-bottom:12px">
+              <p style="font-size:13px;color:var(--text-secondary);margin:0 0 8px">¿Cuánto dura?</p>
+              <div id="activate-dur-chips" style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px">
+                <button class="dur-chip" data-min="15" type="button">15 min</button>
+                <button class="dur-chip active" data-min="30" type="button">30 min</button>
+                <button class="dur-chip" data-min="45" type="button">45 min</button>
+                <button class="dur-chip" data-min="60" type="button">1 hora</button>
+                <button class="dur-chip" data-min="90" type="button">1 h 30</button>
+                <button class="dur-chip" data-min="120" type="button">2 horas</button>
+              </div>
+              <button id="btn-activate-svc-add" type="button" class="btn-agenda-add">Agregar</button>
+              <p id="activate-svc-error" style="color:var(--warn,#c05000);font-size:12px;margin-top:8px;display:none"></p>
+              <div id="activate-svc-list" style="margin-top:10px"></div>
+              <p style="font-size:12px;color:var(--muted-2);margin:10px 0 0;border-top:1px solid var(--border);padding-top:10px">Podés agregar más después en Agenda</p>
+            </div>
+          </div>
+
+          <!-- PASO 3 -->
+          <div class="activate-step-block">
+            <div class="activate-step-hdr">
+              <span class="activate-step-num" id="step3-num">3</span>
+              <strong>Activar</strong>
+            </div>
+            <div class="activate-step-body">
+              <button class="btn-agenda-add" id="btn-activate-agenda" type="button" disabled
+                style="opacity:0.4;cursor:not-allowed;width:100%">Activar</button>
+              <p id="activate-block-reason" style="font-size:13px;color:var(--muted-2);margin:10px 0 0;display:none"></p>
+            </div>
+          </div>
+
         </div>
       </div>
       <div id="view-disabled-apts" class="upsell-apts-list" style="max-width:480px;margin:0 auto"></div>
@@ -2173,68 +2241,136 @@ document.getElementById('btn-retry').addEventListener('click', () => window.loca
     } catch { return false; }
   }
 
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
   async function initActivationView(biz) {
-    const hasHours = _hasOpenDay(biz.business_hours);
+    let hasHours = _hasOpenDay(biz.business_hours);
     let svcs = [];
     try {
       const r = await fetch('/api/agenda/services');
       if (r.ok) svcs = await r.json();
     } catch (_) {}
-    const hasService = svcs.length > 0;
 
-    const checkHours = document.getElementById('step-hours-check');
-    const checkSvc   = document.getElementById('step-service-check');
-    checkHours.textContent = hasHours ? '✓' : '○';
-    checkHours.style.color = hasHours ? 'var(--accent,#2e7d32)' : '';
-    checkSvc.textContent   = hasService ? '✓' : '○';
-    checkSvc.style.color   = hasService ? 'var(--accent,#2e7d32)' : '';
-    document.getElementById('step-activate-row').style.opacity = (hasHours && hasService) ? '1' : '0.5';
+    let selectedDur = 30;
 
-    // hide inline service form if already has services
-    document.getElementById('activate-service-form').style.display = hasService ? 'none' : '';
+    const STEP_ORANGE = '#e07000';
+    const STEP_GREY   = 'var(--muted-2,#999)';
 
-    const btn    = document.getElementById('btn-activate-agenda');
-    const reason = document.getElementById('activate-block-reason');
+    function updateStepBadges() {
+      const steps = [
+        { id: 'step1-num', n: '1', done: hasHours },
+        { id: 'step2-num', n: '2', done: svcs.length > 0 },
+        { id: 'step3-num', n: '3', done: hasHours && svcs.length > 0 },
+      ];
+      let foundCurrent = false;
+      steps.forEach(s => {
+        const el = document.getElementById(s.id);
+        if (s.done) {
+          el.textContent = '✓';
+          el.style.background = STEP_ORANGE;
+        } else if (!foundCurrent) {
+          foundCurrent = true;
+          el.textContent = s.n;
+          el.style.background = STEP_ORANGE;
+        } else {
+          el.textContent = s.n;
+          el.style.background = STEP_GREY;
+        }
+      });
+    }
+
+    function renderStep1() {
+      const body = document.getElementById('activate-body-1');
+      if (hasHours) {
+        body.innerHTML = '<p style="color:var(--accent,#2e7d32);font-weight:600;font-size:15px;margin:0">Listo ✓</p>';
+      } else {
+        body.innerHTML = '<a href="/dashboard.html#card-horarios" class="btn-agenda-add" style="display:inline-flex;text-decoration:none">Cargar mis horarios</a>';
+      }
+    }
+
+    function renderSvcList() {
+      const el = document.getElementById('activate-svc-list');
+      if (!svcs.length) { el.innerHTML = ''; return; }
+      el.innerHTML = svcs.map(s =>
+        `<div class="activate-svc-row" data-id="${s.id}">` +
+        `<span>${escHtml(s.name)} <span style="color:var(--muted-2);font-size:12px">— ${escHtml(formatMin(s.duration_min))}</span></span>` +
+        `<button class="activate-svc-del" data-id="${s.id}" title="Quitar" type="button">×</button>` +
+        `</div>`
+      ).join('');
+      el.querySelectorAll('.activate-svc-del').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const svcId = Number(btn.dataset.id);
+          const svc = svcs.find(s => s.id === svcId);
+          if (!confirm(`¿Quitás "${svc?.name}"?`)) return;
+          btn.disabled = true;
+          const errEl = document.getElementById('activate-svc-error');
+          const r = await fetch(`/api/agenda/services/${svcId}`, { method: 'DELETE' });
+          if (r.ok) {
+            const data = await r.json().catch(() => ({}));
+            svcs = Array.isArray(data.services) ? data.services : svcs.filter(s => s.id !== svcId);
+            renderSvcList();
+            refreshBtn();
+            updateStepBadges();
+          } else {
+            const d = await r.json().catch(() => ({}));
+            errEl.textContent = d.error || 'Error al quitar el servicio.';
+            errEl.style.display = '';
+            btn.disabled = false;
+          }
+        });
+      });
+    }
 
     function refreshBtn() {
+      const btn    = document.getElementById('btn-activate-agenda');
+      const reason = document.getElementById('activate-block-reason');
       const ok = hasHours && svcs.length > 0;
       btn.disabled = !ok;
-      btn.style.opacity = ok ? '1' : '0.5';
+      btn.style.opacity = ok ? '1' : '0.4';
       btn.style.cursor  = ok ? 'pointer' : 'not-allowed';
-      document.getElementById('step-activate-row').style.opacity = ok ? '1' : '0.5';
       if (!ok) {
-        const reasons = [];
-        if (!hasHours) reasons.push('Falta cargar los horarios de atención');
-        if (svcs.length === 0) reasons.push('Falta crear al menos un servicio');
-        reason.textContent = reasons.join(' · ');
-        reason.style.display = 'block';
+        if (!hasHours && svcs.length === 0) reason.textContent = 'Completá el paso 1 y el paso 2 para activar';
+        else if (!hasHours)                  reason.textContent = 'Completá el paso 1 para activar';
+        else                                 reason.textContent = 'Completá el paso 2 para activar';
+        reason.style.display = '';
       } else {
         reason.style.display = 'none';
       }
     }
-    refreshBtn();
 
-    // Inline service add
+    renderStep1();
+    renderSvcList();
+    refreshBtn();
+    updateStepBadges();
+
+    // Duration chips
+    document.querySelectorAll('#activate-dur-chips .dur-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('#activate-dur-chips .dur-chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        selectedDur = Number(chip.dataset.min);
+      });
+    });
+
+    // Add service
     document.getElementById('btn-activate-svc-add').addEventListener('click', async () => {
-      const name = document.getElementById('activate-svc-name').value.trim();
-      const dur  = parseInt(document.getElementById('activate-svc-dur').value, 10);
+      const name  = document.getElementById('activate-svc-name').value.trim();
       const errEl = document.getElementById('activate-svc-error');
       if (!name) { errEl.textContent = 'Escribí el nombre del servicio.'; errEl.style.display = ''; return; }
-      if (!dur || dur < 5) { errEl.textContent = 'Duración mínima: 5 min.'; errEl.style.display = ''; return; }
       errEl.style.display = 'none';
       const r = await fetch('/api/agenda/services', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, duration_min: dur }),
+        body: JSON.stringify({ name, duration_min: selectedDur }),
       });
       if (r.ok) {
         const data = await r.json();
         svcs = Array.isArray(data) ? data : (data.services || []);
         document.getElementById('activate-svc-name').value = '';
-        document.getElementById('activate-svc-dur').value = '';
-        document.getElementById('activate-service-form').style.display = svcs.length > 0 ? 'none' : '';
-        document.getElementById('step-service-check').textContent = '✓';
-        document.getElementById('step-service-check').style.color = 'var(--accent,#2e7d32)';
+        renderSvcList();
         refreshBtn();
+        updateStepBadges();
       } else {
         const d = await r.json().catch(() => ({}));
         errEl.textContent = d.error || 'Error al agregar servicio.';
@@ -2242,22 +2378,53 @@ document.getElementById('btn-retry').addEventListener('click', () => window.loca
       }
     });
 
-    btn.addEventListener('click', async () => {
+    // Activate
+    document.getElementById('btn-activate-agenda').addEventListener('click', async () => {
+      const btn    = document.getElementById('btn-activate-agenda');
+      const reason = document.getElementById('activate-block-reason');
       btn.disabled = true; btn.textContent = 'Activando…';
       const r = await fetch('/api/business/agenda-enabled', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: true }),
       });
       if (r.ok) {
-        location.reload();
+        btn.style.display = 'none';
+        reason.style.color = 'var(--accent,#2e7d32)';
+        reason.style.fontWeight = '500';
+        reason.textContent = 'Listo, tu asistente ya ofrece turnos. Probalo escribiéndole al WhatsApp de tu negocio.';
+        reason.style.display = '';
+        setTimeout(() => location.reload(), 2500);
       } else {
         const d = await r.json().catch(() => ({}));
+        reason.style.color = 'var(--warn,#c05000)';
+        reason.style.fontWeight = '';
         reason.textContent = d.error || 'Error al activar.';
-        reason.style.display = 'block';
+        reason.style.display = '';
         btn.disabled = false; btn.textContent = 'Activar';
         refreshBtn();
+        updateStepBadges();
       }
     });
+
+    // Refresh step 1 when user returns to this tab (may have set hours in dashboard)
+    async function refreshHoursState() {
+      try {
+        const r = await fetch('/api/business');
+        if (!r.ok) return;
+        const b = await r.json();
+        const newHasHours = _hasOpenDay(b.business_hours);
+        if (newHasHours !== hasHours) {
+          hasHours = newHasHours;
+          renderStep1();
+          refreshBtn();
+          updateStepBadges();
+        }
+      } catch (_) {}
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') refreshHoursState();
+    });
+    window.addEventListener('focus', refreshHoursState);
   }
 
   async function loadUpsellApts(containerId = 'view-upsell-apts') {
