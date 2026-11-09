@@ -449,6 +449,124 @@ app.get('/register', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/register.html'));
 });
 
+// ── Compressed static file server (gzip + brotli, CSS versioning) ───────────
+{
+  const zlib         = require('zlib');
+  const PUBLIC_DIR_S = path.resolve(path.join(__dirname, '../public'));
+  const COMPRESS_EXT = new Set(['.html', '.css', '.js', '.svg', '.json']);
+  const STATIC_MIME  = {
+    '.html': 'text/html; charset=utf-8',
+    '.css':  'text/css; charset=utf-8',
+    '.js':   'text/javascript; charset=utf-8',
+    '.svg':  'image/svg+xml',
+    '.json': 'application/json; charset=utf-8',
+  };
+  const compressCache = new Map(); // key → {etag, raw, gzip, br}; max 200 entries
+  const cssHashCache  = new Map(); // filePath → {mtime, hash}
+
+  function cacheSet(key, entry) {
+    if (compressCache.size >= 200) compressCache.delete(compressCache.keys().next().value);
+    compressCache.set(key, entry);
+  }
+
+  function getCssHash(p) {
+    try {
+      const st = fs.statSync(p);
+      const c  = cssHashCache.get(p);
+      if (c && c.mtime === st.mtimeMs) return c.hash;
+      const h = crypto.createHash('sha1').update(fs.readFileSync(p)).digest('hex').slice(0, 10);
+      cssHashCache.set(p, { mtime: st.mtimeMs, hash: h });
+      return h;
+    } catch { return null; }
+  }
+
+  function injectCssVersions(html) {
+    return html.replace(
+      /(<link\b[^>]*\bhref=")(\/?[^"?#\s]+\.css)(")/g,
+      (m, pre, ref, post) => {
+        if (/^(https?:|\/\/)/.test(ref)) return m;
+        const h = getCssHash(path.join(PUBLIC_DIR_S, ref.startsWith('/') ? ref.slice(1) : ref));
+        return h ? `${pre}${ref}?v=${h}${post}` : m;
+      }
+    );
+  }
+
+  function buildEntry(raw, cb) {
+    const etag = `"${crypto.createHash('md5').update(raw).digest('hex')}"`;
+    let n = 2, gz = null, br = null;
+    function done() { if (!--n) cb({ etag, raw, gzip: gz, br }); }
+    zlib.gzip(raw, (e, b) => { gz = e ? null : b; done(); });
+    zlib.brotliCompress(raw, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 } }, (e, b) => { br = e ? null : b; done(); });
+  }
+
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    const urlPath = req.path;
+    const ext     = path.extname(urlPath).toLowerCase();
+    if (!COMPRESS_EXT.has(ext)) return next();
+
+    // Security: block path traversal (resolved path must be inside public/)
+    const resolved = path.resolve(path.join(PUBLIC_DIR_S, urlPath.replace(/^\//, '')));
+    if (!resolved.startsWith(PUBLIC_DIR_S + path.sep)) return res.status(404).end();
+
+    fs.stat(resolved, (err, stat) => {
+      if (err || !stat.isFile()) return next();
+
+      const isHtml    = ext === '.html';
+      const isCssVers = ext === '.css' && !!req.query.v;
+      const cc        = isCssVers ? 'public, max-age=31536000, immutable' : 'public, max-age=0';
+
+      function serve(entry) {
+        if (req.headers['if-none-match'] === entry.etag) {
+          res.setHeader('ETag', entry.etag);
+          res.setHeader('Cache-Control', cc);
+          res.setHeader('Vary', 'Accept-Encoding');
+          return res.status(304).end();
+        }
+        const ae = req.headers['accept-encoding'] || '';
+        let body, enc;
+        if      (entry.br   && ae.includes('br'))   { body = entry.br;   enc = 'br';   }
+        else if (entry.gzip && ae.includes('gzip')) { body = entry.gzip; enc = 'gzip'; }
+        else                                        { body = entry.raw; }
+        res.setHeader('Content-Type',  STATIC_MIME[ext]);
+        res.setHeader('ETag',          entry.etag);
+        res.setHeader('Cache-Control', cc);
+        res.setHeader('Vary',          'Accept-Encoding');
+        if (enc) res.setHeader('Content-Encoding', enc);
+        if (req.method === 'HEAD') {
+          res.setHeader('Content-Length', body.length);
+          return res.end();
+        }
+        res.end(body);
+      }
+
+      if (!isHtml) {
+        const key    = `${resolved}:${stat.mtimeMs}`;
+        const cached = compressCache.get(key);
+        if (cached) return serve(cached);
+        fs.readFile(resolved, (e, raw) => {
+          if (e) return next();
+          buildEntry(raw, entry => { cacheSet(key, entry); serve(entry); });
+        });
+        return;
+      }
+
+      // HTML: inject CSS version hashes, cache by html-mtime + css-hashes
+      fs.readFile(resolved, 'utf8', (e, html) => {
+        if (e) return next();
+        const transformed = injectCssVersions(html);
+        const raw         = Buffer.from(transformed, 'utf8');
+        const etag0       = `"${crypto.createHash('md5').update(raw).digest('hex')}"`;
+        const key         = `html:${resolved}:${etag0}`;
+        const cached      = compressCache.get(key);
+        if (cached) return serve(cached);
+        buildEntry(raw, entry => { cacheSet(key, entry); serve(entry); });
+      });
+    });
+  });
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 app.use(express.static(path.join(__dirname, '../public')));
 app.get('/ayuda/conectar-whatsapp', (_req, res) => {
   res.sendFile(path.join(__dirname, '../public/ayuda/conectar-whatsapp.html'));

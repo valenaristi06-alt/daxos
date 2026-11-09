@@ -1269,15 +1269,38 @@
 'use strict';
 document.getElementById('btn-retry').addEventListener('click', () => window.location.reload());
 
+// ── Instant agenda nav from localStorage (before API) ────────────────────────
+(function() {
+  try {
+    if (localStorage.getItem('daxos_agenda_ok') === '1') {
+      ['nav-agenda-link','mobile-nav-agenda-link'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.style.display = '';
+      });
+    }
+  } catch (_) {}
+  // Instant active state on nav click
+  document.querySelectorAll('.sidebar-link, .mobile-nav-item').forEach(link => {
+    if (link.target === '_blank' ||
+        link.classList.contains('sidebar-link--help') ||
+        /^https?:\/\//.test(link.getAttribute('href') || '')) return;
+    link.addEventListener('click', function() {
+      document.querySelectorAll('.sidebar-link, .mobile-nav-item').forEach(l => l.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+})();
+
 (async () => {
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
-  const meRes = await fetch('/auth/me');
+  // ── Auth + Business in parallel ───────────────────────────────────────────
+  const [meRes, bizRes] = await Promise.all([fetch('/auth/me'), fetch('/api/business')]);
   if (!meRes.ok) { window.location.href = '/login.html'; return; }
 
-  const bizRes = await fetch('/api/business');
   const biz = bizRes.ok ? await bizRes.json() : null;
   if (!biz) { window.location.href = '/login.html'; return; }
+
+  // Update localStorage with real value
+  try { localStorage.setItem('daxos_agenda_ok', biz.agenda_plan_ok ? '1' : '0'); } catch (_) {}
 
   const LABELS = { arranque: 'Arranque', crecimiento: 'Crecimiento', a_medida: 'A medida' };
   const badge  = document.getElementById('plan-badge');
