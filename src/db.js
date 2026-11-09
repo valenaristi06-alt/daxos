@@ -1680,6 +1680,20 @@ function getAgendaServices(businessId) {
   `).all(businessId);
 }
 
+function getAgendaServiceById(id, businessId) {
+  return db.prepare(`
+    SELECT * FROM agenda_services WHERE id = ? AND business_id = ? AND active = 1
+  `).get(id, businessId);
+}
+
+function getFutureAppointmentsForService(serviceId, businessId) {
+  const now = new Date().toISOString();
+  return db.prepare(`
+    SELECT id FROM agenda_appointments
+    WHERE service_id = ? AND business_id = ? AND status = 'confirmed' AND starts_at > ?
+  `).all(serviceId, businessId, now);
+}
+
 function deactivateAgendaService(serviceId, businessId) {
   db.prepare(`
     UPDATE agenda_services SET active = 0
@@ -2147,6 +2161,8 @@ module.exports = {
   // agenda
   createAgendaService,
   getAgendaServices,
+  getAgendaServiceById,
+  getFutureAppointmentsForService,
   deactivateAgendaService,
   getAppointmentById,
   getUpcomingAppointmentsForPhone,
