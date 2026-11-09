@@ -7,7 +7,7 @@ PROJ="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJ"
 
 kill_ports() {
-  for port in 3000 3091 3095 3096 3097 3098 3099 3100 3105 3106 3107 3109 3110 3215 3216 3222 3225; do
+  for port in 3000 3091 3095 3096 3097 3098 3099 3100 3105 3106 3107 3109 3110 3215 3216 3222 3225 3230; do
     pids=$(lsof -ti tcp:$port 2>/dev/null)
     [ -n "$pids" ] && kill -9 $pids 2>/dev/null
   done
@@ -25,6 +25,7 @@ cleanup_dbs() {
          /tmp/test-runtime-config /tmp/test-sale-intent-booking /tmp/test-sale-intent-db \
          /tmp/test-security /tmp/test-security-prod /tmp/test-silent-window /tmp/test-spending-cap \
          /tmp/test-trial-grace /tmp/test-wa-disconnect /tmp/test-wa-health-check \
+         /tmp/test-perf-static \
          2>/dev/null || true
 }
 
@@ -95,6 +96,7 @@ run_suite "test-agenda-api"          "scripts/test-agenda-api.js"
 run_suite "test-agenda-booking"      "scripts/test-agenda-booking.js"
 run_suite "test-agenda-access"       "scripts/test-agenda-access.js"
 run_suite "test-agenda-activation"   "scripts/test-agenda-activation.js"
+run_suite "test-perf-static"         "scripts/test-perf-static.js"
 
 echo "================================================================"
 echo "Done."

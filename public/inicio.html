@@ -151,6 +151,25 @@
 
   <script>
   'use strict';
+  // ── Instant agenda nav from localStorage ─────────────────────────────────
+  (function() {
+    try {
+      if (localStorage.getItem('daxos_agenda_ok') === '1') {
+        ['nav-agenda-link','mobile-nav-agenda-link'].forEach(id => {
+          const el = document.getElementById(id); if (el) el.style.display = '';
+        });
+      }
+    } catch (_) {}
+    document.querySelectorAll('.sidebar-link, .mobile-nav-item').forEach(link => {
+      if (link.target === '_blank' ||
+          link.classList.contains('sidebar-link--help') ||
+          /^https?:\/\//.test(link.getAttribute('href') || '')) return;
+      link.addEventListener('click', function() {
+        document.querySelectorAll('.sidebar-link, .mobile-nav-item').forEach(l => l.classList.remove('active'));
+        this.classList.add('active');
+      });
+    });
+  })();
   (async () => {
     // ── helpers ──────────────────────────────────────────────────────────────
     function formatPhone(raw) {
@@ -252,6 +271,7 @@
     }
 
     // ── agenda nav ────────────────────────────────────────────────────────────
+    try { localStorage.setItem('daxos_agenda_ok', b?.agenda_plan_ok ? '1' : '0'); } catch (_) {}
     if (b?.agenda_plan_ok) {
       const s = document.getElementById('nav-agenda-link');
       const m = document.getElementById('mobile-nav-agenda-link');

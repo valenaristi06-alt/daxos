@@ -970,13 +970,34 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
       return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
 
-    // ── Redirect if not logged in ──
+    // ── Instant agenda nav from localStorage ──────────────────────────────────
+    (function() {
+      try {
+        if (localStorage.getItem('daxos_agenda_ok') === '1') {
+          ['nav-agenda-link','mobile-nav-agenda-link'].forEach(id => {
+            const el = document.getElementById(id); if (el) el.style.display = '';
+          });
+        }
+      } catch (_) {}
+      document.querySelectorAll('.sidebar-link, .mobile-nav-item').forEach(link => {
+        if (link.target === '_blank' ||
+            link.classList.contains('sidebar-link--help') ||
+            /^https?:\/\//.test(link.getAttribute('href') || '')) return;
+        link.addEventListener('click', function() {
+          document.querySelectorAll('.sidebar-link, .mobile-nav-item').forEach(l => l.classList.remove('active'));
+          this.classList.add('active');
+        });
+      });
+    })();
+
+    // ── Redirect if not logged in ── (auth + business fetched in parallel)
+    const _bizPrefetch = fetch('/api/business');
     (async () => {
       const res = await fetch('/auth/me');
       if (!res.ok) { window.location.href = '/login.html'; return; }
       const { email } = await res.json();
       document.getElementById('user-email').textContent = email;
-      loadBusiness().catch(err => {
+      loadBusiness(_bizPrefetch).catch(err => {
         console.error('[loadBusiness] uncaught error:', err);
         document.getElementById('form-skeleton').style.display = 'none';
         document.getElementById('form').style.display = '';
@@ -1119,10 +1140,11 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
     }
 
     // ── Load existing business data ──
-    async function loadBusiness() {
-      const res = await fetch('/api/business');
+    async function loadBusiness(prefetch) {
+      const res = await (prefetch || fetch('/api/business'));
       const b = await res.json();
       currentBusiness = b;
+      try { localStorage.setItem('daxos_agenda_ok', b?.agenda_plan_ok ? '1' : '0'); } catch (_) {}
       document.getElementById('form-skeleton').style.display = 'none';
       document.getElementById('form').style.display = '';
       renderWaConnectionStatus(b);
