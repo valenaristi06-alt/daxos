@@ -101,6 +101,10 @@ async function setupBizWithHours(cookie, withHours = true) {
     business_hours: withHours ? HOURS_JSON : null,
   }, { cookie });
   if (r.status !== 200) throw new Error(`setupBizWithHours failed: ${JSON.stringify(r.body)}`);
+  if (withHours) {
+    // Create a default service so PATCH agenda-enabled can succeed
+    await req('POST', '/api/agenda/services', { name: 'Default', duration_min: 30 }, { cookie });
+  }
 }
 
 async function setPlan(email, plan) {
@@ -175,6 +179,8 @@ async function setPlan(email, plan) {
   assert(rA.status === 200 && Array.isArray(rA.body) && rA.body.length === 1, 'bizA sees its own appointment');
 
   // ── Suite 3: plan gating — write routes 403 on insufficient plan ──────────
+  // Set access=paid so arranque is gated (default 'all' would let everyone through)
+  await req('POST', '/admin/api/runtime-config/agenda_access', { value: 'paid' }, { bearer: ADMIN_TOKEN });
 
   console.log('\nSuite 3: Plan gating — write routes return 403 when plan insufficient');
   const cookieC = await register('agenda-c@test.com', 'AgendaC1!');
@@ -203,6 +209,9 @@ async function setPlan(email, plan) {
     const r = await req('GET', '/api/agenda/appointments?date=2026-12-01', null, { cookie: cookieC });
     assert(r.status === 200, 'GET appointments → 200 on any plan (read-only ok)');
   }
+
+  // Reset access to default before next suite
+  await req('POST', '/admin/api/runtime-config/agenda_access', { value: '' }, { bearer: ADMIN_TOKEN });
 
   // ── Suite 4: agenda disabled — write routes 403 ────────────────────────────
 

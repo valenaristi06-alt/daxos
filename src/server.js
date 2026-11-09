@@ -533,6 +533,7 @@ function ownerView(biz) {
   for (const k of OWNER_BUSINESS_FIELDS) {
     if (k in biz) out[k] = biz[k];
   }
+  out.agenda_plan_ok = _agendaAccessOk(biz);
   return out;
 }
 
@@ -925,8 +926,24 @@ app.patch('/api/business/split-messages', requireAuth, (req, res) => {
 
 // ── Agenda routes ─────────────────────────────────────────────────────────────
 
+function _hasOpenDay(hoursJson) {
+  if (!hoursJson) return false;
+  try {
+    const h = typeof hoursJson === 'string' ? JSON.parse(hoursJson) : hoursJson;
+    return Object.values(h).some(
+      ranges => Array.isArray(ranges) && ranges.length > 0 &&
+                ranges.some(r => Array.isArray(r) && r.length === 2 && r[0] && r[1])
+    );
+  } catch { return false; }
+}
+
 function _agendaPlanOk(biz) {
   return !!biz.plan_cortesia || biz.plan === 'crecimiento' || biz.plan === 'a_medida';
+}
+
+function _agendaAccessOk(biz) {
+  const access = getRuntimeConfig('agenda_access') || 'all';
+  return access === 'paid' ? _agendaPlanOk(biz) : true;
 }
 
 app.patch('/api/business/agenda-enabled', requireAuth, (req, res) => {
@@ -935,9 +952,14 @@ app.patch('/api/business/agenda-enabled', requireAuth, (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   const biz = getBusinessById(user.business_id);
-  if (!_agendaPlanOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
-  if (enabled && !biz.business_hours)
-    return res.status(400).json({ error: 'Cargá los horarios de atención antes de activar la agenda.', code: 'NO_BUSINESS_HOURS' });
+  if (!_agendaAccessOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
+  if (enabled) {
+    if (!_hasOpenDay(biz.business_hours))
+      return res.status(400).json({ error: 'Cargá al menos un día y horario de atención antes de activar la agenda.', code: 'NO_BUSINESS_HOURS' });
+    const svcs = getAgendaServices(user.business_id);
+    if (!svcs.length)
+      return res.status(400).json({ error: 'Creá al menos un servicio antes de activar la agenda.', code: 'NO_SERVICES' });
+  }
   setAgendaEnabled(user.business_id, enabled);
   res.json({ ok: true, agenda_enabled: enabled });
 });
@@ -949,7 +971,7 @@ app.patch('/api/business/agenda-cancel-min', requireAuth, (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   const biz = getBusinessById(user.business_id);
-  if (!_agendaPlanOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
+  if (!_agendaAccessOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
   setAgendaCancelMinBefore(user.business_id, minutes);
   res.json({ ok: true, agenda_cancel_min_before: minutes });
 });
@@ -964,7 +986,7 @@ app.post('/api/agenda/services', requireAuth, (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   const biz = getBusinessById(user.business_id);
-  if (!_agendaPlanOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
+  if (!_agendaAccessOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
   const { name, duration_min } = req.body;
   if (!name || typeof name !== 'string' || !name.trim())
     return res.status(400).json({ error: 'name requerido' });
@@ -1013,7 +1035,7 @@ app.post('/api/agenda/appointments', requireAuth, async (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   const biz = getBusinessById(user.business_id);
-  if (!_agendaPlanOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
+  if (!_agendaAccessOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
   if (!biz.agenda_enabled) return res.status(403).json({ error: 'La agenda está apagada.' });
 
   const { serviceId, customerPhone, clientName, date, time, notes } = req.body;
@@ -1070,7 +1092,7 @@ app.patch('/api/agenda/appointments/:id/cancel', requireAuth, (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   const biz = getBusinessById(user.business_id);
-  if (!_agendaPlanOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
+  if (!_agendaAccessOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
   if (!biz.agenda_enabled) return res.status(403).json({ error: 'La agenda está apagada.' });
 
   const apt = getAppointmentById(Number(req.params.id));
@@ -1104,7 +1126,7 @@ app.patch('/api/agenda/appointments/:id/reschedule', requireAuth, (req, res) => 
   const user = getUserById(req.session.userId);
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   const biz = getBusinessById(user.business_id);
-  if (!_agendaPlanOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
+  if (!_agendaAccessOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
   if (!biz.agenda_enabled) return res.status(403).json({ error: 'La agenda está apagada.' });
 
   const { date, time } = req.body;
@@ -2740,8 +2762,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   const delayMs  = (business.response_delay ?? 5) * 1000;
   const _delayEnd = Date.now() + delayMs;
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-  const agendaOk = !!business.agenda_enabled &&
-    (['crecimiento', 'a_medida'].includes(business.plan) || !!business.plan_cortesia);
+  const agendaOk = !!business.agenda_enabled && _agendaAccessOk(business);
   const currentBookingState = (agendaOk || business.booking_enabled) ? getBookingState(conversation.id) : null;
   const businessImages = getBusinessImages(business.id);
   const businessDocs   = getBusinessDocumentTexts(business.id);
@@ -6017,7 +6038,7 @@ app.post('/admin/api/run-auto-resume', requireBearerToken, (_req, res) => {
   res.json({ ok: true, resumed: n });
 });
 
-const RUNTIME_CONFIG_ALLOWED = new Set(['cap_conv_hourly']);
+const RUNTIME_CONFIG_ALLOWED = new Set(['cap_conv_hourly', 'agenda_access']);
 
 app.get('/admin/api/runtime-config/:key', requireBearerToken, (req, res) => {
   if (!RUNTIME_CONFIG_ALLOWED.has(req.params.key))
@@ -6039,6 +6060,10 @@ app.post('/admin/api/runtime-config/:key', requireBearerToken, (req, res) => {
   let newValue;
   if (rawValue === '' || rawValue === null) {
     newValue = null; // reset to hardcoded default
+  } else if (key === 'agenda_access') {
+    if (rawValue !== 'all' && rawValue !== 'paid')
+      return res.status(400).json({ error: 'agenda_access debe ser "all" o "paid"' });
+    newValue = rawValue;
   } else {
     const n = parseInt(rawValue, 10);
     if (isNaN(n) || n < 5 || n > 100)

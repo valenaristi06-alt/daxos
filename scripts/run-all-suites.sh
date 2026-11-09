@@ -7,17 +7,32 @@ PROJ="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJ"
 
 kill_ports() {
-  for port in 3000 3091 3095 3096 3097 3098 3099 3100 3105 3106 3107 3109 3110 3215; do
+  for port in 3000 3091 3095 3096 3097 3098 3099 3100 3105 3106 3107 3109 3110 3215 3216 3222 3225; do
     pids=$(lsof -ti tcp:$port 2>/dev/null)
     [ -n "$pids" ] && kill -9 $pids 2>/dev/null
   done
   sleep 1
 }
 
+cleanup_dbs() {
+  rm -rf /tmp/test-agenda-access /tmp/test-agenda-activation /tmp/test-agenda-api \
+         /tmp/test-agenda-assistant /tmp/test-agenda-booking-direct /tmp/test-agenda-booking-e2e \
+         /tmp/test-agenda-booking-server /tmp/test-agenda-db /tmp/test-agenda-db-partial \
+         /tmp/test-agenda-panel /tmp/test-agenda-slots /tmp/test-billing /tmp/test-cortes-bot \
+         /tmp/test-excluded-contacts /tmp/test-harness-sec /tmp/test-kapso-image /tmp/test-lote3 \
+         /tmp/test-mailtest-a /tmp/test-mailtest-b /tmp/test-mailtest-c /tmp/test-mark-read \
+         /tmp/test-owner-view /tmp/test-panel-send /tmp/test-pause-keyword /tmp/test-reset-conv \
+         /tmp/test-runtime-config /tmp/test-sale-intent-booking /tmp/test-sale-intent-db \
+         /tmp/test-security /tmp/test-security-prod /tmp/test-silent-window /tmp/test-spending-cap \
+         /tmp/test-trial-grace /tmp/test-wa-disconnect /tmp/test-wa-health-check \
+         2>/dev/null || true
+}
+
 run_suite() {
   local name="$1"
   local script="$2"
   kill_ports
+  cleanup_dbs
   result=$(node "$script" 2>&1)
   exit_code=$?
   # Extract final results line
@@ -78,6 +93,8 @@ run_suite "test-agenda-assistant"    "scripts/test-agenda-assistant.js"
 run_suite "test-agenda-panel"        "scripts/test-agenda-panel.js"
 run_suite "test-agenda-api"          "scripts/test-agenda-api.js"
 run_suite "test-agenda-booking"      "scripts/test-agenda-booking.js"
+run_suite "test-agenda-access"       "scripts/test-agenda-access.js"
+run_suite "test-agenda-activation"   "scripts/test-agenda-activation.js"
 
 echo "================================================================"
 echo "Done."

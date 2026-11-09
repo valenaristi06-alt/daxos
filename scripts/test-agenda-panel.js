@@ -8,9 +8,10 @@ const path = require('path');
 const http = require('http');
 const { execSync, spawn } = require('child_process');
 
-const TEST_PORT = 3097;
-const DB_DIR    = '/tmp/test-agenda-panel';
-const BASE_URL  = `http://localhost:${TEST_PORT}`;
+const TEST_PORT   = 3097;
+const DB_DIR      = '/tmp/test-agenda-panel';
+const BASE_URL    = `http://localhost:${TEST_PORT}`;
+const ADMIN_TOKEN = 'panel-test-token';
 
 let serverProc = null;
 let passed = 0;
@@ -28,7 +29,8 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function req(method, urlPath, body, opts = {}) {
   return new Promise((resolve, reject) => {
     const headers = { 'Content-Type': 'application/json' };
-    if (opts.cookie) headers['Cookie'] = opts.cookie;
+    if (opts.cookie)  headers['Cookie']        = opts.cookie;
+    if (opts.bearer)  headers['Authorization'] = `Bearer ${opts.bearer}`;
     const r = http.request(
       { hostname: 'localhost', port: TEST_PORT, path: urlPath, method, headers },
       (res) => {
@@ -68,15 +70,20 @@ function startServer() {
       PORT:             String(TEST_PORT),
       DB_DIR,
       SESSION_SECRET:   'ap-test-secret',
-      NODE_ENV:         '',
+      NODE_ENV:            '',
       RAILWAY_ENVIRONMENT: '',
-      ENABLE_RATE_LIMIT: 'true',
+      ENABLE_RATE_LIMIT:   'true',
+      ADMIN_SET_WA_TOKEN:  ADMIN_TOKEN,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   proc.stdout.on('data', d => process.stdout.write('[srv] ' + d));
   proc.stderr.on('data', d => process.stderr.write('[srv] ' + d));
   return proc;
+}
+
+async function setAccess(value) {
+  await req('POST', '/admin/api/runtime-config/agenda_access', { value }, { bearer: ADMIN_TOKEN });
 }
 
 async function registerUser(email, pass = 'UserPass1!') {
@@ -92,6 +99,9 @@ async function main() {
   await sleep(200);
 
   const Database = require('better-sqlite3');
+
+  // Set access=paid so plan-gating tests get 403 for arranque
+  await setAccess('paid');
 
   // ── Suite 1: Plan gating ──────────────────────────────────────────────────
   console.log('\nSuite 1: Plan gating — arranque cannot write agenda');
@@ -109,6 +119,9 @@ async function main() {
     const r4 = await req('GET', '/api/agenda/appointments?date=2026-12-01', null, { cookie });
     assert(r4.status === 200, 'GET /api/agenda/appointments: arranque → 200 (read-only)');
   }
+
+  // Reset access to default before subsequent suites
+  await setAccess('');
 
   // ── Suite 2: Upgrade plan, enable agenda, CRUD services ──────────────────
   console.log('\nSuite 2: Crecimiento plan — services CRUD');
@@ -128,9 +141,16 @@ async function main() {
     );
     db.close();
 
+    // Create a temp service to satisfy the activation requirement (deleted after enable)
+    const tmpR = await req('POST', '/api/agenda/services', { name: '_setup', duration_min: 1 }, { cookie: cookie2 });
+    const tmpSvcId = tmpR.body.services?.[0]?.id;
+
     // Enable agenda
     const r1 = await req('PATCH', '/api/business/agenda-enabled', { enabled: true }, { cookie: cookie2 });
     assert(r1.status === 200 && r1.body.agenda_enabled === true, 'agenda-enabled: crecimiento → 200');
+
+    // Remove the temp service so the CRUD test starts from an empty list
+    if (tmpSvcId) await req('DELETE', `/api/agenda/services/${tmpSvcId}`, null, { cookie: cookie2 });
 
     // Set cancel_min_before
     const r2 = await req('PATCH', '/api/business/agenda-cancel-min', { minutes: 60 }, { cookie: cookie2 });
@@ -261,6 +281,15 @@ async function main() {
     assert(src.includes('_formatMinutes'), 'server.js defines _formatMinutes');
     assert(src.includes("return `${m} min`") || src.includes("return m + ' min'"), '_formatMinutes handles minutes-only case');
     assert(src.includes('_formatMinutes(_cancelMinBefore)'), 'cancel window uses _formatMinutes');
+  }
+
+  // ── Suite 8: activation link target exists in dashboard ───────────────────
+  console.log('\nSuite 8: dashboard.html has id="card-horarios"');
+  {
+    const html = require('fs').readFileSync(path.join(__dirname, '../public/dashboard.html'), 'utf8');
+    assert(html.includes('id="card-horarios"'), 'dashboard.html has id="card-horarios"');
+    const agendaHtml = require('fs').readFileSync(path.join(__dirname, '../public/agenda.html'), 'utf8');
+    assert(agendaHtml.includes('/dashboard.html#card-horarios'), 'agenda.html activation link points to #card-horarios');
   }
 
   // ── Summary ───────────────────────────────────────────────────────────────
