@@ -25,7 +25,7 @@ cleanup_dbs() {
          /tmp/test-runtime-config /tmp/test-sale-intent-booking /tmp/test-sale-intent-db \
          /tmp/test-security /tmp/test-security-prod /tmp/test-silent-window /tmp/test-spending-cap \
          /tmp/test-trial-grace /tmp/test-wa-disconnect /tmp/test-wa-health-check \
-         /tmp/test-perf-static \
+         /tmp/test-perf-static /tmp/test-agenda-form \
          2>/dev/null || true
 }
 
@@ -97,6 +97,7 @@ run_suite "test-agenda-booking"      "scripts/test-agenda-booking.js"
 run_suite "test-agenda-access"       "scripts/test-agenda-access.js"
 run_suite "test-agenda-activation"   "scripts/test-agenda-activation.js"
 run_suite "test-perf-static"         "scripts/test-perf-static.js"
+run_suite "test-agenda-form"         "scripts/test-agenda-form.js"
 
 echo "================================================================"
 echo "Done."

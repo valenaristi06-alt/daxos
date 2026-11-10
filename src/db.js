@@ -1946,9 +1946,12 @@ const EXCLUDED_CONTACTS_LIMIT = 500;
 function normalizeContactPhone(phone) {
   if (!phone) return null;
   let digits = String(phone).replace(/\D/g, '');
-  // Uruguay local format: starts with 0, 9 digits total (e.g. 098323308 → 59898323308)
+  // Uruguay local 9 digits with leading 0: 098323308 → 59898323308
   if (digits.startsWith('0') && digits.length === 9) {
     digits = '598' + digits.slice(1);
+  // Uruguay mobile 8 digits without leading 0: 98323308 → 59898323308
+  } else if (digits.startsWith('9') && digits.length === 8) {
+    digits = '598' + digits;
   }
   return digits || null;
 }

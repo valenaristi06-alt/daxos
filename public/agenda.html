@@ -881,7 +881,8 @@
       margin-bottom: 6px;
     }
     .modal .field input,
-    .modal .field select {
+    .modal .field select,
+    #m-time-manual {
       width: 100%;
       background: var(--bg);
       border: 1px solid var(--border-2);
@@ -898,7 +899,8 @@
       min-height: 44px;
     }
     .modal .field input:focus,
-    .modal .field select:focus {
+    .modal .field select:focus,
+    #m-time-manual:focus {
       border-color: var(--accent);
       box-shadow: 0 0 0 3px rgba(196,92,26,0.15);
     }
@@ -913,6 +915,34 @@
     }
     .modal-error { color: #ef4444; font-size: 12px; margin-top: 6px; display: none; }
     .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+    .slot-list { display: flex; flex-wrap: wrap; gap: 8px; max-height: 180px; overflow-y: auto; padding: 2px 0; }
+    .slot-btn {
+      height: 44px; min-width: 72px; padding: 0 12px;
+      border-radius: 6px; border: 1.5px solid var(--border-2);
+      background: var(--bg); color: var(--text);
+      font-family: var(--sans); font-size: 14px; cursor: pointer;
+      box-sizing: border-box; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+    }
+    .slot-btn:hover:not(:disabled) { border-color: var(--accent); }
+    .slot-btn.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .slot-btn:disabled {
+      opacity: 0.3; cursor: not-allowed;
+      background: var(--bg-2, #f4f4f4); color: var(--muted-2, #999);
+      border-color: var(--border, #e0e0e0); text-decoration: line-through;
+    }
+    @media (max-width: 430px) { .slot-btn { min-width: calc(50% - 4px); flex: 1 0 calc(50% - 4px); } }
+    .slot-hint { font-size: 12px; color: var(--muted-2); margin: 4px 0 0; display: none; }
+    .slot-unavail-legend { font-size: 11px; color: var(--muted-2); margin: 6px 0 0; display: none; }
+    .slot-other-btn {
+      background: none; border: none; padding: 0;
+      font-size: 12px; color: var(--accent); cursor: pointer;
+      text-decoration: underline; margin-top: 8px; display: block;
+      font-family: var(--sans);
+    }
+    .slot-other-btn:hover { opacity: 0.8; }
+    .field-hint { font-size: 11px; color: var(--muted-2); margin-top: 4px; }
     .btn-modal-cancel {
       flex: 1;
       padding: 11px 16px; min-height: 44px;
@@ -1307,7 +1337,8 @@
   <div id="modal-body">
     <div class="field">
       <label for="m-phone">Teléfono del cliente</label>
-      <input type="tel" id="m-phone" placeholder="598912345678" />
+      <input type="tel" id="m-phone" placeholder="098 123 456" />
+      <p class="field-hint">Ej: 098 123 456</p>
     </div>
     <div class="field">
       <label for="m-name">Nombre</label>
@@ -1321,9 +1352,14 @@
       <label for="m-date">Fecha</label>
       <input type="date" id="m-date" />
     </div>
-    <div class="field">
-      <label for="m-time">Hora</label>
-      <input type="time" id="m-time" step="300" />
+    <div class="field" id="m-slot-field">
+      <label>Hora</label>
+      <div id="m-slots" class="slot-list" role="listbox" aria-label="Seleccioná un horario"></div>
+      <p id="m-slots-loading" class="slot-hint" style="display:none">Cargando horarios…</p>
+      <p id="m-slots-empty" class="slot-hint">Sin disponibilidad para este día.</p>
+      <p id="m-slots-unavail-legend" class="slot-unavail-legend">Los horarios en gris no están disponibles.</p>
+      <button type="button" id="m-other-btn" class="slot-other-btn">¿Otra hora? Escribila</button>
+      <input type="text" id="m-time-manual" placeholder="HH:MM, ej. 15:30" maxlength="5" style="display:none;width:100%;margin-top:6px" />
     </div>
     <div id="modal-error" class="modal-error"></div>
     <div class="modal-actions">
@@ -2147,6 +2183,47 @@ document.getElementById('btn-retry').addEventListener('click', () => window.loca
   document.getElementById('detail-panel-close').addEventListener('click', closeSheet);
 
   // ── Add / Reschedule modal ────────────────────────────────────────────────
+  let _slotsGen = 0;
+  async function loadSlots(date, serviceId, preselectTime) {
+    const gen     = ++_slotsGen;
+    const wrap    = document.getElementById('m-slots');
+    const empty   = document.getElementById('m-slots-empty');
+    const loading = document.getElementById('m-slots-loading');
+    wrap.innerHTML = '';
+    empty.style.display = 'none';
+    loading.style.display = '';
+    try {
+      const qs  = `date=${encodeURIComponent(date)}${serviceId ? `&serviceId=${serviceId}` : ''}`;
+      const res = await fetch(`/api/agenda/slots?${qs}`);
+      const { slots = [] } = await res.json().catch(() => ({}));
+      if (gen !== _slotsGen) return; // stale — a newer load superseded this one
+      loading.style.display = 'none';
+      if (!slots.length) { empty.style.display = ''; return; }
+      const hasUnavail = slots.some(s => !s.available);
+      document.getElementById('m-slots-unavail-legend').style.display = hasUnavail ? '' : 'none';
+      slots.forEach(s => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'slot-btn';
+        btn.textContent = s.time;
+        btn.dataset.time = s.time;
+        btn.disabled = !s.available;
+        btn.setAttribute('role', 'option');
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#m-slots .slot-btn').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          document.getElementById('m-time-manual').style.display = 'none';
+        });
+        if (preselectTime && s.time === preselectTime && s.available) btn.classList.add('selected');
+        wrap.appendChild(btn);
+      });
+    } catch {
+      if (gen !== _slotsGen) return;
+      loading.style.display = 'none';
+      empty.style.display = '';
+    }
+  }
+
   function openModal({ mode = 'create', apt = null } = {}) {
     const isResched = mode === 'reschedule';
     document.getElementById('modal-title').textContent = isResched ? 'Mover turno' : 'Agregar turno';
@@ -2154,13 +2231,17 @@ document.getElementById('btn-retry').addEventListener('click', () => window.loca
     document.getElementById('m-name').value  = isResched ? (apt?.client_name || '') : '';
     document.getElementById('m-svc').value   = isResched ? (apt?.service_id ?? '') : '';
     document.getElementById('m-date').value  = currentDate;
-    document.getElementById('m-time').value  = isResched ? utcToMvdHHMM(apt?.starts_at || '') : '';
     document.getElementById('modal-error').style.display = 'none';
+    document.getElementById('m-time-manual').style.display = 'none';
+    document.getElementById('m-time-manual').value = '';
+    document.getElementById('m-slots-unavail-legend').style.display = 'none';
     ['m-phone','m-name','m-svc'].forEach(id => { document.getElementById(id).disabled = isResched; });
     document.getElementById('modal-save').dataset.mode  = mode;
     document.getElementById('modal-save').dataset.aptId = apt?.id ?? '';
     document.getElementById('modal-backdrop').classList.add('open');
     document.getElementById('apt-modal').classList.add('open');
+    const preselectTime = isResched && apt?.starts_at ? utcToMvdHHMM(apt.starts_at) : null;
+    loadSlots(currentDate, document.getElementById('m-svc').value || '', preselectTime);
   }
 
   function closeModal() {
@@ -2174,6 +2255,24 @@ document.getElementById('btn-retry').addEventListener('click', () => window.loca
   document.getElementById('modal-cancel').addEventListener('click', closeModal);
   document.getElementById('modal-backdrop').addEventListener('click', closeModal);
 
+  document.getElementById('m-date').addEventListener('change', () => {
+    if (!document.getElementById('apt-modal').classList.contains('open')) return;
+    loadSlots(document.getElementById('m-date').value, document.getElementById('m-svc').value || '');
+  });
+  document.getElementById('m-svc').addEventListener('change', () => {
+    if (!document.getElementById('apt-modal').classList.contains('open')) return;
+    loadSlots(document.getElementById('m-date').value, document.getElementById('m-svc').value || '');
+  });
+  document.getElementById('m-other-btn').addEventListener('click', () => {
+    const manual = document.getElementById('m-time-manual');
+    const isVisible = manual.style.display !== 'none';
+    if (!isVisible) {
+      manual.style.display = 'block';
+      document.querySelectorAll('#m-slots .slot-btn').forEach(b => b.classList.remove('selected'));
+      manual.focus();
+    }
+  });
+
   document.getElementById('modal-save').addEventListener('click', async () => {
     const btn   = document.getElementById('modal-save');
     const mode  = btn.dataset.mode;
@@ -2182,46 +2281,62 @@ document.getElementById('btn-retry').addEventListener('click', () => window.loca
     errEl.style.display = 'none';
 
     const date = document.getElementById('m-date').value;
-    const time = document.getElementById('m-time').value;
-    if (!date || !time) { errEl.textContent = 'Ingresá fecha y hora.'; errEl.style.display = ''; return; }
-    btn.disabled = true;
+    const manualEl     = document.getElementById('m-time-manual');
+    const isManual     = manualEl.style.display !== 'none';
+    const selectedSlot = document.querySelector('#m-slots .slot-btn.selected');
+    const time = isManual
+      ? manualEl.value.trim()
+      : (selectedSlot ? selectedSlot.dataset.time : '');
 
-    if (mode === 'reschedule') {
-      const res = await fetch(`/api/agenda/appointments/${aptId}/reschedule`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, time }),
-      });
-      btn.disabled = false;
-      if (res.ok) {
-        closeModal();
-        await navigateTo(date);
-        await updateSubtitle();
-        showToast('Turno movido.', 'success');
+    if (!date || !time) { errEl.textContent = 'Ingresá fecha y hora.'; errEl.style.display = 'block'; return; }
+    if (isManual && !/^\d{2}:\d{2}$/.test(time)) {
+      errEl.textContent = 'Hora inválida. Usá formato HH:MM (ej: 15:30).'; errEl.style.display = 'block'; return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Guardando…';
+
+    try {
+      if (mode === 'reschedule') {
+        const res = await fetch(`/api/agenda/appointments/${aptId}/reschedule`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date, time }),
+        });
+        if (res.ok) {
+          closeModal();
+          await navigateTo(date);
+          await updateSubtitle();
+          showToast('Turno movido.', 'success');
+        } else {
+          const d = await res.json().catch(()=>({}));
+          errEl.textContent = d.error || 'Error al mover.';
+          errEl.style.display = 'block';
+        }
       } else {
-        const d = await res.json().catch(()=>({}));
-        errEl.textContent = d.error || 'Error al mover.';
-        errEl.style.display = '';
+        const phone = document.getElementById('m-phone').value.trim();
+        const name  = document.getElementById('m-name').value.trim();
+        const svcId = document.getElementById('m-svc').value || null;
+        if (!phone) { errEl.textContent = 'Ingresá el teléfono. Ej: 098 123 456.'; errEl.style.display = 'block'; return; }
+        const res = await fetch('/api/agenda/appointments', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ serviceId: svcId ? Number(svcId) : null, customerPhone: phone, clientName: name || null, date, time }),
+        });
+        if (res.ok) {
+          closeModal();
+          await navigateTo(date);
+          await updateSubtitle();
+          showToast('Turno agregado.', 'success');
+        } else {
+          const d = await res.json().catch(()=>({}));
+          errEl.textContent = d.error || 'Error al agregar.';
+          errEl.style.display = 'block';
+        }
       }
-    } else {
-      const phone = document.getElementById('m-phone').value.trim();
-      const name  = document.getElementById('m-name').value.trim();
-      const svcId = document.getElementById('m-svc').value || null;
-      if (!phone) { btn.disabled = false; errEl.textContent = 'Ingresá el teléfono.'; errEl.style.display = ''; return; }
-      const res = await fetch('/api/agenda/appointments', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serviceId: svcId ? Number(svcId) : null, customerPhone: phone, clientName: name || null, date, time }),
-      });
+    } catch {
+      errEl.textContent = 'Error de conexión. Revisá tu internet e intentá de nuevo.';
+      errEl.style.display = 'block';
+    } finally {
       btn.disabled = false;
-      if (res.ok) {
-        closeModal();
-        await navigateTo(date);
-        await updateSubtitle();
-        showToast('Turno agregado.', 'success');
-      } else {
-        const d = await res.json().catch(()=>({}));
-        errEl.textContent = d.error || 'Error al agregar.';
-        errEl.style.display = '';
-      }
+      btn.textContent = 'Guardar turno';
     }
   });
 
@@ -2316,7 +2431,7 @@ document.getElementById('btn-retry').addEventListener('click', () => window.loca
           } else {
             const d = await r.json().catch(() => ({}));
             errEl.textContent = d.error || 'Error al quitar el servicio.';
-            errEl.style.display = '';
+            errEl.style.display = 'block';
             btn.disabled = false;
           }
         });
@@ -2358,7 +2473,7 @@ document.getElementById('btn-retry').addEventListener('click', () => window.loca
     document.getElementById('btn-activate-svc-add').addEventListener('click', async () => {
       const name  = document.getElementById('activate-svc-name').value.trim();
       const errEl = document.getElementById('activate-svc-error');
-      if (!name) { errEl.textContent = 'Escribí el nombre del servicio.'; errEl.style.display = ''; return; }
+      if (!name) { errEl.textContent = 'Escribí el nombre del servicio.'; errEl.style.display = 'block'; return; }
       errEl.style.display = 'none';
       const r = await fetch('/api/agenda/services', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2374,7 +2489,7 @@ document.getElementById('btn-retry').addEventListener('click', () => window.loca
       } else {
         const d = await r.json().catch(() => ({}));
         errEl.textContent = d.error || 'Error al agregar servicio.';
-        errEl.style.display = '';
+        errEl.style.display = 'block';
       }
     });
 

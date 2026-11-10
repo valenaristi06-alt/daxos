@@ -116,6 +116,34 @@ function getFreeSlots(business, durationMin) {
   return { slotsByDay, slotsMap, generatedAt: nowMs };
 }
 
+// All slots for a date (available + occupied), used by GET /api/agenda/slots panel UI
+function getAllSlotsForDate(business, dateStr, durationMin) {
+  const dow       = getMvdDow(dateStr);
+  const intervals = getBizHoursForDow(business, dow);
+  if (!intervals.length) return [];
+
+  const dayStartUtc = mvdToUtcIso(dateStr, '00:00');
+  const dayEndUtc   = mvdToUtcIso(addDays(dateStr, 1), '00:00');
+  const existing    = getConfirmedAppointmentsInRange(business.id, dayStartUtc, dayEndUtc);
+  const minStartMs  = Date.now() + MIN_ADVANCE_MS;
+
+  const slots = [];
+  for (const [startTime, endTime] of intervals) {
+    const closeMs = new Date(mvdToUtcIso(dateStr, endTime)).getTime();
+    let cursor    = new Date(mvdToUtcIso(dateStr, startTime)).getTime();
+    while (cursor + durationMin * 60_000 <= closeMs) {
+      const slotEndMs  = cursor + durationMin * 60_000;
+      const startsAt   = new Date(cursor).toISOString();
+      const endsAt     = new Date(slotEndMs).toISOString();
+      const isPast     = cursor < minStartMs;
+      const isOccupied = existing.some(a => a.starts_at < endsAt && a.ends_at > startsAt);
+      slots.push({ time: utcIsoToMvdHHMM(startsAt), available: !isPast && !isOccupied });
+      cursor = slotEndMs;
+    }
+  }
+  return slots;
+}
+
 // ── Prompt formatting ──────────────────────────────────────────────────────────
 
 function formatSlotsForPrompt(slotsByDay) {
@@ -177,6 +205,7 @@ module.exports = {
   formatDayLabel,
   getBizHoursForDow,
   getFreeSlotsForDate,
+  getAllSlotsForDate,
   DOW_LABELS,
   SLOT_TTL_MS,
   MIN_ADVANCE_MS,

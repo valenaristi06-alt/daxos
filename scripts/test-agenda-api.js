@@ -270,13 +270,14 @@ async function setPlan(email, plan) {
   }
 
   // Create apt (no WA creds in test — status stays null, no crash)
+  // 2026-12-04 is Friday (DOW=5), within business hours Mon-Fri 09:00-18:00
   const aptResB = await req('POST', '/api/agenda/appointments', {
-    customerPhone: '+59899000011', clientName: 'WaTest', date: '2026-12-05', time: '10:00',
+    customerPhone: '+59899000011', clientName: 'WaTest', date: '2026-12-04', time: '10:00',
   }, { cookie: cookieA });
   assert(aptResB.status === 200, 'create apt for notify-status test → 200');
   assert(aptResB.body?.id > 0, 'returned appointment has id');
 
-  const rGet2 = await req('GET', '/api/agenda/appointments?date=2026-12-05', null, { cookie: cookieA });
+  const rGet2 = await req('GET', '/api/agenda/appointments?date=2026-12-04', null, { cookie: cookieA });
   assert(Array.isArray(rGet2.body), 'GET date returns array');
   const foundApt = Array.isArray(rGet2.body) ? rGet2.body.find(a => a.id === aptResB.body?.id) : null;
   assert(!!foundApt, 'appointment retrievable after creation');

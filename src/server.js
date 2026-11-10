@@ -253,7 +253,7 @@ async function extractTextFromFile(buffer, mimetype, originalname) {
 
 const fs = require('fs');
 const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, markReadAndTyping, downloadKapsoMedia, downloadMetaMedia, parseSplitParts, splitAndSend, sanitizeForClient } = require('./whatsapp');
-const { getFreeSlots, formatSlotsForPrompt, formatSlotsForClient, formatAppointmentsBlock, getMaxBookingDate, isSlotsMapFresh, utcIsoToMvdHHMM, getMvdDow, DOW_LABELS } = require('./agenda');
+const { getFreeSlots, formatSlotsForPrompt, formatSlotsForClient, formatAppointmentsBlock, getMaxBookingDate, isSlotsMapFresh, utcIsoToMvdHHMM, getMvdDow, DOW_LABELS, getBizHoursForDow, getAllSlotsForDate } = require('./agenda');
 const { generateAudioBuffer, transcribeAudio } = require('./elevenlabs');
 const { convertToOgg } = require('./audio');
 
@@ -1158,6 +1158,23 @@ app.get('/api/agenda/appointments', requireAuth, (req, res) => {
   res.json(getAppointmentsForBusiness(user.business_id, fromUtc, toUtc.toISOString()));
 });
 
+app.get('/api/agenda/slots', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'No business' });
+  const biz = getBusinessById(user.business_id);
+  if (!_agendaAccessOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
+  if (!biz.agenda_enabled) return res.status(403).json({ error: 'La agenda está apagada.' });
+
+  const { date, serviceId } = req.query;
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
+    return res.status(400).json({ error: 'date requerido (YYYY-MM-DD)' });
+
+  const svcs = getAgendaServices(user.business_id);
+  const svc  = serviceId ? svcs.find(s => s.id === Number(serviceId)) : null;
+  const dur  = svc?.duration_min ?? biz.agenda_slot_min ?? 30;
+  res.json({ slots: getAllSlotsForDate(biz, date, dur) });
+});
+
 app.post('/api/agenda/appointments', requireAuth, async (req, res) => {
   const user = getUserById(req.session.userId);
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
@@ -1178,7 +1195,19 @@ app.post('/api/agenda/appointments', requireAuth, async (req, res) => {
   const endsAt   = new Date(new Date(startsAt).getTime() + dur * 60_000).toISOString();
 
   const normPhone = normalizeContactPhone(customerPhone);
-  if (!normPhone) return res.status(400).json({ error: 'customerPhone inválido' });
+  if (!normPhone || normPhone.length < 7)
+    return res.status(400).json({ error: 'Teléfono inválido. Ej: 098 123 456 o 59891234567.' });
+
+  // Validate business hours
+  const dow      = getMvdDow(date);
+  const bizHours = getBizHoursForDow(biz, dow);
+  if (bizHours.length === 0)
+    return res.status(400).json({ error: 'El negocio no atiende ese día.' });
+  const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const tMin  = toMin(time);
+  const withinHours = bizHours.some(([s, e]) => tMin >= toMin(s) && tMin + dur <= toMin(e));
+  if (!withinHours)
+    return res.status(400).json({ error: 'El horario elegido está fuera del horario de atención.' });
 
   let apt;
   try {
