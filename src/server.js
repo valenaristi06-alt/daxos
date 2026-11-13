@@ -85,7 +85,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
   incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
   incrementPreviewCall, getPreviewSpendingToday, setSpendingCapOwnerNotified, setSpendingCapNeedsAttention,
   getConvAssistantCountLastHour, setSpendingCapNotified,
@@ -1961,7 +1961,8 @@ app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
     let audio_b64 = null;
     if (sent_audio) {
       try {
-        const mp3 = await generateAudioBuffer(business.voice_id, _pvReplyForTTS);
+        const mp3 = await generateAudioBuffer(business.voice_id, _pvReplyForTTS,
+        { model: business.voice_tts_model, stability: business.voice_stability });
         audio_b64 = mp3.toString('base64');
       } catch (audioErr) {
         console.error('[preview-audio] ElevenLabs failed:', audioErr.message);
@@ -3491,7 +3492,8 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     if (wantsAudio && business.voice_id && planAllowsAudio && replyFitsAudio && !ttsCapHit) {
       try {
         logError('tts-text', { message: `business_id=${business.id} chars=${_replyForTTS.length}`, stack: '' });
-        const mp3 = await generateAudioBuffer(business.voice_id, _replyForTTS);
+        const mp3 = await generateAudioBuffer(business.voice_id, _replyForTTS,
+          { model: business.voice_tts_model, stability: business.voice_stability });
         try { setClaudeUsageTtsChars(getLastClaudeUsageId(conversation.id), _replyForTTS.length); } catch (_) {}
         try { incrementElevenLabsChars(business.id, _replyForTTS.length); } catch (_) {}
         logError('tts-buffers', { message: `mp3=${mp3.length}b`, stack: '' });
@@ -6235,6 +6237,42 @@ app.post('/admin/api/runtime-config/:key', requireBearerToken, (req, res) => {
     recordRuntimeConfigAudit(key, oldValue, newValue, changedBy);
     res.json({ ok: true, key, value: newValue, previous: oldValue });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+const VOICE_ALLOWED_MODELS = [null, 'eleven_v4_turbo', 'eleven_v4'];
+
+// Set per-business voice model and stability.
+// Protected by ADMIN_SET_WA_TOKEN Bearer token (same as other /admin/api routes).
+app.post('/admin/api/business/:id/voice-config', requireBearerToken, (req, res) => {
+  const bizId = parseInt(req.params.id, 10);
+  if (!bizId || isNaN(bizId)) return res.status(400).json({ error: 'id inválido' });
+
+  const biz = getBusinessById(bizId);
+  if (!biz) return res.status(404).json({ error: `Negocio ${bizId} no encontrado` });
+
+  const { voice_tts_model, voice_stability } = req.body ?? {};
+
+  // Validate model — only listed values or null/undefined (to clear)
+  const model = voice_tts_model === undefined ? biz.voice_tts_model : (voice_tts_model || null);
+  if (!VOICE_ALLOWED_MODELS.includes(model))
+    return res.status(400).json({ error: `voice_tts_model debe ser null, "eleven_v4_turbo" o "eleven_v4"` });
+
+  // Validate stability — 0–1 or null/undefined (to clear)
+  let stability = voice_stability === undefined ? biz.voice_stability : (voice_stability ?? null);
+  if (stability !== null) {
+    stability = Number(stability);
+    if (isNaN(stability) || stability < 0 || stability > 1)
+      return res.status(400).json({ error: 'voice_stability debe ser un número entre 0 y 1, o null para limpiar' });
+  }
+
+  const prev = { voice_tts_model: biz.voice_tts_model, voice_stability: biz.voice_stability };
+  setVoiceConfig(bizId, { voice_tts_model: model, voice_stability: stability });
+
+  const changedBy = req.ip || req.headers['x-forwarded-for'] || 'admin';
+  recordRuntimeConfigAudit(`biz:${bizId}:voice_tts_model`, String(prev.voice_tts_model), String(model), changedBy);
+  recordRuntimeConfigAudit(`biz:${bizId}:voice_stability`, String(prev.voice_stability), String(stability), changedBy);
+
+  res.json({ ok: true, business_id: bizId, voice_tts_model: model, voice_stability: stability, previous: prev });
 });
 
 app.post('/admin/backup-now', requireBearerToken, async (req, res) => {

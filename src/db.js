@@ -680,6 +680,19 @@ db.exec(`
     }
   } catch (e) { console.warn('[migration 021] agenda:', e.message); }
 
+  // Migration 022: per-business voice model and stability overrides
+  try {
+    if (!applied('022_voice_config')) {
+      const bizCols022 = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+      if (!bizCols022.includes('voice_tts_model'))
+        db.exec('ALTER TABLE businesses ADD COLUMN voice_tts_model TEXT');
+      if (!bizCols022.includes('voice_stability'))
+        db.exec('ALTER TABLE businesses ADD COLUMN voice_stability REAL');
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('022_voice_config');
+      console.log('[migration 022] voice_tts_model + voice_stability added to businesses');
+    }
+  } catch (e) { console.warn('[migration 022] voice_config:', e.message); }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -891,6 +904,12 @@ function saveVoiceConsent(businessId, { voiceId, consentText, consentBy }) {
     SET voice_id = ?, voice_consent_at = datetime('now'), consent_text = ?, consent_by = ?
     WHERE id = ?
   `).run(voiceId, consentText, consentBy, businessId);
+}
+
+function setVoiceConfig(businessId, { voice_tts_model, voice_stability }) {
+  db.prepare(`
+    UPDATE businesses SET voice_tts_model = ?, voice_stability = ? WHERE id = ?
+  `).run(voice_tts_model ?? null, voice_stability ?? null, businessId);
 }
 
 const stmtGetBusinessById = db.prepare('SELECT * FROM businesses WHERE id = ?');
@@ -2093,6 +2112,7 @@ module.exports = {
   setStyleProfile,
   setWebsiteSummary,
   saveVoiceConsent,
+  setVoiceConfig,
   createUser,
   getUserByEmail,
   changeUserEmail,
