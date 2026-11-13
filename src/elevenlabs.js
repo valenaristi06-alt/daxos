@@ -17,7 +17,8 @@ async function fetchWithTimeout(url, opts, timeoutMs = EL_TIMEOUT_MS) {
 
 const API_KEY = process.env.ELEVENLABS_API_KEY;
 const TTS_MODEL = process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2';
-const BASE = 'https://api.elevenlabs.io/v1';
+// ELEVENLABS_BASE_URL is overridable for testing; never set in production
+const BASE = (process.env.ELEVENLABS_BASE_URL || 'https://api.elevenlabs.io') + '/v1';
 
 function requireKey() {
   if (!API_KEY) throw new Error('ELEVENLABS_API_KEY not set in .env.local');
@@ -47,7 +48,7 @@ async function cloneVoice(name, fileBuffer) {
   return data.voice_id;
 }
 
-function normalizeTtsText(text) {
+function normalizeTtsText(text, { stripUrls = false } = {}) {
   // Strip markdown that ElevenLabs reads literally (*bold*, _italic_, etc.)
   let t = text
     .replace(/\*\*([^*]+)\*\*/g, '$1')
@@ -55,15 +56,54 @@ function normalizeTtsText(text) {
     .replace(/_([^_]+)_/g, '$1')
     .replace(/`([^`]+)`/g, '$1')
     .trim();
+  // v4 path: strip URLs before synthesis (they sound terrible when read aloud)
+  if (stripUrls) {
+    t = t.replace(/https?:\/\/\S+/g, '').replace(/\s{2,}/g, ' ').trim();
+  }
   // Ensure terminal punctuation so ElevenLabs closes the intonation curve
   if (t && !/[.!?…]$/.test(t)) t += '.';
   return t;
 }
 
-function ttsBody(text) {
+// Allowed explicit model values stored in DB; anything else falls back to legacy path with a warning.
+const ALLOWED_V4_MODELS = ['eleven_v4_turbo', 'eleven_v4'];
+
+// opts = { model?: string, stability?: number }
+// Legacy path (model null/undefined): identical body to before this change
+function ttsBody(text, opts = {}) {
+  let { model, stability } = opts;
+
+  // Validate model: only NULL or an explicitly allowed value; unknown → warn + legacy
+  if (model !== null && model !== undefined && !ALLOWED_V4_MODELS.includes(model) && !model.startsWith('eleven_v4')) {
+    console.error(`[elevenlabs:voice_tts_model] unknown model "${model}" — falling back to default`);
+    model = null;
+  }
+
+  // Validate stability: must be 0–1 or null; out of range → warn + default
+  if (stability !== null && stability !== undefined) {
+    if (typeof stability !== 'number' || stability < 0 || stability > 1) {
+      console.error(`[elevenlabs:voice_stability] value ${stability} out of range 0–1 — using default`);
+      stability = null;
+    }
+  }
+
+  const resolvedModel = model || TTS_MODEL;
+
+  if (resolvedModel.startsWith('eleven_v4')) {
+    return JSON.stringify({
+      text: normalizeTtsText(text, { stripUrls: true }),
+      model_id: resolvedModel,
+      voice_settings: {
+        stability: stability ?? 0.35,
+        similarity_boost: 0.75,
+      },
+    });
+  }
+
+  // Legacy path: exact same body as before this change
   return JSON.stringify({
     text: normalizeTtsText(text),
-    model_id: TTS_MODEL,
+    model_id: resolvedModel,
     speed: 1.1,
     voice_settings: { stability: 0.5, similarity_boost: 0.85, style: 0.2, use_speaker_boost: true },
   });
@@ -89,9 +129,14 @@ async function generatePreview(voiceId) {
 const _audioCache = new Map();
 const _AUDIO_CACHE_MAX = 200;
 
-async function generateAudioBuffer(voiceId, text) {
+// opts = { model?: string, stability?: number } — forwarded from business.voice_tts_model / voice_stability
+// Null opts → identical behavior to before this change (legacy path, legacy cache key)
+async function generateAudioBuffer(voiceId, text, opts = {}) {
   requireKey();
-  const cacheKey = `${voiceId}|${text}`;
+  // Preserve old cache key format for legacy path so existing hits are not invalidated
+  const cacheKey = opts.model
+    ? `${voiceId}|${opts.model}|${text}`
+    : `${voiceId}|${text}`;
   if (_audioCache.has(cacheKey)) {
     console.log(`[elevenlabs:cache-hit] voiceId=${voiceId} chars=${text.length}`);
     return _audioCache.get(cacheKey);
@@ -100,7 +145,7 @@ async function generateAudioBuffer(voiceId, text) {
   const res = await fetchWithTimeout(`${BASE}/text-to-speech/${voiceId}`, {
     method: 'POST',
     headers: { 'xi-api-key': API_KEY, 'Accept': 'audio/mpeg', 'Content-Type': 'application/json' },
-    body: ttsBody(text),
+    body: ttsBody(text, opts),
   });
 
   if (!res.ok) {
@@ -148,4 +193,9 @@ async function transcribeAudio(buffer, contentType) {
   return (data.text || '').trim();
 }
 
-module.exports = { cloneVoice, generatePreview, generateAudioBuffer, deleteVoice, transcribeAudio };
+module.exports = {
+  cloneVoice, generatePreview, generateAudioBuffer, deleteVoice, transcribeAudio,
+  // Exported for unit tests only — not part of the public API
+  _ttsBody: ttsBody,
+  _normalizeTtsText: normalizeTtsText,
+};
