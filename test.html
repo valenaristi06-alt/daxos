@@ -1,15 +1,8 @@
 <!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Método Hana — Test local</title>
+<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Método Hana — Test local</title>
 <style>html,body{margin:0;padding:0;background:#efe7ea}</style>
-<script>
-window.fbq=function(){try{console.log("[fbq]",Array.prototype.slice.call(arguments).join(" | "));}catch(e){}};
-</script>
-</head>
-<body>
+<script>window.fbq=function(){try{console.log("[fbq]",Array.prototype.slice.call(arguments).join(" | "));}catch(e){}};</script>
+</head><body>
 <!-- ============================================================
      MÉTODO HANA · Landing-quiz (Impultienda — bloque HTML completo)
      Pegar tal cual en el constructor "HTML completo".
@@ -233,6 +226,12 @@ window.fbq=function(){try{console.log("[fbq]",Array.prototype.slice.call(argumen
   margin-top:22px;text-align:center;animation:hIn .4s ease both
 }
 #hana .h-win .big{font-size:24px;font-weight:900;color:var(--acc)}
+#hana .h-winprice{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:12px}
+#hana .h-winprice .old{font-size:19px;color:var(--gray);text-decoration:line-through;animation:hIn .3s ease both}
+#hana .h-winprice .arw{color:var(--acc);font-weight:900;font-size:20px}
+#hana .h-winprice .new{font-size:36px;font-weight:900;color:var(--acc);animation:hPricePop .55s cubic-bezier(.2,1.5,.4,1) .15s both}
+@keyframes hPricePop{0%{transform:scale(.3);opacity:0}60%{transform:scale(1.18)}100%{transform:scale(1);opacity:1}}
+@media (prefers-reduced-motion:reduce){#hana .h-winprice .new{animation:none}#hana .h-winprice .old{animation:none}}
 #hana .h-confetti{position:fixed;inset:0;pointer-events:none;z-index:999;overflow:hidden}
 #hana .h-confetti i{position:absolute;width:9px;height:14px;top:-20px;border-radius:2px;animation:hFall linear forwards}
 @keyframes hFall{to{transform:translateY(110vh) rotate(720deg);opacity:.9}}
@@ -918,7 +917,9 @@ window.HANA_CONFIG = window.HANA_CONFIG || {
       try{ if(navigator.vibrate) navigator.vibrate(60); }catch(e){}
       confetti();
       var out=w.querySelector('#hWheelOut');
+      var bp=basePrice(), full=fmt(bp.n,bp.pref), disc=fmt(bp.n*(1-DISCOUNT),bp.pref);
       out.innerHTML='<div class="h-win"><div class="big">¡Ganaste! 25% OFF 🎁</div>'+
+        '<div class="h-winprice"><span class="old">'+full+'</span><span class="arw">→</span><span class="new">'+disc+'</span></div>'+
         '<p style="font-size:14px;margin-top:6px;color:var(--plum)">+ rutina express de 7 minutos · guía de sueño · calendario imprimible.</p>'+
         '<p style="font-size:15px;font-weight:700;margin-top:10px;color:var(--acc)">🎉 Felicitaciones por el premio mayor</p></div>';
       showCta('Ver mi plan con descuento →', function(){ startTimer(); next(); });
@@ -1085,5 +1086,4 @@ window.HANA_CONFIG = window.HANA_CONFIG || {
 </script>
 </div>
 
-</body>
-</html>
+</body></html>
