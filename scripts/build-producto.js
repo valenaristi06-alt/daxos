@@ -22,12 +22,12 @@ const LINKS = {
   pdfFase2: 'https://drive.google.com/uc?export=download&id=1EX9oWfPOAuihCkFaMHasZphFweHo69RS',
 };
 
-// ---------- figura de marca desde pose (dimensionada por ALTO) ----------
-function figSVG(pose, frame, boxH) {
+// ---------- figura de marca desde pose ----------
+function figCore(pose, frame) {
   const k = pose[frame] || pose.A;
   const P = Object.values(k);
   const xs = P.map(a => a[0]), ys = P.map(a => a[1]);
-  const pad = 18;
+  const pad = 20;
   const minx = Math.min(...xs) - pad, maxx = Math.max(...xs) + pad;
   const miny = Math.min(...ys) - pad - 6, maxy = Math.max(...ys) + pad;
   const w = maxx - minx, h = maxy - miny;
@@ -46,8 +46,21 @@ function figSVG(pose, frame, boxH) {
   g += seg([k.neck, k.elbow_n, k.hand_n], 9);
   g += `<circle cx="${bx}" cy="${by}" r="${hr * 0.45}" fill="#fff"/><circle cx="${bx}" cy="${by}" r="${hr * 0.38}" fill="${PLUM}"/>`;
   g += `<circle cx="${k.head[0]}" cy="${k.head[1]}" r="${hr + 3}" fill="#fff"/><circle cx="${k.head[0]}" cy="${k.head[1]}" r="${hr}" fill="${PLUM}"/>`;
-  const vw = Math.round(boxH * w / h);
-  return `<svg width="${vw}" height="${boxH}" viewBox="${minx} ${miny} ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${g}</svg>`;
+  return { g, minx, miny, w, h };
+}
+function svgWrap(vw, vh, c) {
+  return `<svg width="${vw}" height="${vh}" viewBox="${c.minx} ${c.miny} ${c.w} ${c.h}" xmlns="http://www.w3.org/2000/svg">${c.g}</svg>`;
+}
+// dimensionada por ALTO
+function figSVG(pose, frame, boxH) {
+  const c = figCore(pose, frame);
+  return svgWrap(Math.round(boxH * c.w / c.h), boxH, c);
+}
+// ajustada DENTRO de una caja (maxW x maxH), figura entera
+function figSVGFit(pose, frame, maxW, maxH) {
+  const c = figCore(pose, frame);
+  const s = Math.min(maxW / c.w, maxH / c.h);
+  return svgWrap(Math.round(c.w * s), Math.round(c.h * s), c);
 }
 
 // ---------- CSS compartido de los PDFs ----------
@@ -162,10 +175,12 @@ function weekDayBlock(w) {
 }
 function weekPages(withTitle) {
   const head = withTitle ? '<h1>Arranque de 7 días</h1><p class="lead">Tu primera semana, día por día. La rutina del plan en la app + 5 minutos extra de movilidad, con una figura guía de cada movimiento.</p>' : '<h2>Arranque de 7 días · Semana 1</h2>';
-  const p1 = page('Arranque 7 días', `${head}${WEEK.slice(0, 2).map(weekDayBlock).join('')}`);
-  const p2 = page('Arranque 7 días', WEEK.slice(2, 5).map(weekDayBlock).join(''));
-  const p3 = page('Arranque 7 días', WEEK.slice(5).map(weekDayBlock).join(''));
-  return [p1, p2, p3];
+  return [
+    page('Arranque 7 días', `${head}${WEEK.slice(0, 2).map(weekDayBlock).join('')}`),
+    page('Arranque 7 días', WEEK.slice(2, 4).map(weekDayBlock).join('')),
+    page('Arranque 7 días', WEEK.slice(4, 6).map(weekDayBlock).join('')),
+    page('Arranque 7 días', WEEK.slice(6).map(weekDayBlock).join('')),
+  ];
 }
 
 // --- 3. Progreso sin báscula ---
@@ -201,9 +216,9 @@ async function accessPage() {
   const qPlan = await QR.toDataURL(LINKS.plan, qrOpts);
   const acc = (img, title, desc, link) => `<div class="acc"><img src="${img}" alt="QR"><div class="ai"><h3>${title}</h3><p>${desc}</p><a>${link}</a></div></div>`;
   return page('Plan 42 días', `<h1>Plan completo de 42 días</h1>
-    <p class="lead">Escanea cada código con la cámara de tu celular para abrir tus accesos. También te llegan por correo.</p>
+    <p class="lead">Escanea cada código con la cámara de tu celular para abrir tus accesos. Guarda este PDF: aquí tienes todos tus accesos.</p>
     ${acc(qPlan, 'Tu plan base (días 1–21)', 'La app Método Hana con tu rutina personalizada.', LINKS.plan)}
-    ${acc(qFase2, 'Fase 2 · días 22–42', 'La continuación de tu programa en la app. PDF de acceso incluido en tu correo.', LINKS.fase2)}
+    ${acc(qFase2, 'Fase 2 · días 22–42', 'La continuación de tu programa en la app, días 22 a 42.', LINKS.fase2)}
     ${acc(qRod, 'Rutina de rodillas y espalda', '8 movimientos suaves para cuidar tus articulaciones.', LINKS.rodillas)}`);
 }
 
@@ -233,12 +248,17 @@ async function buildAll() {
     ],
   });
 
-  // 5. Plan completo 42 días (acceso)
-  const plan42Idx = `<h2>Incluye además el Pack Arranque</h2>
+  // 5. Plan completo 42 días: entrega TODO en un archivo (accesos + Pack completo)
+  const p42menu = menuPages(false), p42week = weekPages(false), p42track = trackPages(false);
+  const nCover = 1, nAccess = 2, nIndex = 3;         // páginas fijas al inicio
+  const pMenu = nIndex + 1;                           // 4
+  const pWeek = pMenu + p42menu.length;              // 4 + 3 = 7
+  const pTrack = pWeek + p42week.length;             // 7 + 4 = 11
+  const plan42Idx = `<h2>Incluido en este PDF: Pack Arranque</h2>
     <ul class="idx">
-      <li>Come rico toda la semana <span>Menú 7 días + lista del súper</span></li>
-      <li>Arranque de 7 días <span>Semana 1 con movilidad extra</span></li>
-      <li>Tu progreso sin báscula <span>Seguimiento de 21 días</span></li>
+      <li>Come rico toda la semana <span>pág. ${pMenu}</span></li>
+      <li>Arranque de 7 días <span>pág. ${pWeek}</span></li>
+      <li>Tu progreso sin báscula <span>pág. ${pTrack}</span></li>
     </ul>
     <div class="tip" style="margin-top:14px"><b>Cómo usarlo:</b> termina tus días 1–21, continúa con la Fase 2 (días 22–42) y usa la rutina de rodillas y espalda cuando lo necesites.</div>`;
   docs.push({
@@ -247,6 +267,7 @@ async function buildAll() {
       coverPage('Programa completo', 'Plan completo<br>de 42 días', 'Duplica tu programa con la Fase 2 + Pack Arranque + rutina de rodillas y espalda', 'Acceso total'),
       await accessPage(),
       page('Índice', plan42Idx),
+      ...p42menu, ...p42week, ...p42track,
     ],
   });
 
@@ -296,7 +317,7 @@ function coverImg(opts) {
     .pscreen{background:#fff;border-radius:20px;height:100%;padding:18px;display:flex;flex-direction:column;align-items:center}
     .plogo{font-weight:900;letter-spacing:2px;color:${PLUM};font-size:13px}
     .pbar{width:70%;height:7px;border-radius:5px;background:${SOFT};margin:14px 0}
-    .pfig{flex:1;display:flex;align-items:center;justify-content:center}
+    .pfig{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;width:100%}
     .ttl{font-size:40px;font-weight:900;color:${PLUM};text-align:center;margin-top:26px;max-width:720px;line-height:1.1}
   </style></head><body>
     <div class="kick">${opts.kick}</div>
@@ -309,7 +330,7 @@ async function buildCovers() {
   const browser = await chromium.launch();
   const p = await browser.newPage({ viewport: { width: 1000, height: 1000 }, deviceScaleFactor: 1 });
   const sheet = (rot, title, extra) => `<div class="sheet" style="transform:rotate(${rot}deg);${extra || ''}"><div class="sh-head"><span class="sh-logo">HANA</span></div><div class="sh-title">${title}</div><div class="sh-lines"><i></i><i></i><i></i><i></i><i></i></div></div>`;
-  const phone = `<div class="phone"><div class="pscreen"><div class="plogo">MÉTODO HANA</div><div class="pbar"></div><div class="pfig">${figSVG(poseById('puente'), 'B', 95)}</div></div></div>`;
+  const phone = `<div class="phone"><div class="pscreen"><div class="plogo">MÉTODO HANA</div><div class="pbar"></div><div class="pfig">${figSVGFit(poseById('sentadilla-silla'), 'A', 118, 215)}</div></div></div>`;
 
   const covers = [
     { file: 'come-rico-toda-la-semana', kick: 'Menú 7 días', ttl: 'Come rico toda la semana', stage: sheet(-7, 'Menú<br>7 días') },
