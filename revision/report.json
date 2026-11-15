@@ -1,0 +1,11 @@
+{
+  "consoleErrors": [
+    "Failed to load resource: net::ERR_FAILED"
+  ],
+  "brokenImages": [],
+  "priceOffer": {
+    "old": "MX$ 400",
+    "new": "MX$ 300"
+  },
+  "screens": 37
+}

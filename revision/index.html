@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Método Hana — Revisión completa</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{--plum:#4a2a4f;--acc:#c2456a;--soft:#fbe9ee;--ink:#1d1520;--gray:#6f6472}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Poppins',system-ui,sans-serif;color:var(--ink);background:#fff7f9;line-height:1.5}
+  header{background:var(--plum);color:#fff;padding:34px 22px}
+  header h1{font-size:28px;font-weight:900}
+  header p{color:#e9d7df;margin-top:6px;font-size:14px}
+  nav{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid var(--soft);padding:10px 18px;display:flex;gap:8px;flex-wrap:wrap}
+  nav a{font-size:13px;font-weight:700;color:var(--plum);text-decoration:none;background:var(--soft);padding:7px 12px;border-radius:20px}
+  nav a:hover{background:var(--acc);color:#fff}
+  main{max-width:1180px;margin:0 auto;padding:22px}
+  section{margin-top:40px}
+  h2{font-size:22px;font-weight:800;color:var(--plum);border-left:5px solid var(--acc);padding-left:12px;margin-bottom:6px}
+  .lead{color:var(--gray);font-size:14px;margin-bottom:18px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:18px}
+  .shot{background:#fff;border:1px solid var(--soft);border-radius:14px;overflow:hidden;box-shadow:0 3px 10px rgba(74,42,79,.06)}
+  .shotimg{background:#faeef2;max-height:430px;overflow:hidden;display:flex;justify-content:center}
+  .shot img{width:100%;height:auto;display:block}
+  figcaption{font-size:12.5px;font-weight:600;padding:10px 12px;display:flex;gap:8px;align-items:flex-start;min-height:52px}
+  .num{background:var(--acc);color:#fff;font-weight:800;border-radius:7px;padding:1px 7px;font-size:12px;flex:0 0 auto}
+  .media-row{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+  video{border-radius:14px;background:#000;max-width:100%}
+  .vbox{width:300px;max-width:100%}
+  .vbox video{width:100%}
+  .cap{background:#fff;border:1px solid var(--soft);border-radius:14px;overflow:hidden;width:300px;max-width:100%}
+  .cap img{width:100%;display:block}
+  .cap .t{padding:10px 12px;font-size:13px;color:var(--gray)}
+  .ad{background:#fff;border:1px solid var(--soft);border-radius:16px;padding:18px;margin-bottom:18px}
+  .ad h3{color:var(--acc);font-size:17px;margin-bottom:12px}
+  .admedia{display:flex;gap:16px;flex-wrap:wrap}
+  .admedia video{width:230px}
+  .admedia img{width:230px;border-radius:12px;height:max-content}
+  .copy{margin-top:14px;font-size:13.5px}
+  .copy p{margin-top:8px}
+  .copy b{color:var(--plum)}
+  .pills{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+  .pill{display:inline-block;background:#fff;border:2px solid var(--soft);color:var(--plum);font-weight:700;
+    text-decoration:none;padding:11px 16px;border-radius:12px;font-size:14px}
+  .pill:hover{border-color:var(--acc)}
+  .pill.big{background:var(--acc);color:#fff;border-color:var(--acc)}
+  .note{background:var(--soft);border-radius:12px;padding:14px 16px;font-size:13.5px;color:var(--plum);margin-top:12px}
+  footer{text-align:center;color:var(--gray);font-size:12px;padding:40px 20px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Método Hana — Revisión completa</h1>
+  <p>Landing-quiz en vivo · ruleta · checkout · anuncios · producto — capturas iPhone 390×844. Generado 2026-11-15.</p>
+</header>
+<nav>
+  <a href="#landing">Landing (37)</a>
+  <a href="#ruleta">Ruleta y urgencia</a>
+  <a href="#checkout">Checkout</a>
+  <a href="#anuncios">Anuncios</a>
+  <a href="#producto">Producto</a>
+</nav>
+<main>
+
+  <section id="landing">
+    <h2>a) Landing — las 37 pantallas</h2>
+    <p class="lead">Recorrido completo del quiz en vialiviana.impultienda.ar (píxel de Facebook bloqueado durante la captura).</p>
+    <div class="grid">
+      <figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/01.png" alt="Pantalla 01"></div>
+      <figcaption><span class="num">1</span>Portada — ¿Cuántos años tienes?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/02.png" alt="Pantalla 02"></div>
+      <figcaption><span class="num">2</span>Prueba social — Miles de mujeres 40+</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/03.png" alt="Pantalla 03"></div>
+      <figcaption><span class="num">3</span>¿Ya probaste la calistenia asiática?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/04.png" alt="Pantalla 04"></div>
+      <figcaption><span class="num">4</span>Respuesta personalizada</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/05.png" alt="Pantalla 05"></div>
+      <figcaption><span class="num">5</span>¿Qué objetivo es más importante hoy?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/06.png" alt="Pantalla 06"></div>
+      <figcaption><span class="num">6</span>¿Cómo describirías tu cuerpo hoy?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/07.png" alt="Pantalla 07"></div>
+      <figcaption><span class="num">7</span>¿Qué te molesta más hoy? (múltiple)</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/08.png" alt="Pantalla 08"></div>
+      <figcaption><span class="num">8</span>¿Cómo te gustaría verte?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/09.png" alt="Pantalla 09"></div>
+      <figcaption><span class="num">9</span>¿Qué zonas trabajar primero? (múltiple)</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/10.png" alt="Pantalla 10"></div>
+      <figcaption><span class="num">10</span>Solo 15 minutos al día</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/11.png" alt="Pantalla 11"></div>
+      <figcaption><span class="num">11</span>¿Con qué frecuencia haces ejercicio?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/12.png" alt="Pantalla 12"></div>
+      <figcaption><span class="num">12</span>¿Te sientes cómoda con este movimiento?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/13.png" alt="Pantalla 13"></div>
+      <figcaption><span class="num">13</span>¿Cuántas sentadillas seguidas?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/14.png" alt="Pantalla 14"></div>
+      <figcaption><span class="num">14</span>¿Qué tan flexible eres?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/15.png" alt="Pantalla 15"></div>
+      <figcaption><span class="num">15</span>¿Cómo es un día normal tuyo?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/16.png" alt="Pantalla 16"></div>
+      <figcaption><span class="num">16</span>¿Y cómo suele cambiar tu peso?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/17.png" alt="Pantalla 17"></div>
+      <figcaption><span class="num">17</span>Tu tipo de cuerpo (biotipo)</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/18.png" alt="Pantalla 18"></div>
+      <figcaption><span class="num">18</span>¿Última vez que te sentiste orgullosa?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/19.png" alt="Pantalla 19"></div>
+      <figcaption><span class="num">19</span>¿Sientes dolor en alguna zona? (múltiple)</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/20.png" alt="Pantalla 20"></div>
+      <figcaption><span class="num">20</span>Beneficios de la calistenia asiática</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/21.png" alt="Pantalla 21"></div>
+      <figcaption><span class="num">21</span>¿Cómo prefieres empezar?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/22.png" alt="Pantalla 22"></div>
+      <figcaption><span class="num">22</span>Intensidad de tu plan + semanas</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/23.png" alt="Pantalla 23"></div>
+      <figcaption><span class="num">23</span>¿Cuánto mides?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/24.png" alt="Pantalla 24"></div>
+      <figcaption><span class="num">24</span>¿Cuál es tu peso actual?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/25.png" alt="Pantalla 25"></div>
+      <figcaption><span class="num">25</span>¿A qué peso te gustaría llegar?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/26.png" alt="Pantalla 26"></div>
+      <figcaption><span class="num">26</span>¿Cuánta agua tomas al día?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/27.png" alt="Pantalla 27"></div>
+      <figcaption><span class="num">27</span>¿Cuántas horas duermes?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/28.png" alt="Pantalla 28"></div>
+      <figcaption><span class="num">28</span>¿Cómo es tu alimentación?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/29.png" alt="Pantalla 29"></div>
+      <figcaption><span class="num">29</span>¿Cómo está tu energía durante el día?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/30.png" alt="Pantalla 30"></div>
+      <figcaption><span class="num">30</span>Evolución de energía y fuerza (gráfico)</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/31.png" alt="Pantalla 31"></div>
+      <figcaption><span class="num">31</span>Creando tu plan (carga 0→100%)</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/32.png" alt="Pantalla 32"></div>
+      <figcaption><span class="num">32</span>Tu protocolo casi listo (comparación)</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/33.png" alt="Pantalla 33"></div>
+      <figcaption><span class="num">33</span>Tu perfil está listo (IMC)</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/34.png" alt="Pantalla 34"></div>
+      <figcaption><span class="num">34</span>Recupera tu energía (emocional)</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/35.png" alt="Pantalla 35"></div>
+      <figcaption><span class="num">35</span>Compromiso — ¿Qué tan segura estás?</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/36.png" alt="Pantalla 36"></div>
+      <figcaption><span class="num">36</span>Ruleta de bienvenida</figcaption>
+    </figure>
+<figure class="shot">
+      <div class="shotimg"><img loading="lazy" src="shots/37.png" alt="Pantalla 37"></div>
+      <figcaption><span class="num">37</span>Oferta (barra 14:59 · MX$400 → MX$300)</figcaption>
+    </figure>
+    </div>
+  </section>
+
+  <section id="ruleta">
+    <h2>b) Ruleta y urgencia</h2>
+    <p class="lead">Secuencia: girar la ruleta → “¡Ganaste! 25% OFF” → página de oferta con la barra “Tu 25% OFF está reservado por 14:59” y scroll al precio MX$400 tachado / MX$300.</p>
+    <div class="vbox"><video controls playsinline preload="metadata" src="media/ruleta-oferta.webm"></video></div>
+  </section>
+
+  <section id="checkout">
+    <h2>c) Checkout</h2>
+    <p class="lead">Checkout con cupón HANA25 aplicado. No se cargó ningún dato ni se realizó pago.</p>
+    <div class="cap">
+      <img loading="lazy" src="media/checkout.png" alt="Checkout HANA25">
+      <div class="t">Cupón <b>HANA25 −25%</b> aplicado · total <b>MX$ 300</b> · métodos MX (Google Pay, tarjeta, OXXO, SPEI) · order bump rodillas/espalda +MX$99.</div>
+    </div>
+  </section>
+
+  <section id="anuncios">
+    <h2>d) Anuncios (Meta · México)</h2>
+    <p class="lead">3 anuncios, cada uno con su video 9:16 + estático 4:5 y los textos del plan.</p>
+    <article class="ad">
+    <h3>A · Sin saltos</h3>
+    <div class="admedia">
+      <video controls muted playsinline preload="metadata" src="../anuncios/Hana-V1-sin-saltos-9x16.mp4"></video>
+      <img loading="lazy" src="../anuncios/Hana-E1-sin-saltos-4x5.jpg" alt="A · Sin saltos estático">
+    </div>
+    <div class="copy">
+      <p><b>Texto principal:</b> Calistenia asiática pensada para mujeres de 40+ 🌸 Movimientos lentos, sin saltos y sin equipo: 15 minutos al día desde tu sala. Haz el test de 1 minuto y recibe tu plan de 21 días, con demostración animada de cada ejercicio y una versión más fácil si algo molesta. Pago único, sin suscripción.</p>
+      <p><b>Título:</b> Haz el test de 1 minuto &nbsp;·&nbsp; <b>Descripción:</b> Tu plan de 21 días en el celular</p>
+    </div>
+  </article>
+<article class="ad">
+    <h3>B · Test de 1 minuto</h3>
+    <div class="admedia">
+      <video controls muted playsinline preload="metadata" src="../anuncios/Hana-V2-test-1-minuto-9x16.mp4"></video>
+      <img loading="lazy" src="../anuncios/Hana-E2-plan-21-dias-4x5.jpg" alt="B · Test de 1 minuto estático">
+    </div>
+    <div class="copy">
+      <p><b>Texto principal:</b> ¿Cuánto tiempo tienes al día? ¿Qué zonas quieres trabajar? Con tus respuestas armamos tu plan de calistenia asiática de 21 días: rutinas de 10, 15 o 20 minutos, sin impacto. Al final del test te espera un regalo de bienvenida 🎁</p>
+      <p><b>Título:</b> Tu plan de calistenia asiática &nbsp;·&nbsp; <b>Descripción:</b> Test gratis · 1 minuto</p>
+    </div>
+  </article>
+<article class="ad">
+    <h3>C · Rodillas</h3>
+    <div class="admedia">
+      <video controls muted playsinline preload="metadata" src="../anuncios/Hana-V3-rodillas-9x16.mp4"></video>
+      <img loading="lazy" src="../anuncios/Hana-E3-rodillas-4x5.jpg" alt="C · Rodillas estático">
+    </div>
+    <div class="copy">
+      <p><b>Texto principal:</b> Moverte sin castigar las rodillas es posible. El plan Método Hana usa movimientos sin impacto, cada uno con su versión más fácil, y se adapta si tienes molestias en rodillas o espalda. 15 minutos al día. Contenido educativo: si tienes una lesión, consulta a tu médico.</p>
+      <p><b>Título:</b> Calistenia sin impacto &nbsp;·&nbsp; <b>Descripción:</b> Plan de 21 días adaptado a ti</p>
+    </div>
+  </article>
+    <div class="note">Campaña propuesta: objetivo Ventas · píxel 1704965227908722 · solo México, mujeres 35-65 · US$10/día, tope US$60 · lanzar con OK del dueño.</div>
+  </section>
+
+  <section id="producto">
+    <h2>e) Producto</h2>
+    <p class="lead">La app que recibe la clienta y los PDFs de entrega (Google Drive).</p>
+    <div class="pills">
+      <a class="pill big" target="_blank" rel="noopener" href="https://metodo-hana.vercel.app/plan-cd1a5b5cc7">🌸 Abrir la app — plan de 21 días</a>
+    </div>
+    <div class="pills">
+      <a class="pill" target="_blank" rel="noopener" href="https://drive.google.com/file/d/1QHPDNr45hXvjSKwtRKClokBTROFeYQvS/view">📄 Metodo-Hana-Acceso.pdf</a>
+<a class="pill" target="_blank" rel="noopener" href="https://drive.google.com/file/d/1Awa6QZuQjdH-ifoSJDDOxWvY4zc7xAVN/view">📄 Metodo-Hana-Pack-de-Bonos.pdf</a>
+<a class="pill" target="_blank" rel="noopener" href="https://drive.google.com/file/d/1VxXII85xD9vD7arpzIpYX1VQU11K0WHk/view">📄 Metodo-Hana-Rodillas-y-Espalda.pdf</a>
+<a class="pill" target="_blank" rel="noopener" href="https://drive.google.com/file/d/1EX9oWfPOAuihCkFaMHasZphFweHo69RS/view">📄 Metodo-Hana-Fase-2.pdf</a>
+    </div>
+  </section>
+
+</main>
+<footer>Método Hana · documento de revisión interna · rama metodo-hana</footer>
+</body>
+</html>
