@@ -148,8 +148,39 @@ function pageCheckout(query) {
   const base = 400;
   const discount = coupon ? 100 : 0;
   const total0 = base - discount;
-  const body = `<style>${css}</style>
-  <div class="testbar">MODO PRUEBA — no se cobra nada</div>
+  const modo = query.modo === 'starter' ? 'starter' : 'free';
+  const bumpVar = (query.bump || 'a').toLowerCase() === 'b' ? 'b' : 'a';
+
+  const chk = (id, price, title, desc) =>
+    `<label class="bopt"><input type="checkbox" class="bchk" id="${id}" data-price="${price}">
+      <span class="bl"><b>${title}</b><br><span class="bd">${desc}</span></span><span class="bp">+MX$ ${price}</span></label>`;
+
+  let bumpsHTML;
+  if (modo === 'starter') {
+    bumpsHTML = `<div class="bump">
+      <div class="h">Suma tus extras de arranque</div>
+      ${chk('b1', 79, '🥑 Come rico toda la semana', 'Menú de 7 días + lista del súper.')}
+      ${chk('b2', 79, '🧘‍♀️ Arranque de 7 días', 'Tu Semana 1 con 5 min extra de movilidad.')}
+      ${chk('b3', 79, '📋 Tu progreso sin báscula', 'Seguimiento imprimible de 21 días.')}
+      <label class="bopt combo"><input type="checkbox" id="ck-combo">
+        <span class="bl"><b>Sumar los 3 por MX$149</b><br><span class="bd">en vez de MX$237</span></span><span class="bp">MX$ 149</span></label>
+    </div>`;
+  } else {
+    const b = bumpVar === 'b'
+      ? { id: 'bb', price: 149, title: '⚡ Mejora tu plan a 42 días', desc: 'Fase 2 (días 22–42) + menú + seguimiento + rodillas y espalda.' }
+      : { id: 'ba', price: 99, title: '🎁 Pack Arranque 3 en 1', desc: 'Menú de 7 días, tu Semana 1 y seguimiento de 21 días.' };
+    bumpsHTML = `<div class="bump"><div class="h">Mejora tu compra</div>${chk(b.id, b.price, b.title, b.desc)}</div>`;
+  }
+
+  const body = `<style>${css}
+    .bopt{display:flex;align-items:center;gap:10px;border:2px solid #fbe9ee;border-radius:12px;padding:11px 12px;margin-top:9px;cursor:pointer}
+    .bopt input{width:20px;height:20px;flex:0 0 auto;accent-color:#c2456a}
+    .bopt .bl{flex:1;font-size:13px;color:#4a2a4f}
+    .bopt .bd{font-size:11.5px;color:#6f6472;font-weight:400}
+    .bopt .bp{font-weight:800;color:#c2456a;font-size:13px;white-space:nowrap}
+    .bopt.combo{border-style:dashed;border-color:#c2456a;background:#fff}
+  </style>
+  <div class="testbar">MODO PRUEBA — no se cobra nada · modo: ${modo}${modo === 'free' ? ' · bump ' + bumpVar : ''}</div>
   <div class="wrap">
     <div class="brand"><b>HANA</b> · Checkout seguro</div>
 
@@ -158,16 +189,12 @@ function pageCheckout(query) {
       <div class="row"><span>Método Hana: plan de calistenia asiática de 21 días para mujeres 40+</span><b>MX$ 400</b></div>
       <div class="row free"><span>Pack de bonos: rutina express de 7 min, guía de sueño profundo 40+ y calendario imprimible de 21 días</span><b>GRATIS</b></div>
       ${coupon ? `<div class="row disc"><span>Cupón HANA25</span><b>−MX$ 100</b></div>` : ''}
-      <div class="row bumprow" style="display:none"><span>Rutina para rodillas y espalda</span><b>+MX$ 99</b></div>
+      <div class="row" id="ck-extra" style="display:none;color:#c2456a;font-weight:700"><span>Extras agregados</span><b>+MX$ 0</b></div>
       <div class="row total"><span>Total</span><b id="ck-total">MX$ ${total0}</b></div>
       ${coupon ? '' : '<p class="muted" style="margin-top:6px">Sin cupón activo — precio normal MX$ 400.</p>'}
     </div>
 
-    <div class="bump">
-      <div class="h">¿Te molestan las rodillas o la espalda?</div>
-      <p style="font-size:13.5px;margin:6px 0">Rutina para rodillas y espalda: 8 movimientos suaves para cuidar tus articulaciones. <b>+MX$ 99</b></p>
-      <button class="btn ghost" id="ck-bump" type="button" onclick="toggleBump()">＋ Agregar a mi compra</button>
-    </div>
+    ${bumpsHTML}
 
     <div class="card">
       <h1 style="font-size:16px">Datos personales <span class="sim">Simulación</span></h1>
@@ -185,18 +212,31 @@ function pageCheckout(query) {
     <p class="muted" style="text-align:center;margin-top:10px">🔒 Compra 100% segura · Garantía de 7 días · <b>MODO PRUEBA</b></p>
   </div>
   <script>
-    var BASE=${base}, DISC=${discount}, bump=false;
+    var BASE=${base}, DISC=${discount}, BUYBASE='/gracias?cupon=${coupon ? 'HANA25' : ''}';
     try{window.fbq&&fbq('track','InitiateCheckout');}catch(e){}
-    function toggleBump(){
-      bump=!bump;
-      document.querySelector('.bumprow').style.display=bump?'flex':'none';
-      document.getElementById('ck-bump').textContent=bump?'✓ Rutina agregada':'＋ Agregar a mi compra';
-      var t=BASE-DISC+(bump?99:0);
+    function recompute(){
+      var combo=document.getElementById('ck-combo');
+      var items=document.querySelectorAll('.bchk');
+      var extra=0;
+      if(combo && combo.checked){
+        items.forEach(function(c){c.checked=true;c.disabled=true;});
+        extra=149;
+      } else {
+        if(combo) items.forEach(function(c){c.disabled=false;});
+        items.forEach(function(c){ if(c.checked) extra+=parseInt(c.dataset.price,10); });
+      }
+      var t=BASE-DISC+extra;
+      var er=document.getElementById('ck-extra');
+      if(extra>0){er.style.display='flex';er.querySelector('b').textContent='+MX$ '+extra;}
+      else er.style.display='none';
       document.getElementById('ck-total').textContent='MX$ '+t;
       var b=document.getElementById('ck-buy');
       b.textContent='Quiero mi plan Hana · MX$ '+t;
-      b.href='/gracias?cupon=${coupon ? 'HANA25' : ''}&bump='+(bump?1:0);
+      b.href=BUYBASE+'&bump='+(extra>0?1:0)+'&extra='+extra;
     }
+    (function(){var combo=document.getElementById('ck-combo');
+      if(combo)combo.addEventListener('change',function(){ if(!combo.checked){document.querySelectorAll('.bchk').forEach(function(c){c.checked=false;c.disabled=false;});} });})();
+    document.querySelectorAll('.bchk,#ck-combo').forEach(function(c){c.addEventListener('change',recompute);});
   </script>`;
   return shell('Método Hana — Checkout (prueba)', body);
 }
