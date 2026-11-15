@@ -7,6 +7,49 @@
 <style>html,body{margin:0;padding:0;background:#efe7ea}</style>
 <script>
 window.fbq=function(){try{console.log("[fbq]",Array.prototype.slice.call(arguments).join(" | "));}catch(e){}};
+/* DATOS DE PRUEBA — solo en test.html, nunca en los archivos publicados */
+window.HANA_CONFIG={
+  "testimonios": [
+    {
+      "nombre": "María G.",
+      "edad": 54,
+      "ciudad": "Guadalajara",
+      "texto": "Nunca había entrenado y en tres semanas me levanto sin dolor de espalda. Los videos son clarísimos.",
+      "foto": "",
+      "verificado": true,
+      "estrellas": 5
+    },
+    {
+      "nombre": "Lucía R.",
+      "edad": 48,
+      "ciudad": "Monterrey",
+      "texto": "15 minutos al día que sí puedo sostener. Me siento con más energía y menos hinchada.",
+      "foto": "",
+      "estrellas": 5
+    },
+    {
+      "nombre": "Carmen T.",
+      "edad": 61,
+      "ciudad": "Puebla",
+      "texto": "Me gustó que cada ejercicio tiene una versión más fácil para mis rodillas.",
+      "foto": "",
+      "verificado": true
+    },
+    {
+      "nombre": "Ana M.",
+      "edad": 45,
+      "ciudad": "CDMX",
+      "texto": "Pensé que a mi edad ya no, y mírame. Lo recomiendo muchísimo.",
+      "foto": "",
+      "estrellas": 5
+    }
+  ],
+  "plazas": {
+    "activo": true,
+    "total": 100,
+    "restantes": 12
+  }
+};
 </script>
 </head>
 <body>
@@ -282,6 +325,31 @@ window.fbq=function(){try{console.log("[fbq]",Array.prototype.slice.call(argumen
 #hana .h-faq .q.h-open .pm{transform:rotate(45deg)}
 #hana .h-legal{font-size:11px;color:var(--gray);line-height:1.5;margin-top:24px;text-align:center}
 
+/* ---------- testimonios ---------- */
+#hana .h-testis{margin-top:30px}
+#hana .h-trow{display:flex;flex-direction:column;gap:12px;margin-top:14px}
+#hana .h-trow.h-tcar{flex-direction:row;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding-bottom:8px;gap:12px}
+#hana .h-trow.h-tcar .h-testi{min-width:82%;scroll-snap-align:start;flex:0 0 auto}
+#hana .h-testi{background:#fff;border:1px solid var(--line);border-radius:16px;padding:15px;box-shadow:0 3px 12px rgba(74,42,79,.06)}
+#hana .h-testi.h-tfeat{background:var(--soft);border-color:var(--acc)}
+#hana .h-thead{display:flex;align-items:center;gap:11px}
+#hana .h-tav{width:46px;height:46px;border-radius:50%;object-fit:cover;flex:0 0 auto}
+#hana .h-tini{background:var(--acc);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px}
+#hana .h-tinfo{min-width:0}
+#hana .h-tname{font-weight:800;font-size:15px;color:var(--plum)}
+#hana .h-tverif{color:var(--ok);font-size:11px;font-weight:700}
+#hana .h-tmeta{font-size:12px;color:var(--gray)}
+#hana .h-tstars{color:#f5b301;font-size:15px;letter-spacing:2px;margin-top:9px}
+#hana .h-ttext{font-size:14px;line-height:1.5;margin-top:9px;color:var(--ink)}
+#hana .h-tload{margin-top:22px;text-align:left}
+
+/* ---------- plazas ---------- */
+#hana .h-plazas{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:13px 15px;margin-bottom:16px}
+#hana .h-ptxt{font-size:13.5px;font-weight:700;color:var(--plum);text-align:center}
+#hana .h-ptxt b{color:var(--acc);font-size:16px}
+#hana .h-pbar{height:10px;border-radius:8px;background:#efd9e0;overflow:hidden;margin-top:9px}
+#hana .h-pbar i{display:block;height:100%;background:linear-gradient(90deg,#c2456a,#e0614e);border-radius:8px;transition:width .6s ease}
+
 /* ---------- footer CTA ---------- */
 #hana .h-foot{
   position:fixed;left:0;right:0;bottom:0;z-index:40;max-width:560px;margin:0 auto;
@@ -311,6 +379,18 @@ window.fbq=function(){try{console.log("[fbq]",Array.prototype.slice.call(argumen
 </style>
 
 <script>
+// ====== CONFIG EDITABLE A MANO (cargá vos los datos reales) ======
+window.HANA_CONFIG = window.HANA_CONFIG || {
+  testimonios: [
+    // { nombre: "María G.", edad: 52, ciudad: "Guadalajara", texto: "...", foto: "", fecha: "2026-11", verificado: false, estrellas: 5 }
+  ],
+  plazas: {
+    activo: false,
+    total: 100,      // plazas reales con precio de lanzamiento
+    restantes: null  // lo actualizo yo con el número real de ventas
+  }
+};
+// =================================================================
 (function(){
   var root = document.getElementById('hana');
   if(!root || root.dataset.init) return; root.dataset.init='1';
@@ -357,6 +437,39 @@ window.fbq=function(){try{console.log("[fbq]",Array.prototype.slice.call(argumen
     return '<div class="h-pic '+(cls||'')+'">'+
       '<img src="'+asset(file)+'" alt="" loading="lazy" onerror="this.style.display=\'none\'">'+
       (emoji?'<span style="font-size:52px">'+emoji+'</span>':'')+'</div>';
+  }
+  // ---------- testimonios + plazas (datos de window.HANA_CONFIG) ----------
+  var HCFG = window.HANA_CONFIG || {};
+  var TESTI = Array.isArray(HCFG.testimonios) ? HCFG.testimonios : [];
+  var PLAZAS = HCFG.plazas || {};
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function testiCard(t,feat){
+    var av = (t.foto && String(t.foto).trim())
+      ? '<img class="h-tav" src="'+esc(t.foto)+'" alt="" onerror="this.outerHTML=\'<div class=&quot;h-tav h-tini&quot;>'+esc((t.nombre||'?').trim().charAt(0))+'</div>\'">'
+      : '<div class="h-tav h-tini">'+esc((t.nombre||'?').trim().charAt(0))+'</div>';
+    var meta=[(t.edad?t.edad+' años':''),(t.ciudad?esc(t.ciudad):'')].filter(Boolean).join(' · ');
+    var stars= t.estrellas ? '<div class="h-tstars">★★★★★</div>' : '';
+    return '<div class="h-testi'+(feat?' h-tfeat':'')+'">'+
+      '<div class="h-thead">'+av+'<div class="h-tinfo"><div class="h-tname">'+esc(t.nombre||'')+(t.verificado?' <span class="h-tverif">✔ Verificado</span>':'')+'</div>'+
+      (meta?'<div class="h-tmeta">'+meta+'</div>':'')+'</div></div>'+
+      stars+
+      '<p class="h-ttext">“'+esc(t.texto||'')+'”</p>'+
+    '</div>';
+  }
+  function testiBlock(){
+    if(!TESTI.length) return '';
+    var car = TESTI.length>2 ? ' h-tcar' : '';
+    return '<section class="h-testis"><h2>Lo que dicen nuestras clientas</h2>'+
+      '<div class="h-trow'+car+'">'+TESTI.map(function(t){return testiCard(t,false);}).join('')+'</div>'+
+      '<p class="h-note h-center">Testimonios de clientas reales. Los resultados varían según cada persona.</p></section>';
+  }
+  function plazasBlock(){
+    var p=PLAZAS;
+    if(!p||!p.activo||typeof p.total!=='number'||p.total<=0||typeof p.restantes!=='number') return '';
+    var rest=Math.max(0,Math.min(p.total,p.restantes));
+    var pct=Math.round(((p.total-rest)/p.total)*100);
+    return '<div class="h-plazas"><div class="h-ptxt">Precio de lanzamiento: quedan <b>'+rest+'</b> de '+p.total+' lugares</div>'+
+      '<div class="h-pbar"><i style="width:'+pct+'%"></i></div></div>';
   }
   var arw='<svg class="h-arw" width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var chkmark='<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -719,7 +832,8 @@ window.fbq=function(){try{console.log("[fbq]",Array.prototype.slice.call(argumen
       '<div class="h-ring"><svg width="160" height="160"><circle cx="80" cy="80" r="70" fill="none" stroke="#fbe9ee" stroke-width="14"/>'+
       '<circle id="hRingC" cx="80" cy="80" r="70" fill="none" stroke="#c2456a" stroke-width="14" stroke-linecap="round" stroke-dasharray="440" stroke-dashoffset="440"/></svg>'+
       '<div class="pct" id="hPct">0%</div></div>'+
-      '<div class="h-steps" id="hStps">'+steps.map(function(t){return '<div class="h-step"><span class="ic">'+chkmark+'</span><span>'+t+'</span></div>';}).join('')+'</div>';
+      '<div class="h-steps" id="hStps">'+steps.map(function(t){return '<div class="h-step"><span class="ic">'+chkmark+'</span><span>'+t+'</span></div>';}).join('')+'</div>'+
+      (TESTI.length?'<div class="h-tload">'+testiCard(TESTI[0],true)+'</div>':'');
     foot.hidden=true;
     var ring=w.querySelector('#hRingC'), pct=w.querySelector('#hPct');
     var stps=w.querySelectorAll('.h-step');
@@ -935,6 +1049,7 @@ window.fbq=function(){try{console.log("[fbq]",Array.prototype.slice.call(argumen
 
     w.className='h-screen h-offer';
     w.innerHTML=
+      plazasBlock()+
       '<h1>¡Tu plan de Calistenia Asiática está listo!</h1>'+
       '<p class="h-sub">Mira cómo funciona:</p>'+
       '<div class="h-video"><video src="'+((typeof window!=="undefined"&&window.HANA_VIDEO)||"video/demo.mp4")+'" autoplay muted loop playsinline controls onerror="this.parentNode.innerHTML=\'📱 Vista previa de la app\'"></video></div>'+
@@ -945,6 +1060,8 @@ window.fbq=function(){try{console.log("[fbq]",Array.prototype.slice.call(argumen
       '</div></section>'+
 
       '<section class="h-center"><h2>¡App fácil de usar y hecha para principiantes!</h2>'+pic('app-mockup.webp','h-por','📱')+'</section>'+
+
+      testiBlock()+
 
       priceBlock(bp)+
 
