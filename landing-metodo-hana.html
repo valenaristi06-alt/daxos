@@ -1,0 +1,991 @@
+<!-- ============================================================
+     MÉTODO HANA · Landing-quiz (Impultienda — bloque HTML completo)
+     Pegar tal cual en el constructor "HTML completo".
+     No incluye <html>/<head>/<body>. Todo el CSS vive bajo #hana.
+     Precio: Impultienda reemplaza {{price}} dentro de #hprice.
+     ============================================================ -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+<span id="hprice" style="display:none">{{price}}</span>
+
+<div id="hana">
+  <header class="h-header">
+    <button class="h-back" id="hBack" aria-label="Volver" type="button">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="h-brand">
+      <span class="h-logo">HANA</span>
+      <span class="h-tag">Calistenia asiática</span>
+    </div>
+    <div class="h-progress" aria-hidden="true"><i id="hBar"></i></div>
+  </header>
+
+  <!-- barra de urgencia de la oferta (oculta hasta la oferta) -->
+  <div class="h-urg" id="hUrg" hidden>
+    <span id="hUrgText">⏳ Tu 25% OFF está reservado por <b id="hClock">14:59</b></span>
+  </div>
+
+  <main class="h-stage" id="hStage" aria-live="polite"></main>
+
+  <div class="h-foot" id="hFoot" hidden>
+    <button class="h-cta" id="hCta" type="button">Continuar</button>
+  </div>
+
+<style>
+/* ===================== SCOPE #hana ===================== */
+#hana *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+#hana{
+  --acc:#c2456a; --soft:#fbe9ee; --plum:#4a2a4f; --ink:#1d1520;
+  --gray:#6f6472; --ok:#2f8a5b; --line:#ecdfe4;
+  font-family:'Poppins',system-ui,-apple-system,sans-serif;
+  color:var(--ink); background:#fff; max-width:560px; margin:0 auto;
+  position:relative; min-height:100dvh; display:flex; flex-direction:column;
+  overflow-x:hidden;
+}
+#hana button{font-family:inherit}
+#hana img{display:block;max-width:100%}
+
+/* ---------- header ---------- */
+#hana .h-header{
+  position:sticky; top:0; z-index:30; background:rgba(255,255,255,.96);
+  backdrop-filter:blur(6px); display:flex; align-items:center; gap:10px;
+  padding:10px 14px 0; border-bottom:1px solid var(--line);
+}
+#hana .h-back{
+  width:38px;height:38px;border:none;background:none;color:var(--plum);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto;
+  border-radius:50%;
+}
+#hana .h-back:active{background:var(--soft)}
+#hana .h-back[hidden]{visibility:hidden}
+#hana .h-brand{flex:1;display:flex;flex-direction:column;align-items:center;line-height:1}
+#hana .h-logo{font-weight:900;font-size:20px;letter-spacing:3px;color:var(--plum)}
+#hana .h-tag{font-size:9.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gray);margin-top:2px}
+#hana .h-header .h-spacer{width:38px;flex:0 0 auto}
+#hana .h-progress{
+  position:absolute;left:0;right:0;bottom:-1px;height:3px;background:var(--soft);
+}
+#hana .h-progress i{
+  display:block;height:100%;width:0;background:var(--acc);
+  border-radius:0 3px 3px 0;transition:width .45s cubic-bezier(.4,0,.2,1);
+}
+
+/* ---------- urgencia ---------- */
+#hana .h-urg{
+  position:sticky;top:49px;z-index:25;background:var(--plum);color:#fff;
+  text-align:center;font-size:13px;font-weight:600;padding:9px 14px;
+}
+#hana .h-urg b{font-weight:800}
+#hana .h-urg.h-exp{background:#7a6a5f}
+
+/* ---------- stage ---------- */
+#hana .h-stage{flex:1;padding:18px 18px 120px;position:relative}
+#hana .h-screen{animation:hIn .32s ease both}
+@keyframes hIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){
+  #hana .h-screen{animation:none}
+  #hana .h-progress i{transition:none}
+}
+
+#hana h1{font-size:26px;font-weight:900;line-height:1.15;letter-spacing:-.4px}
+#hana h2{font-size:22px;font-weight:800;line-height:1.2;letter-spacing:-.3px}
+#hana .h-acc{color:var(--acc)}
+#hana .h-kicker{font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--acc);margin-bottom:8px}
+#hana .h-sub{color:var(--gray);font-size:14.5px;line-height:1.5;margin-top:8px}
+#hana .h-center{text-align:center}
+
+/* imagen genérica (fondo rosa si falla) */
+#hana .h-pic{
+  width:100%;background:var(--soft);border-radius:20px;overflow:hidden;position:relative;
+  aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;margin:0 auto;
+}
+#hana .h-pic img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#hana .h-pic.h-por{aspect-ratio:3/4;max-width:260px}
+#hana .h-pic.h-sq{aspect-ratio:1/1}
+
+/* ---------- opciones ---------- */
+#hana .h-opts{display:flex;flex-direction:column;gap:11px;margin-top:20px}
+#hana .h-opt{
+  display:flex;align-items:center;gap:13px;width:100%;text-align:left;
+  background:#fff;border:2px solid var(--line);border-radius:16px;
+  padding:15px 15px;min-height:60px;cursor:pointer;font-size:16px;font-weight:600;
+  color:var(--ink);transition:border-color .15s,background .15s,transform .08s;
+}
+#hana .h-opt:active{transform:scale(.99)}
+#hana .h-opt .h-emo{font-size:24px;flex:0 0 auto;line-height:1}
+#hana .h-opt .h-txt{flex:1;line-height:1.25}
+#hana .h-opt .h-arw{color:var(--acc);flex:0 0 auto;opacity:.6}
+#hana .h-opt .h-chk{
+  width:24px;height:24px;border:2px solid var(--line);border-radius:7px;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;color:#fff;
+}
+#hana .h-opt.h-on{border-color:var(--acc);background:var(--soft)}
+#hana .h-opt.h-on .h-chk{background:var(--acc);border-color:var(--acc)}
+#hana .h-opt .h-mini{
+  width:46px;height:46px;border-radius:12px;background:var(--soft);flex:0 0 auto;
+  overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:24px
+}
+#hana .h-opt .h-mini img{width:100%;height:100%;object-fit:cover}
+
+/* ---------- cajas ---------- */
+#hana .h-box{
+  background:var(--soft);border-radius:16px;padding:15px 16px;margin-top:18px;
+  font-size:14px;line-height:1.5;color:var(--plum)
+}
+#hana .h-box.h-ok{background:#eaf6ef;color:#1f6b45}
+#hana .h-note{font-size:11.5px;color:var(--gray);margin-top:12px;line-height:1.45}
+#hana .h-lock{font-size:12px;color:var(--gray);margin-top:14px;display:flex;align-items:center;gap:6px;justify-content:center}
+
+/* alertas con viñeta */
+#hana .h-alerts{display:flex;flex-direction:column;gap:12px;margin-top:18px}
+#hana .h-al{display:flex;gap:11px;align-items:flex-start;font-size:14.5px;line-height:1.4}
+#hana .h-al .h-dot{width:10px;height:10px;border-radius:50%;background:var(--acc);margin-top:5px;flex:0 0 auto}
+#hana .h-al b{font-weight:700}
+
+/* grilla semanas 2x2 */
+#hana .h-weeks{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:18px}
+#hana .h-wk{background:var(--soft);border-radius:14px;padding:13px}
+#hana .h-wk .n{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--acc)}
+#hana .h-wk .t{font-size:14px;font-weight:600;margin-top:4px;line-height:1.3}
+
+/* ---------- slider / regla ---------- */
+#hana .h-slider{margin-top:26px;text-align:center}
+#hana .h-units{display:inline-flex;background:var(--soft);border-radius:30px;padding:4px;margin-bottom:20px}
+#hana .h-units button{
+  border:none;background:none;padding:8px 20px;border-radius:30px;font-weight:700;
+  font-size:14px;color:var(--gray);cursor:pointer;min-height:38px
+}
+#hana .h-units button.h-on{background:#fff;color:var(--acc);box-shadow:0 2px 8px rgba(0,0,0,.08)}
+#hana .h-val{font-size:48px;font-weight:900;color:var(--plum);line-height:1}
+#hana .h-val span{font-size:20px;font-weight:700;color:var(--gray);margin-left:4px}
+#hana .h-range{width:100%;margin-top:26px;-webkit-appearance:none;appearance:none;height:8px;border-radius:8px;background:var(--line);outline:none}
+#hana .h-range::-webkit-slider-thumb{-webkit-appearance:none;width:34px;height:34px;border-radius:50%;background:var(--acc);border:4px solid #fff;box-shadow:0 2px 10px rgba(194,69,106,.5);cursor:pointer}
+#hana .h-range::-moz-range-thumb{width:34px;height:34px;border-radius:50%;background:var(--acc);border:4px solid #fff;box-shadow:0 2px 10px rgba(194,69,106,.5);cursor:pointer}
+
+/* ---------- anillo de carga ---------- */
+#hana .h-ring{width:160px;height:160px;margin:10px auto 0;position:relative}
+#hana .h-ring svg{transform:rotate(-90deg)}
+#hana .h-ring .pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:900;color:var(--plum)}
+#hana .h-steps{margin-top:26px;display:flex;flex-direction:column;gap:13px}
+#hana .h-step{display:flex;align-items:center;gap:11px;font-size:15px;color:var(--gray);transition:color .3s}
+#hana .h-step .ic{width:24px;height:24px;border-radius:50%;border:2px solid var(--line);flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;transition:all .3s}
+#hana .h-step.h-done{color:var(--ink);font-weight:600}
+#hana .h-step.h-done .ic{background:var(--ok);border-color:var(--ok)}
+
+/* ---------- IMC ---------- */
+#hana .h-imc{margin-top:22px}
+#hana .h-imc .bar{height:16px;border-radius:10px;display:flex;overflow:hidden}
+#hana .h-imc .bar span{flex:1}
+#hana .h-imc .bar .b1{background:#7cc4f0}
+#hana .h-imc .bar .b2{background:#4caf6a}
+#hana .h-imc .bar .b3{background:#f0b84c}
+#hana .h-imc .bar .b4{background:#e0614e}
+#hana .h-imc .track{position:relative;height:30px;margin-top:4px}
+#hana .h-imc .mark{position:absolute;top:0;transform:translateX(-50%);text-align:center;transition:left .6s ease}
+#hana .h-imc .mark .pin{width:3px;height:14px;background:var(--ink);margin:0 auto;border-radius:2px}
+#hana .h-imc .mark .lbl{font-size:11px;font-weight:800;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:8px;padding:2px 7px;margin-top:3px;white-space:nowrap}
+#hana .h-imc .legend{display:flex;justify-content:space-between;font-size:10px;color:var(--gray);margin-top:6px}
+#hana .h-cards{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:20px}
+#hana .h-card{background:var(--soft);border-radius:14px;padding:13px}
+#hana .h-card .k{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--gray)}
+#hana .h-card .v{font-size:16px;font-weight:800;color:var(--plum);margin-top:3px;line-height:1.2}
+
+/* ---------- ruleta ---------- */
+#hana .h-wheelwrap{position:relative;width:280px;height:280px;margin:18px auto 0}
+#hana .h-wheel{
+  width:100%;height:100%;border-radius:50%;position:relative;
+  border:8px solid #fff;box-shadow:0 10px 30px rgba(74,42,79,.25),0 0 0 4px var(--acc);
+  transition:transform 5s cubic-bezier(.12,.8,.12,1);
+}
+#hana .h-wheel .seg{
+  position:absolute;inset:0;display:flex;justify-content:center;
+  font-size:10.5px;font-weight:800;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.25)
+}
+#hana .h-wheel .seg span{
+  margin-top:20px;width:70px;text-align:center;transform-origin:center;line-height:1.1
+}
+#hana .h-hub{
+  position:absolute;top:50%;left:50%;width:54px;height:54px;transform:translate(-50%,-50%);
+  background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:26px;box-shadow:0 2px 10px rgba(0,0,0,.2);z-index:3
+}
+#hana .h-point{
+  position:absolute;top:-6px;left:50%;transform:translateX(-50%);z-index:4;
+  width:0;height:0;border-left:13px solid transparent;border-right:13px solid transparent;
+  border-top:22px solid var(--acc);filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))
+}
+#hana .h-win{
+  background:var(--soft);border:2px solid var(--acc);border-radius:18px;padding:18px;
+  margin-top:22px;text-align:center;animation:hIn .4s ease both
+}
+#hana .h-win .big{font-size:24px;font-weight:900;color:var(--acc)}
+#hana .h-confetti{position:fixed;inset:0;pointer-events:none;z-index:999;overflow:hidden}
+#hana .h-confetti i{position:absolute;width:9px;height:14px;top:-20px;border-radius:2px;animation:hFall linear forwards}
+@keyframes hFall{to{transform:translateY(110vh) rotate(720deg);opacity:.9}}
+
+/* ---------- oferta ---------- */
+#hana .h-offer section{margin-top:30px}
+#hana .h-video{
+  width:100%;max-width:300px;margin:16px auto 0;aspect-ratio:9/16;background:var(--plum);
+  border-radius:20px;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#fff
+}
+#hana .h-video video{width:100%;height:100%;object-fit:cover}
+#hana .h-price{
+  background:linear-gradient(180deg,#fff,var(--soft));border:2px solid var(--acc);
+  border-radius:20px;padding:22px;text-align:center;margin-top:16px
+}
+#hana .h-price .old{font-size:17px;color:var(--gray);text-decoration:line-through}
+#hana .h-price .new{font-size:44px;font-weight:900;color:var(--acc);line-height:1;margin-top:4px}
+#hana .h-price .meta{font-size:13px;color:var(--plum);margin-top:8px;font-weight:600}
+#hana .h-price .safe{font-size:12px;color:var(--gray);margin-top:6px}
+#hana .h-buy{
+  background:var(--acc);color:#fff;border:none;border-radius:14px;padding:16px;
+  font-size:17px;font-weight:800;width:100%;margin-top:14px;cursor:pointer;min-height:54px;
+  box-shadow:0 6px 18px rgba(194,69,106,.4);text-decoration:none;display:block;text-align:center
+}
+#hana .h-buy:active{transform:scale(.99)}
+#hana .h-receive{display:flex;flex-direction:column;gap:14px;margin-top:16px}
+#hana .h-receive .r{display:flex;gap:12px;align-items:flex-start}
+#hana .h-receive .r .i{font-size:22px;flex:0 0 auto}
+#hana .h-receive .r .t{font-size:14.5px;line-height:1.4}
+#hana .h-steps3{display:flex;flex-direction:column;gap:12px;margin-top:16px}
+#hana .h-steps3 .s{display:flex;gap:12px;align-items:center;background:var(--soft);border-radius:14px;padding:13px}
+#hana .h-steps3 .s .n{width:30px;height:30px;border-radius:50%;background:var(--acc);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+#hana .h-bonus{display:flex;flex-direction:column;gap:11px;margin-top:16px}
+#hana .h-bonus .b{display:flex;gap:12px;align-items:center;border:2px solid var(--line);border-radius:14px;padding:13px}
+#hana .h-bonus .b .m{width:48px;height:48px;border-radius:10px;background:var(--soft);flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:24px}
+#hana .h-guar{text-align:center;background:#eaf6ef;border-radius:18px;padding:22px;margin-top:16px}
+#hana .h-guar .seal{width:70px;height:70px;border-radius:50%;background:#fff;border:3px solid var(--ok);display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 10px}
+#hana .h-check{display:flex;flex-direction:column;gap:14px;margin-top:16px}
+#hana .h-check .c .wk{font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--acc)}
+#hana .h-check .c .d{font-size:14.5px;margin-top:3px;display:flex;gap:8px;align-items:flex-start}
+#hana .h-faq{margin-top:12px}
+#hana .h-faq .q{border-bottom:1px solid var(--line);padding:15px 0;cursor:pointer}
+#hana .h-faq .q .qh{display:flex;justify-content:space-between;align-items:center;gap:10px;font-weight:700;font-size:15px}
+#hana .h-faq .q .qh .pm{color:var(--acc);font-size:22px;transition:transform .2s;flex:0 0 auto}
+#hana .h-faq .q .a{max-height:0;overflow:hidden;transition:max-height .25s ease;font-size:14px;color:var(--gray);line-height:1.5}
+#hana .h-faq .q.h-open .a{max-height:240px;margin-top:10px}
+#hana .h-faq .q.h-open .pm{transform:rotate(45deg)}
+#hana .h-legal{font-size:11px;color:var(--gray);line-height:1.5;margin-top:24px;text-align:center}
+
+/* ---------- footer CTA ---------- */
+#hana .h-foot{
+  position:fixed;left:0;right:0;bottom:0;z-index:40;max-width:560px;margin:0 auto;
+  padding:14px 18px calc(14px + env(safe-area-inset-bottom));
+  background:linear-gradient(180deg,rgba(255,255,255,0),#fff 32%);
+  pointer-events:none;
+}
+#hana .h-cta{
+  pointer-events:auto;width:100%;background:var(--acc);color:#fff;border:none;
+  border-radius:16px;padding:17px;font-size:17px;font-weight:800;cursor:pointer;
+  min-height:56px;box-shadow:0 8px 22px rgba(194,69,106,.42);
+}
+#hana .h-cta:active{transform:scale(.99)}
+#hana .h-cta:disabled{opacity:.45;box-shadow:none}
+
+/* cover layout */
+#hana .h-cover-top{display:flex;gap:14px;align-items:stretch}
+#hana .h-cover-top .l{flex:1;display:flex;flex-direction:column;justify-content:center}
+#hana .h-cover-top .r{flex:0 0 42%}
+#hana .h-cover-top .r .h-pic{height:100%;aspect-ratio:auto;min-height:200px}
+#hana .h-agebtns{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+@media(max-width:360px){
+  #hana h1{font-size:23px}
+  #hana .h-val{font-size:40px}
+  #hana .h-wheelwrap{width:250px;height:250px}
+}
+</style>
+
+<script>
+(function(){
+  var root = document.getElementById('hana');
+  if(!root || root.dataset.init) return; root.dataset.init='1';
+
+  var stage = document.getElementById('hStage');
+  var bar   = document.getElementById('hBar');
+  var back  = document.getElementById('hBack');
+  var foot  = document.getElementById('hFoot');
+  var cta   = document.getElementById('hCta');
+  var urg   = document.getElementById('hUrg');
+
+  // ---------- pixel helper ----------
+  var fired = {};
+  function px(ev){
+    try{ if(typeof fbq==='function' && !fired[ev]){ fbq('track', ev); fired[ev]=1; } }catch(e){}
+  }
+
+  // ---------- precio ----------
+  function basePrice(){
+    var raw=(document.getElementById('hprice')||{}).textContent||'';
+    var digits=raw.replace(/[^0-9.,]/g,'');
+    // normaliza: último separador = decimal si deja 2 dígitos, si no se ignora
+    var m=digits.match(/[.,](\d{2})$/);
+    var dec=0, intpart=digits;
+    if(m){ dec=parseInt(m[1],10); intpart=digits.slice(0,m.index); }
+    intpart=intpart.replace(/[.,]/g,'');
+    var n=parseInt(intpart||'0',10)+(dec/100);
+    var pref=raw.replace(/[0-9.,\s]/g,'')||'MX$';
+    return {n:n||399, pref:pref.trim()||'MX$', raw:raw.trim()||'MX$ 399'};
+  }
+  function fmt(n,pref){
+    var r=Math.round(n);
+    return (pref||'MX$')+' '+r.toLocaleString('es-MX');
+  }
+
+  // ---------- estado ----------
+  var S={ height:165, hUnit:'cm', weight:70, wUnit:'kg', target:65, tUnit:'kg' };
+  var idx=0;
+
+  // ---------- util ----------
+  function el(html){ var d=document.createElement('div'); d.innerHTML=html.trim(); return d.firstChild; }
+  function asset(file){ try{ if(window.HANA_ASSETS && HANA_ASSETS[file]) return HANA_ASSETS[file]; }catch(e){} return 'img/'+file; }
+  function pic(file,cls,emoji){
+    return '<div class="h-pic '+(cls||'')+'">'+
+      '<img src="'+asset(file)+'" alt="" loading="lazy" onerror="this.style.display=\'none\'">'+
+      (emoji?'<span style="font-size:52px">'+emoji+'</span>':'')+'</div>';
+  }
+  var arw='<svg class="h-arw" width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var chkmark='<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  // ============ definición de pantallas ============
+  // tipos: cover, image, single, multi, personal, slider, loader, graph, imc, biotipo, intensity, graph2, wheel, offer
+  var SCR=[
+    {type:'cover'},                                                                 // 0
+    {type:'image', img:'grupo.webp', title:'Miles de mujeres después de los 40 eligen entrenar así',
+      sub:'Movimientos lentos, sin impacto y en casa. Tu cuerpo lo agradece.', cta:'Continuar'},   // 1
+    {type:'single', key:'knows', title:'¿Ya probaste la calistenia asiática?',
+      sub:'No necesitas experiencia: el plan arranca desde cero.', img:'grupo.webp',
+      opts:[['✅','Sí, alguna vez'],['👂','Escuché hablar'],['🌱','Nunca, pero me interesa']]},     // 2
+    {type:'personal', from:'knows', title:'Perfecto para tu punto de partida',
+      img:'grupo.webp', cta:'CONTINUAR →',
+      texts:{0:'¡Genial! Vas a reconocer los movimientos y afinar tu técnica con guía paso a paso.',
+             1:'Te va a encantar: por fin vas a probar eso de lo que tanto se habla, bien explicado.',
+             2:'Ideal: empiezas sin malos hábitos y aprendes cada movimiento desde cero, a tu ritmo.'}}, // 3
+    {type:'single', key:'goal', title:'¿Qué objetivo es más importante hoy?',
+      opts:[['🔥','Bajar la panza y afinar la cintura'],['💪','Tonificar y ganar fuerza'],['⚡','Más energía y menos dolores']]}, // 4
+    {type:'single', key:'bodyNow', title:'¿Cómo describirías tu cuerpo hoy?',
+      opts:[['🙂','Delgada'],['🙋‍♀️','Con algunos kilos de más'],['🤗','Con bastantes kilos de más']]}, // 5
+    {type:'multi', key:'bothers', title:'¿Qué te molesta más hoy?',
+      sub:'Puedes elegir varias.', foot:'🔒 Tus datos son 100% confidenciales.',
+      opts:[['🤰','Me cuesta bajar la panza'],['🦴','Cuerpo rígido y dolorido'],['😴','Cansancio y poca energía'],
+            ['🎈','Me siento hinchada'],['🌙','Duermo mal'],['🌡️','Cambios hormonales (sofocos, ánimo)'],
+            ['💗','Solo quiero cuidar mi salud','excl']]},                             // 6
+    {type:'single', key:'lookLike', title:'¿Cómo te gustaría verte?',
+      opts:[['🌸','Más delgada'],['💪','Tonificada y firme'],['🤸‍♀️','Ágil y sin dolores']]}, // 7
+    {type:'multi', key:'zones', title:'¿Qué zonas quieres trabajar primero?',
+      sub:'Elige las que quieras.',
+      opts:[['🎯','Abdomen y cintura'],['🍑','Glúteos'],['🦵','Piernas'],['💪','Brazos'],['🧍‍♀️','Espalda y postura']]}, // 8
+    {type:'image', img:'mov-flex.webp', title:'Solo 15 minutos al día',
+      sub:'Movimientos lentos y controlados que caben en cualquier agenda.', cta:'Crear mi rutina personalizada →'}, // 9
+    {type:'single', key:'freq', title:'¿Con qué frecuencia haces ejercicio?',
+      opts:[['🔁','Todos los días'],['📆','Algunas veces por semana'],['🌧️','Casi nunca']]}, // 10
+    {type:'single', key:'comfy', title:'¿Te sientes cómoda haciendo este movimiento?',
+      sub:'Una sentadilla suave apoyándote en una silla.', img:'mov-sentadilla.webp',
+      opts:[['😄','Sí, sin problema'],['😅','Con algo de dificultad'],['🙅‍♀️','No, me cuesta mucho']]}, // 11
+    {type:'single', key:'squats', title:'¿Cuántas sentadillas puedes hacer seguidas?',
+      img:'mov-sentadilla.webp',
+      opts:[['0️⃣','Ninguna'],['🔟','1 a 10'],['💪','11 a 20'],['🏅','Más de 20']]}, // 12
+    {type:'single', key:'flex', title:'¿Qué tan flexible eres?',
+      img:'mov-flex.webp',
+      opts:[['🤸‍♀️','Muy flexible'],['🙆‍♀️','Un poco'],['🪵','Muy rígida'],['🤔','No estoy segura']]}, // 13
+    {type:'single', key:'dayLife', title:'¿Cómo es un día normal tuyo?',
+      box:'La mayoría de las mujeres que empiezan vienen de una vida sedentaria: el plan está pensado para eso.',
+      opts:[['🪑','Casi todo el día sentada'],['🚶‍♀️','Me muevo un poco'],['🏃‍♀️','Muy activa']]}, // 14
+    {type:'single', key:'weightChange', title:'¿Y cómo suele cambiar tu peso?',
+      opts:[['⬆️','Subo fácil y bajo lento'],['⚖️','Subo y bajo con facilidad'],['⬇️','Me cuesta subir de peso']]}, // 15 -> biotipo
+    {type:'biotipo'},                                                                // 16
+    {type:'single', key:'proud', title:'¿Cuándo fue la última vez que te sentiste orgullosa de tu cuerpo?',
+      opts:[['🗓️','Hace menos de 1 año'],['📅','Entre 1 y 3 años'],['⏳','Hace más de 3 años'],['🙈','Ya ni me acuerdo']]}, // 17
+    {type:'multi', key:'pain', title:'¿Sientes dolor en alguna zona?',
+      sub:'Vamos a cuidar esas zonas en tu plan.',
+      opts:[['🔙','Espalda / lumbar'],['🦵','Rodillas'],['💆‍♀️','Cuello y hombros'],['✨','Ninguna','excl']]}, // 18
+    {type:'benefits'},                                                               // 19
+    {type:'single', key:'prefStart', title:'¿Cómo prefieres empezar?',
+      opts:[['🍃','Bien suave'],['🔸','Intermedio'],['🔥','Más activo'],['✅','Que el plan decida por mí']]}, // 20
+    {type:'intensity'},                                                              // 21
+    {type:'slider', key:'height', title:'¿Cuánto mides?', units:['cm','pies'], def:165}, // 22
+    {type:'slider', key:'weight', title:'¿Cuál es tu peso actual?', units:['kg','lb'], def:70}, // 23
+    {type:'slider', key:'target', title:'¿A qué peso te gustaría llegar?', units:['kg','lb'], def:65}, // 24
+    {type:'single', key:'water', title:'¿Cuánta agua tomas al día?',
+      opts:[['☕','Solo café o té'],['💧','Poca'],['🥤','Una buena cantidad'],['🌊','Todo el día']]}, // 25
+    {type:'single', key:'sleep', title:'¿Cuántas horas duermes?',
+      opts:[['😣','Menos de 5'],['😐','5 a 6'],['😊','7 a 8'],['😴','Más de 8']]}, // 26
+    {type:'single', key:'diet', title:'¿Cómo es tu alimentación?',
+      opts:[['🍽️','Sin restricciones'],['🥗','Vegetariana'],['🌱','Vegana'],['🌾','Sin gluten'],['🍫','Me cuesta controlar los antojos']]}, // 27
+    {type:'single', key:'energy', title:'¿Cómo está tu energía durante el día?',
+      opts:[['🔋','Agotada casi siempre'],['📈','Varía durante el día'],['⚡','Muy activa']]}, // 28
+    {type:'graph'},                                                                  // 29
+    {type:'loader'},                                                                 // 30
+    {type:'graph2'},                                                                 // 31
+    {type:'imc'},                                                                    // 32
+    {type:'image', img:'mov-flex.webp', title:'Recupera tu energía y vuelve a sentirte tú',
+      box:'Sin gimnasio, sin saltos y sin dietas imposibles.', cta:'QUIERO EMPEZAR AHORA →', okbox:true}, // 33
+    {type:'commit'},                                                                 // 34
+    {type:'wheel'},                                                                  // 35
+    {type:'offer'}                                                                   // 36
+  ];
+
+  var LOADER_IDX=30, OFFER_IDX=36;
+
+  // ---------- navegación ----------
+  function setProgress(){
+    var p = idx>=LOADER_IDX ? 100 : Math.round((idx/LOADER_IDX)*100);
+    bar.style.width = p+'%';
+  }
+  function go(n){
+    if(n<0||n>=SCR.length) return;
+    idx=n;
+    back.hidden = (idx===0);
+    urg.hidden = (idx!==OFFER_IDX);
+    foot.hidden = true;
+    setProgress();
+    stage.innerHTML='';
+    render(SCR[idx]);
+    try{ window.scrollTo(0,0); }catch(e){}
+    stage.scrollTop=0;
+    if(idx===LOADER_IDX) px('QuizComplete');
+    if(idx===OFFER_IDX) px('ViewOffer');
+  }
+  function next(){ go(idx+1); }
+  back.addEventListener('click', function(){ if(idx>0) go(idx-1); });
+
+  // CTA genérico
+  function showCta(label, fn){
+    cta.textContent=label; cta.disabled=false;
+    cta.onclick=fn;
+    foot.hidden=false;
+  }
+
+  // ---------- render principal ----------
+  function render(s){
+    var w=document.createElement('div'); w.className='h-screen'; stage.appendChild(w);
+    var T=s.type;
+
+    if(T==='cover') return renderCover(w);
+    if(T==='image') return renderImage(w,s);
+    if(T==='single') return renderSingle(w,s);
+    if(T==='multi') return renderMulti(w,s);
+    if(T==='personal') return renderPersonal(w,s);
+    if(T==='slider') return renderSlider(w,s);
+    if(T==='biotipo') return renderBiotipo(w);
+    if(T==='benefits') return renderBenefits(w);
+    if(T==='intensity') return renderIntensity(w);
+    if(T==='graph') return renderGraph(w);
+    if(T==='loader') return renderLoader(w);
+    if(T==='graph2') return renderGraph2(w);
+    if(T==='imc') return renderImc(w);
+    if(T==='commit') return renderCommit(w);
+    if(T==='wheel') return renderWheel(w);
+    if(T==='offer') return renderOffer(w);
+  }
+
+  // ---------- cover ----------
+  function renderCover(w){
+    w.innerHTML=
+      '<div class="h-kicker">Test de 1 minuto</div>'+
+      '<div class="h-cover-top">'+
+        '<div class="l"><h1>Calistenia <span class="h-acc">Asiática</span> para Mujeres</h1></div>'+
+        '<div class="r">'+pic('hero.webp','h-por','🌸')+'</div>'+
+      '</div>'+
+      '<h2 style="margin-top:20px">¿Cuántos años tienes?</h2>'+
+      '<div class="h-agebtns" id="hAge"></div>'+
+      '<div class="h-box">Haz este test y recibe un plan específico para tu edad y objetivo. Al final, recibes tu diagnóstico gratis.</div>'+
+      '<div class="h-lock">🔒 Tus datos son privados y seguros.</div>'+
+      '<div class="h-note">Al continuar, aceptas los Términos y la Política de privacidad.</div>';
+    var ages=[['🌼','35 a 44'],['🌸','45 a 54'],['🌺','55 a 64'],['🌷','65 o más']];
+    var box=w.querySelector('#hAge');
+    ages.forEach(function(a,i){
+      var b=el('<button class="h-opt" type="button"><span class="h-emo">'+a[0]+'</span><span class="h-txt">'+a[1]+'</span>'+arw+'</button>');
+      b.addEventListener('click',function(){
+        S.age=a[1]; px('QuizStart'); pick(b,w,function(){ next(); });
+      });
+      box.appendChild(b);
+    });
+  }
+
+  // ---------- auto-avance ----------
+  function pick(node,w,done){
+    node.classList.add('h-on');
+    Array.prototype.forEach.call(w.querySelectorAll('.h-opt'),function(o){ o.style.pointerEvents='none'; });
+    setTimeout(done,200);
+  }
+
+  // ---------- image screen ----------
+  function renderImage(w,s){
+    w.innerHTML=(s.img?pic(s.img,'',''):'')+
+      '<h1 style="margin-top:18px">'+s.title+'</h1>'+
+      (s.sub?'<p class="h-sub">'+s.sub+'</p>':'')+
+      (s.box?'<div class="h-box'+(s.okbox?' h-ok':'')+'">'+s.box+'</div>':'');
+    showCta(s.cta||'Continuar', next);
+  }
+
+  // ---------- single ----------
+  function renderSingle(w,s){
+    w.innerHTML=
+      (s.img?pic(s.img,'',''):'')+
+      '<h1 style="margin-top:'+(s.img?'18px':'4px')+'">'+s.title+'</h1>'+
+      (s.sub?'<p class="h-sub">'+s.sub+'</p>':'')+
+      (s.box?'<div class="h-box">'+s.box+'</div>':'')+
+      '<div class="h-opts"></div>';
+    var box=w.querySelector('.h-opts');
+    s.opts.forEach(function(o,i){
+      var b=el('<button class="h-opt" type="button"><span class="h-emo">'+o[0]+'</span><span class="h-txt">'+o[1]+'</span>'+arw+'</button>');
+      b.addEventListener('click',function(){ S[s.key]=i; pick(b,w,next); });
+      box.appendChild(b);
+    });
+  }
+
+  // ---------- multi ----------
+  function renderMulti(w,s){
+    w.innerHTML=
+      '<h1>'+s.title+'</h1>'+
+      (s.sub?'<p class="h-sub">'+s.sub+'</p>':'')+
+      '<div class="h-opts"></div>'+
+      (s.foot?'<div class="h-lock">'+s.foot+'</div>':'');
+    var box=w.querySelector('.h-opts');
+    var sel={};
+    s.opts.forEach(function(o,i){
+      var b=el('<button class="h-opt" type="button"><span class="h-emo">'+o[0]+'</span><span class="h-txt">'+o[1]+'</span><span class="h-chk">'+chkmark+'</span></button>');
+      b.addEventListener('click',function(){
+        var excl=o[2]==='excl';
+        if(excl){
+          var on=!sel[i]; sel={};
+          Array.prototype.forEach.call(box.children,function(c){c.classList.remove('h-on');});
+          if(on){ sel[i]=1; b.classList.add('h-on'); }
+        }else{
+          // deselecciona exclusivos
+          s.opts.forEach(function(oo,j){ if(oo[2]==='excl'&&sel[j]){ delete sel[j]; box.children[j].classList.remove('h-on'); }});
+          if(sel[i]){ delete sel[i]; b.classList.remove('h-on'); }
+          else{ sel[i]=1; b.classList.add('h-on'); }
+        }
+        cta.disabled = Object.keys(sel).length===0;
+      });
+      box.appendChild(b);
+    });
+    showCta('Continuar', function(){ S[s.key]=Object.keys(sel).map(Number); next(); });
+    cta.disabled=true;
+  }
+
+  // ---------- personal ----------
+  function renderPersonal(w,s){
+    var k=S[s.from]; if(k===undefined)k=2;
+    w.innerHTML=(s.img?pic(s.img,'',''):'')+
+      '<h1 style="margin-top:18px">'+s.title+'</h1>'+
+      '<div class="h-box">'+(s.texts[k]||s.texts[2])+'</div>';
+    showCta(s.cta||'Continuar', next);
+  }
+
+  // ---------- slider ----------
+  function renderSlider(w,s){
+    var key=s.key;
+    var unitKey = key==='height'?'hUnit':(key==='weight'?'wUnit':'tUnit');
+    w.innerHTML=
+      '<h1>'+s.title+'</h1>'+
+      '<div class="h-slider">'+
+        '<div class="h-units"><button data-u="0" class="h-on">'+s.units[0]+'</button><button data-u="1">'+s.units[1]+'</button></div>'+
+        '<div class="h-val" id="hSv"></div>'+
+        '<input class="h-range" type="range" id="hSr">'+
+      '</div>';
+    var sv=w.querySelector('#hSv'), sr=w.querySelector('#hSr');
+    var uBtns=w.querySelectorAll('.h-units button');
+
+    // rangos base en unidad métrica
+    var conf = key==='height'
+      ? {min:140,max:195,step:1, m2i:function(v){return v;}, metric:'cm'}
+      : {min:40, max:150,step:1, m2i:function(v){return v;}, metric:'kg'};
+
+    function cur(){ return S[key]; } // valor en métrica
+    function draw(){
+      var u=S[unitKey];
+      if(key==='height'){
+        if(u==='cm'){ sr.min=140; sr.max=195; sr.value=S.height; sv.innerHTML=S.height+'<span>cm</span>'; }
+        else{ // pies
+          var totalIn=Math.round(S.height/2.54);
+          var ft=Math.floor(totalIn/12), inch=totalIn%12;
+          sr.min=140; sr.max=195; sr.value=S.height;
+          sv.innerHTML=ft+"'"+inch+'"<span></span>';
+        }
+      }else{
+        if(u==='kg'){ sr.min=40; sr.max=150; sr.value=S[key]; sv.innerHTML=S[key]+'<span>kg</span>'; }
+        else{ sr.min=40; sr.max=150; sr.value=S[key]; sv.innerHTML=Math.round(S[key]*2.205)+'<span>lb</span>'; }
+      }
+    }
+    sr.min=conf.min; sr.max=conf.max; sr.step=conf.step; sr.value=cur();
+    draw();
+    sr.addEventListener('input',function(){ S[key]=parseInt(sr.value,10); draw(); });
+    Array.prototype.forEach.call(uBtns,function(ub){
+      ub.addEventListener('click',function(){
+        Array.prototype.forEach.call(uBtns,function(x){x.classList.remove('h-on');});
+        ub.classList.add('h-on');
+        S[unitKey]= ub.dataset.u==='0' ? s.units[0] : s.units[1];
+        // normaliza clave de unidad a métrica/imperial reconocible
+        if(key==='height') S.hUnit = ub.dataset.u==='0'?'cm':'pies';
+        else S[unitKey]= ub.dataset.u==='0'?'kg':'lb';
+        draw();
+      });
+    });
+    showCta('Continuar', next);
+  }
+
+  // ---------- biotipo ----------
+  function bioData(){
+    var k=S.weightChange; // 0 endo,1 meso,2 ecto
+    if(k===1) return {key:'meso', name:'Mesomorfo', img:'biotipo-meso.webp',
+      txt:'Tu cuerpo responde rápido al entrenamiento. Con constancia vas a notar tono y firmeza pronto.'};
+    if(k===2) return {key:'ecto', name:'Ectomorfo', img:'biotipo-ecto.webp',
+      txt:'Te cuesta ganar volumen. El foco será fuerza suave y postura para una figura definida.'};
+    return {key:'endo', name:'Endomorfo', img:'biotipo-endo.webp',
+      txt:'Acumulas con facilidad y liberas despacio. Trabajaremos movilidad y constancia para activar tu cuerpo.'};
+  }
+  function renderBiotipo(w){
+    var b=bioData(); S.biotipo=b.name;
+    w.innerHTML=pic(b.img,'','🧍‍♀️')+
+      '<h1 style="margin-top:18px">Parece que tu tipo de cuerpo es: <span class="h-acc">'+b.name+'</span></h1>'+
+      '<p class="h-sub">'+b.txt+'</p>'+
+      '<div class="h-box">Por eso armamos tu plan a medida de tu tipo de cuerpo.</div>'+
+      '<div class="h-note">Orientación general, no es un diagnóstico.</div>';
+    showCta('Continuar', next);
+  }
+
+  // ---------- benefits ----------
+  function renderBenefits(w){
+    var al=[
+      'Ayuda a <b>aliviar tensiones</b> en espalda, cuello y rodillas',
+      'Trabaja para <b>recuperar movilidad</b> sin forzar',
+      '<b>Fortalece</b> con movimientos lentos y controlados',
+      'Ayuda a <b>calmar el estrés</b> y la mente',
+      'Activa el cuerpo de forma <b>progresiva</b>'
+    ];
+    w.innerHTML=pic('grupo.webp','','🧘‍♀️')+
+      '<h1 style="margin-top:18px">La calistenia asiática trabaja todo tu cuerpo sin castigar las articulaciones</h1>'+
+      '<div class="h-alerts">'+al.map(function(t){return '<div class="h-al"><span class="h-dot"></span><span>'+t+'</span></div>';}).join('')+'</div>';
+    showCta('Continuar', next);
+  }
+
+  // ---------- intensity ----------
+  function renderIntensity(w){
+    var map=['Bien suave','Intermedia','Más activa','a tu medida'];
+    var p=S.prefStart; var label= p===3?'a tu medida':(map[p]||'a tu medida');
+    S.intensity=label;
+    var wk=[['Semana 1','Movilidad y respiración'],['Semana 2','Fuerza de piernas y abdomen'],
+            ['Semana 3','Tono y postura'],['Semana 4','Hábito y constancia']];
+    w.innerHTML=
+      '<h1>Genial, la intensidad de tu plan va a ser: <span class="h-acc">'+label+'</span></h1>'+
+      '<div class="h-box h-ok">Empiezas a tu nivel, con una progresión constante.</div>'+
+      '<div class="h-weeks">'+wk.map(function(x){return '<div class="h-wk"><div class="n">'+x[0]+'</div><div class="t">'+x[1]+'</div></div>';}).join('')+'</div>';
+    showCta('Continuar', next);
+  }
+
+  // ---------- graph (energía) ----------
+  function renderGraph(w){
+    w.innerHTML=
+      '<h1>Así puede evolucionar tu energía y tu fuerza</h1>'+
+      '<div style="margin-top:22px;background:var(--soft);border-radius:18px;padding:18px 14px 10px">'+
+      graphSvg()+
+      '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--gray);margin-top:6px;font-weight:600"><span>Hoy</span><span>Día 7</span><span>Día 14</span><span>Día 21</span></div>'+
+      '</div>'+
+      '<p class="h-sub">Según tus respuestas, tienes un muy buen punto de partida.</p>'+
+      '<div class="h-note">Gráfico ilustrativo; los resultados varían según cada persona.</div>';
+    showCta('Finalizar mi test →', next);
+  }
+  function graphSvg(){
+    return '<svg viewBox="0 0 300 150" width="100%" height="150" aria-hidden="true">'+
+      '<defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c2456a" stop-opacity=".25"/><stop offset="1" stop-color="#c2456a" stop-opacity="0"/></linearGradient></defs>'+
+      '<path d="M10,120 C80,110 120,80 160,60 C210,35 250,25 290,15 L290,140 L10,140 Z" fill="url(#hg)"/>'+
+      '<path d="M10,120 C80,110 120,80 160,60 C210,35 250,25 290,15" fill="none" stroke="#c2456a" stroke-width="3.5" stroke-linecap="round"/>'+
+      '<circle cx="10" cy="120" r="5" fill="#c2456a"/><circle cx="290" cy="15" r="6" fill="#c2456a"/>'+
+      '</svg>';
+  }
+
+  // ---------- loader ----------
+  function renderLoader(w){
+    var steps=['Analizando tus respuestas','Eligiendo tus ejercicios sin impacto','Cuidando tus molestias','Ajustando la intensidad','Armando tus 21 días'];
+    w.innerHTML=
+      '<h1 class="h-center">Creando tu plan personalizado</h1>'+
+      '<div class="h-ring"><svg width="160" height="160"><circle cx="80" cy="80" r="70" fill="none" stroke="#fbe9ee" stroke-width="14"/>'+
+      '<circle id="hRingC" cx="80" cy="80" r="70" fill="none" stroke="#c2456a" stroke-width="14" stroke-linecap="round" stroke-dasharray="440" stroke-dashoffset="440"/></svg>'+
+      '<div class="pct" id="hPct">0%</div></div>'+
+      '<div class="h-steps" id="hStps">'+steps.map(function(t){return '<div class="h-step"><span class="ic">'+chkmark+'</span><span>'+t+'</span></div>';}).join('')+'</div>';
+    foot.hidden=true;
+    var ring=w.querySelector('#hRingC'), pct=w.querySelector('#hPct');
+    var stps=w.querySelectorAll('.h-step');
+    var t0=Date.now(), dur=6000;
+    var reduce = matchMedia('(prefers-reduced-motion:reduce)').matches;
+    (function tick(){
+      var p=Math.min(1,(Date.now()-t0)/dur);
+      var e= reduce?1:p;
+      ring.style.strokeDashoffset = 440*(1-e);
+      pct.textContent=Math.round(e*100)+'%';
+      var si=Math.min(stps.length, Math.floor(e*stps.length+0.001));
+      for(var i=0;i<stps.length;i++) stps[i].classList.toggle('h-done', i<si);
+      if(p<1 && !reduce){ requestAnimationFrame(tick); }
+      else{ for(var j=0;j<stps.length;j++) stps[j].classList.add('h-done'); setTimeout(next, 500); }
+    })();
+  }
+
+  // ---------- graph2 (comparación) ----------
+  function renderGraph2(w){
+    w.innerHTML=
+      '<h1>¡Tu protocolo está casi listo!</h1>'+
+      '<p class="h-sub">Tu plan avanza con una progresión suave. Empezar sin guía suele estancarse.</p>'+
+      '<div style="margin-top:20px;background:var(--soft);border-radius:18px;padding:18px 14px 12px">'+
+      '<svg viewBox="0 0 300 160" width="100%" height="160" aria-hidden="true">'+
+        '<path d="M15,140 C90,120 170,70 285,25" fill="none" stroke="#c2456a" stroke-width="4" stroke-linecap="round"/>'+
+        '<path d="M15,140 C110,135 200,128 285,118" fill="none" stroke="#b9acbf" stroke-width="3" stroke-dasharray="6 6" stroke-linecap="round"/>'+
+        '<circle cx="285" cy="25" r="6" fill="#c2456a"/><circle cx="285" cy="118" r="5" fill="#b9acbf"/>'+
+      '</svg>'+
+      '<div style="display:flex;gap:16px;justify-content:center;font-size:12px;margin-top:4px;font-weight:600">'+
+      '<span style="color:var(--acc)">● Tu plan Hana</span><span style="color:#b9acbf">● Sin guía</span></div>'+
+      '</div>'+
+      '<div class="h-box">Tu plan de 21 días está casi listo.</div>';
+    showCta('Continuar →', next);
+  }
+
+  // ---------- imc ----------
+  function imcVal(){
+    var h=S.height/100; var v=S.weight/(h*h);
+    return Math.round(v*10)/10;
+  }
+  function renderImc(w){
+    var v=imcVal();
+    // posición 15..40 -> 0..100
+    var pos=Math.max(0,Math.min(100,((v-15)/(40-15))*100));
+    var en=['Agotada','Variable','Muy activa'][S.energy]||'Variable';
+    var zonas = (S.zones||[]).length ? SCR[8].opts.filter(function(_,i){return S.zones.indexOf(i)>-1;}).map(function(o){return o[1];}).join(', ') : 'Cuerpo completo';
+    var cuid = (S.pain||[]).length ? SCR[18].opts.filter(function(_,i){return S.pain.indexOf(i)>-1;}).map(function(o){return o[1];}).join(', ') : 'Ninguna';
+    if(cuid==='Ninguna' && (S.pain||[]).indexOf(3)>-1) cuid='Prevención general';
+    w.innerHTML=
+      '<h1>Tu perfil está listo</h1>'+
+      '<div class="h-imc">'+
+        '<div class="bar"><span class="b1"></span><span class="b2"></span><span class="b3"></span><span class="b4"></span></div>'+
+        '<div class="track"><div class="mark" style="left:'+pos+'%"><div class="pin"></div><div class="lbl">Tú: '+String(v).replace('.',',')+'</div></div></div>'+
+        '<div class="legend"><span>Bajo</span><span>Normal</span><span>Sobrepeso</span><span>Obesidad</span></div>'+
+      '</div>'+
+      '<div class="h-cards">'+
+        card('Energía',en)+card('Tipo de cuerpo',S.biotipo||'—')+
+        card('Zonas foco',zonas)+card('Zonas que cuidamos',cuid)+
+      '</div>'+
+      '<div class="h-card" style="margin-top:11px"><div class="k">Potencial de mejora</div><div class="v" style="color:var(--ok)">Alto</div></div>'+
+      '<div class="h-note">El IMC es una referencia general; no mide músculo ni grasa.</div>';
+    showCta('Continuar', next);
+  }
+  function card(k,v){ return '<div class="h-card"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'; }
+
+  // ---------- commit ----------
+  function renderCommit(w){
+    var d=new Date(); d.setDate(d.getDate()+28);
+    var fecha=d.toLocaleDateString('es-MX',{day:'numeric',month:'long'});
+    w.innerHTML=
+      '<h1>¿Qué tan segura estás de ponerte en forma antes del '+fecha+'?</h1>'+
+      '<div class="h-opts"></div>';
+    var box=w.querySelector('.h-opts');
+    [['💪','¡Muy segura!'],['🙂','Dispuesta a probar algo nuevo'],['🤞','No sé, pero quiero intentarlo']].forEach(function(o,i){
+      var b=el('<button class="h-opt" type="button"><span class="h-emo">'+o[0]+'</span><span class="h-txt">'+o[1]+'</span>'+arw+'</button>');
+      b.addEventListener('click',function(){ S.confidence=i; pick(b,w,next); });
+      box.appendChild(b);
+    });
+  }
+
+  // ---------- ruleta ----------
+  function renderWheel(w){
+    // segmentos (desde arriba, en sentido horario) — premio = índice 5 (25% OFF)
+    var labels=['Rutina express','5% OFF','Guía de sueño','10% OFF','Calendario','25% OFF 🎁'];
+    var colors=['#f6c9d6','#e59ab0','#f6c9d6','#e59ab0','#f6c9d6','#c2456a'];
+    var cg=[]; for(var i=0;i<6;i++){ cg.push(colors[i]+' '+(i*60)+'deg '+((i+1)*60)+'deg'); }
+    var segHtml='';
+    for(var k=0;k<6;k++){
+      var mid=(k*60)+30;
+      segHtml+='<div class="seg" style="transform:rotate('+mid+'deg)"><span>'+labels[k]+'</span></div>';
+    }
+    w.innerHTML=
+      '<h1 class="h-center">🎁 ¡Completaste el test!</h1>'+
+      '<p class="h-sub h-center">Gira la ruleta y descubre tu regalo de bienvenida.</p>'+
+      '<div class="h-wheelwrap">'+
+        '<div class="h-point"></div>'+
+        '<div class="h-wheel" id="hWheel" style="background:conic-gradient('+cg.join(',')+')">'+segHtml+'</div>'+
+        '<div class="h-hub">🌸</div>'+
+      '</div>'+
+      '<div id="hWheelOut"></div>'+
+      '<div class="h-note h-center" style="margin-top:14px">Hoy, todas las que completan el test reciben el premio mayor.</div>';
+    showCta('Girar la ruleta', spin);
+    var spun=false;
+    function spin(){
+      if(spun) return; spun=true;
+      cta.disabled=true;
+      var wheel=w.querySelector('#hWheel');
+      // premio seg5 centro=330deg -> para llevarlo arriba: 360-330=30, +6 vueltas
+      var target=360*6 + 30;
+      var reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+      if(reduce){ wheel.style.transition='none'; }
+      wheel.style.transform='rotate('+target+'deg)';
+      setTimeout(win, reduce?50:5100);
+    }
+    function win(){
+      px('WheelWin');
+      try{ if(navigator.vibrate) navigator.vibrate(60); }catch(e){}
+      confetti();
+      var out=w.querySelector('#hWheelOut');
+      out.innerHTML='<div class="h-win"><div class="big">¡Ganaste! 25% OFF 🎁</div>'+
+        '<p style="font-size:14px;margin-top:6px;color:var(--plum)">+ rutina express de 7 minutos · guía de sueño · calendario imprimible.</p></div>';
+      showCta('Ver mi plan con descuento →', function(){ startTimer(); next(); });
+      cta.disabled=false;
+    }
+  }
+  function confetti(){
+    var reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+    if(reduce) return;
+    var box=document.createElement('div'); box.className='h-confetti'; root.appendChild(box);
+    var cs=['#c2456a','#4a2a4f','#f0b84c','#2f8a5b','#e59ab0'];
+    for(var i=0;i<90;i++){
+      var p=document.createElement('i');
+      p.style.left=Math.random()*100+'%';
+      p.style.background=cs[i%cs.length];
+      p.style.animationDuration=(1.6+Math.random())+'s';
+      p.style.animationDelay=(Math.random()*0.5)+'s';
+      p.style.transform='rotate('+(Math.random()*360)+'deg)';
+      box.appendChild(p);
+    }
+    setTimeout(function(){ box.remove(); },2600);
+  }
+
+  // ---------- temporizador ----------
+  var DEADLINE_KEY='hana_deadline', DUR=900000; // 15 min
+  function startTimer(){
+    try{
+      if(!sessionStorage.getItem(DEADLINE_KEY))
+        sessionStorage.setItem(DEADLINE_KEY, String(Date.now()+DUR));
+    }catch(e){}
+  }
+  function deadline(){
+    try{ var v=sessionStorage.getItem(DEADLINE_KEY); return v?parseInt(v,10):(Date.now()+DUR); }
+    catch(e){ return Date.now()+DUR; }
+  }
+  var timerInt=null;
+  function runTimer(){
+    var clock=document.getElementById('hClock');
+    var txt=document.getElementById('hUrgText');
+    if(timerInt) clearInterval(timerInt);
+    function upd(){
+      var left=deadline()-Date.now();
+      if(left<=0){
+        urg.classList.add('h-exp');
+        if(txt) txt.innerHTML='Tu descuento de la ruleta venció';
+        applyExpired(true);
+        clearInterval(timerInt); timerInt=null;
+        return;
+      }
+      var s=Math.floor(left/1000), m=Math.floor(s/60), ss=s%60;
+      if(clock) clock.textContent=m+':'+(ss<10?'0':'')+ss;
+    }
+    upd(); timerInt=setInterval(upd,1000);
+  }
+
+  // ---------- oferta ----------
+  var DISCOUNT=0.25;
+  function applyExpired(exp){
+    var bp=basePrice();
+    var full=fmt(bp.n,bp.pref);
+    var disc=fmt(bp.n*(1-DISCOUNT),bp.pref);
+    var link= exp ? '/checkout' : '/checkout?cupon=HANA25';
+    var btnTxt= exp ? 'Quiero mi plan' : 'Quiero mi plan con 25% OFF';
+    // precios
+    Array.prototype.forEach.call(document.querySelectorAll('#hana .h-price'),function(pb){
+      var oldEl=pb.querySelector('.old'), newEl=pb.querySelector('.new');
+      if(exp){ if(oldEl)oldEl.style.display='none'; if(newEl)newEl.textContent=full; }
+      else{ if(oldEl){oldEl.style.display='';oldEl.textContent=full;} if(newEl)newEl.textContent=disc; }
+    });
+    // botones compra
+    Array.prototype.forEach.call(document.querySelectorAll('#hana .h-buy'),function(b){ b.setAttribute('href',link); });
+    // cta fijo
+    cta.textContent=btnTxt;
+    cta.onclick=function(){ px('ClickCheckout'); location.href=link; };
+  }
+
+  function renderOffer(w){
+    var bp=basePrice();
+    var faqs=[
+      ['¿Sirve si nunca hice ejercicio?','Sí. El plan arranca desde cero, con movimientos lentos y una versión más fácil de cada ejercicio.'],
+      ['¿Necesito equipo?','No. Solo tu cuerpo y, si quieres, una silla para apoyarte. Entrenas en casa.'],
+      ['¿Es seguro con dolor de rodillas o espalda?','El plan se adapta para cuidar esas zonas. Si tienes una lesión, consulta primero a tu médico.'],
+      ['¿Es un pago único?','Sí, un solo pago. Sin suscripción ni cobros automáticos.'],
+      ['¿Funciona en mi celular?','Sí. Abres la app desde el navegador de tu celular, sin instalar nada complicado.']
+    ];
+    var receive=[
+      ['📱','App Método Hana con tu plan de 21 días armado según tus respuestas.'],
+      ['🧘‍♀️','24 ejercicios sin impacto, cada uno con demostración animada y versión más fácil.'],
+      ['🦵','Adaptación automática si tienes molestias de rodillas o zona lumbar.'],
+      ['🌿','Días de movilidad suave (7, 14 y 21) para recuperar.'],
+      ['⏱️','Rutinas de 10, 15 o 20 minutos, según tu tiempo.'],
+      ['✅','Seguimiento de días completados en tu celular.']
+    ];
+    var bonos=[['🏃‍♀️','Rutina express de 7 minutos'],['🌙','Guía de sueño profundo después de los 40'],['🗓️','Calendario imprimible de 21 días']];
+
+    w.className='h-screen h-offer';
+    w.innerHTML=
+      '<h1>¡Tu plan de Calistenia Asiática está listo!</h1>'+
+      '<p class="h-sub">Mira cómo funciona:</p>'+
+      '<div class="h-video"><video src="'+((typeof window!=="undefined"&&window.HANA_VIDEO)||"video/demo.mp4")+'" autoplay muted loop playsinline controls onerror="this.parentNode.innerHTML=\'📱 Vista previa de la app\'"></video></div>'+
+      '<a class="h-buy" href="/checkout?cupon=HANA25">Obtener mi plan personalizado →</a>'+
+
+      '<section><h2>Lo que vas a recibir</h2><div class="h-receive">'+
+      receive.map(function(r){return '<div class="r"><span class="i">'+r[0]+'</span><span class="t">'+r[1]+'</span></div>';}).join('')+
+      '</div></section>'+
+
+      '<section class="h-center"><h2>¡App fácil de usar y hecha para principiantes!</h2>'+pic('app-mockup.webp','h-por','📱')+'</section>'+
+
+      priceBlock(bp)+
+
+      '<section><h2>Cómo funciona en 3 pasos</h2><div class="h-steps3">'+
+      [['1','Haces el test'],['2','Recibes tu plan en la app'],['3','15 minutos al día']].map(function(s){return '<div class="s"><span class="n">'+s[0]+'</span><span>'+s[1]+'</span></div>';}).join('')+
+      '</div></section>'+
+
+      priceBlock(bp)+
+
+      '<section><h2>🎁 + Bonos incluidos hoy</h2><div class="h-bonus">'+
+      bonos.map(function(b){return '<div class="b"><span class="m">'+b[0]+'</span><span>'+b[1]+'</span></div>';}).join('')+
+      '</div></section>'+
+
+      '<div class="h-guar"><div class="seal">🛡️</div><h2>Garantía de 7 días</h2>'+
+      '<p class="h-sub">Si el plan no es para ti, escribes dentro de los 7 días y te devolvemos el dinero.</p></div>'+
+
+      '<section><h2>Qué esperar en tus 21 días</h2><div class="h-check">'+
+      [['Semana 1','Movilidad y respiración'],['Semana 2','Fuerza de piernas y abdomen'],['Semana 3','Tono y postura']].map(function(c){
+        return '<div class="c"><div class="wk">'+c[0]+'</div><div class="d">✅ <span>'+c[1]+'</span></div></div>';}).join('')+
+      '</div></section>'+
+
+      '<section><h2>Preguntas frecuentes</h2><div class="h-faq">'+
+      faqs.map(function(f){return '<div class="q"><div class="qh">'+f[0]+'<span class="pm">+</span></div><div class="a">'+f[1]+'</div></div>';}).join('')+
+      '</div></section>'+
+
+      priceBlock(bp)+
+
+      '<div class="h-legal">Contenido educativo. No reemplaza la indicación de tu médico. Los resultados varían según cada persona.</div>';
+
+    // faq acordeón
+    Array.prototype.forEach.call(w.querySelectorAll('.h-faq .q'),function(q){
+      q.querySelector('.qh').addEventListener('click',function(){ q.classList.toggle('h-open'); });
+    });
+
+    // cta fijo + precios + timer
+    foot.hidden=false;
+    startTimer();
+    applyExpired(false);
+    runTimer();
+  }
+  function priceBlock(bp){
+    return '<section><div class="h-price">'+
+      '<div class="old"></div>'+
+      '<div class="new"></div>'+
+      '<div class="meta">Pago único • Acceso inmediato</div>'+
+      '<div class="safe">🔒 Compra 100% segura • Garantía de 7 días</div>'+
+      '<a class="h-buy" href="/checkout?cupon=HANA25">Quiero mi plan con 25% OFF</a>'+
+      '</div></section>';
+  }
+
+  // ---------- init ----------
+  go(0);
+})();
+</script>
+</div>
