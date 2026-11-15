@@ -8,6 +8,7 @@
   },
   "scripts": {
     "start": "node src/server.js",
+    "preview": "node preview/server.js",
     "dev": "nodemon src/server.js",
     "local-seguro": "bash scripts/start-local.sh",
     "postinstall": "node scripts/apply-baileys-patch.js"
