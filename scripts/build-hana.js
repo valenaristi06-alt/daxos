@@ -39,7 +39,9 @@ for (const f of imgFiles) {
 }
 
 const LIMIT = 1.5 * 1024 * 1024;
-const videoURI = dataURI('video/demo.mp4', 'video/mp4');
+// Modo liviano para Impultienda: video por URL (externo), imágenes embebidas (base64).
+const LIGHT = process.argv.includes('light');
+const HANA_VIDEO_URL = 'https://sb.impultienda.ar/storage/v1/object/public/store-resources/4617c275-9c74-4e88-902d-7e9f9a0f6692/1794712926093_demo.mp4';
 
 function buildPaste(videoSrc) {
   const head = '<script>window.HANA_ASSETS=' + JSON.stringify(assets) + ';'
@@ -47,17 +49,22 @@ function buildPaste(videoSrc) {
   return head + block;
 }
 
-// try with embedded video first
-let paste = buildPaste(videoURI);
-let videoMode;
-if (Buffer.byteLength(paste) <= LIMIT) {
-  videoMode = 'embedded';
+let paste, videoMode;
+if (LIGHT) {
+  // video por URL de Impultienda (no embebido) -> liviano (<300 KB)
+  paste = buildPaste(HANA_VIDEO_URL);
+  videoMode = 'external URL (liviano)';
 } else {
-  // too heavy: point video at a VIDEO_SRC constant the user replaces
-  const note = '<!-- El video superó 1,5 MB embebido. Reemplazá VIDEO_SRC por la URL pública de demo.mp4. -->\n'
-    + '<script>window.VIDEO_SRC="https://TU-CDN/demo.mp4";</script>\n';
-  paste = note + buildPaste(null).replace('<script>window.HANA_ASSETS', '<script>window.HANA_VIDEO=window.VIDEO_SRC;window.HANA_ASSETS');
-  videoMode = 'external (VIDEO_SRC)';
+  const videoURI = dataURI('video/demo.mp4', 'video/mp4');
+  paste = buildPaste(videoURI);
+  if (Buffer.byteLength(paste) <= LIMIT) {
+    videoMode = 'embedded';
+  } else {
+    const note = '<!-- El video superó 1,5 MB embebido. Reemplazá VIDEO_SRC por la URL pública de demo.mp4. -->\n'
+      + '<script>window.VIDEO_SRC="https://TU-CDN/demo.mp4";</script>\n';
+    paste = note + buildPaste(null).replace('<script>window.HANA_ASSETS', '<script>window.HANA_VIDEO=window.VIDEO_SRC;window.HANA_ASSETS');
+    videoMode = 'external (VIDEO_SRC)';
+  }
 }
 
 fs.writeFileSync('landing-store-paste.html', paste);
