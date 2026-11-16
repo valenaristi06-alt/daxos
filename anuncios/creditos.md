@@ -56,6 +56,14 @@ El nombre del autor figura en cada página (no se pudo scrapear: Pexels sirve la
 - Música: ElevenLabs Music (`ugc/music.mp3`), instrumental suave, a ~-20 dB bajo la voz.
 - Texto superior fijo primeros 2,5 s (para sound-off): A "15 MIN · SIN SALTOS · SIN EQUIPO",
   B "21 DÍAS ANTES DE AÑO NUEVO". Barra de progreso fina arriba en #c2456a.
-- Salidas: `Hana-UGC-A-9x16.mp4` / `-4x5.mp4` (~23 s), `Hana-UGC-B-9x16.mp4` / `-4x5.mp4` (~19 s).
-- Nota: las pausas >0,25 s caen en los cortes de escena (sin aire muerto); la voz conserva su
-  cadencia natural en vez de recortar el audio.
+- Tipografía: Poppins embebida en base64 (@font-face) en cada render de Playwright; se espera
+  document.fonts.ready y se verifica con getComputedStyle antes de capturar (adiós fallback serif).
+- Jump cuts físicos: se recortan los silencios >0,25 s del audio y del video (retiming real),
+  alternando encuadre 100%/112% en cada corte.
+- Teléfono grande (~84% del alto) con scroll/pan y toques; PiP circular de la presentadora
+  (~24% del ancho) hablando mientras se ve la app. "Versión fácil" con scroll al renglón + resaltado.
+- Cierre (2 s): presentadora desenfocada de fondo + logo, "HAZ EL TEST GRATIS" (Poppins 900),
+  "1 minuto → tu plan de 21 días", "🎁 Regalo de bienvenida al final", botón + ▽ que rebota + ding.
+- Grid: solo mujeres adultas (se quitó el clip ambiguo/joven).
+- Audio: loudnorm 2 pasadas a -14 LUFS int. / TP ≤ -1 dBTP (+ limiter de seguridad); música a ~-18 dB.
+- Salidas: `Hana-UGC-A-9x16.mp4` / `-4x5.mp4` (20,8 s), `Hana-UGC-B-9x16.mp4` / `-4x5.mp4` (16,7 s).
