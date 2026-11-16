@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Método Hana · Anuncios</title>
+<style>
+  :root{ --plum:#4a2a4f; --acc:#c2456a; --soft:#fbe9ee; --ink:#1d1520; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--soft)}
+  header{padding:28px 20px 10px;text-align:center}
+  header h1{margin:0 0 4px;color:var(--plum);font-size:26px}
+  header p{margin:0;color:#6b5a66;font-size:14px}
+  .sect{max-width:1180px;margin:0 auto;padding:18px 16px 40px}
+  .sect h2{color:var(--acc);font-size:15px;letter-spacing:.04em;text-transform:uppercase;margin:26px 0 12px;border-bottom:2px solid #efc9d6;padding-bottom:6px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px}
+  .card{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(74,42,79,.08);display:flex;flex-direction:column}
+  .media{background:#111;display:flex;align-items:center;justify-content:center;aspect-ratio:9/16;max-height:520px}
+  .media.r45{aspect-ratio:4/5}
+  .media video,.media img{width:100%;height:100%;object-fit:cover;display:block}
+  .body{padding:12px 14px 16px}
+  .tag{display:inline-block;background:var(--plum);color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;margin-bottom:6px}
+  .tag.new{background:var(--acc)}
+  .card h3{margin:2px 0 6px;font-size:16px;color:var(--plum)}
+  .card p{margin:0 0 8px;font-size:13px;line-height:1.45;color:#4a4049}
+  .fmts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .fmts button{font:inherit;font-size:12px;font-weight:600;padding:5px 10px;border:1px solid #d9b7c4;background:#fff;color:var(--plum);border-radius:8px;cursor:pointer}
+  .fmts button.on{background:var(--plum);color:#fff;border-color:var(--plum)}
+  .meta{font-size:11px;color:#8a7b85;margin-top:8px}
+  footer{text-align:center;padding:10px 20px 40px;color:#8a7b85;font-size:12px}
+  footer a{color:var(--acc)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Método Hana · Anuncios</h1>
+  <p>Calistenia asiática para mujeres de 40+ · México · 9 piezas (6 actuales + 3 nuevas)</p>
+</header>
+
+<div class="sect">
+  <h2>Nuevos — clips reales (G1 · G2 · G3)</h2>
+  <div class="grid">
+
+    <div class="card">
+      <div class="media" id="m-g1">
+        <video src="Hana-G1-grilla-9x16.mp4" muted autoplay loop playsinline></video>
+      </div>
+      <div class="body">
+        <span class="tag new">NUEVO · G1</span>
+        <h3>Grilla · 15 min cada mañana</h3>
+        <p>Seis ejercicios en grilla con series (3×12, 3×10, 2×30 s…). “Cada mañana, 15 minutos. Hasta Año Nuevo.”</p>
+        <div class="fmts" data-base="Hana-G1-grilla" data-target="m-g1">
+          <button class="on" data-f="9x16">9:16</button>
+          <button data-f="4x5">4:5</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="media" id="m-g2">
+        <video src="Hana-G2-21dias-9x16.mp4" muted autoplay loop playsinline></video>
+      </div>
+      <div class="body">
+        <span class="tag new">NUEVO · G2</span>
+        <h3>Dame 21 días</h3>
+        <p>15 minutos al día, sin saltos, desde tu sala. Calendario de 21 casillas que se van tachando.</p>
+        <div class="fmts" data-base="Hana-G2-21dias" data-target="m-g2">
+          <button class="on" data-f="9x16">9:16</button>
+          <button data-f="4x5">4:5</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="media" id="m-g3">
+        <video src="Hana-G3-singimnasio-9x16.mp4" muted autoplay loop playsinline></video>
+      </div>
+      <div class="body">
+        <span class="tag new">NUEVO · G3</span>
+        <h3>Sin gimnasio</h3>
+        <p>Sin gimnasio · sin saltos · sin equipo · 15 minutos. Cierra con el test en la app.</p>
+        <div class="fmts" data-base="Hana-G3-singimnasio" data-target="m-g3">
+          <button class="on" data-f="9x16">9:16</button>
+          <button data-f="4x5">4:5</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="sect">
+  <h2>Actuales — motor de marca (A · B · C)</h2>
+  <div class="grid">
+
+    <div class="card">
+      <div class="media"><video src="Hana-V1-sin-saltos-9x16.mp4" muted autoplay loop playsinline></video></div>
+      <div class="body">
+        <span class="tag">A · 9:16</span>
+        <h3>Sin saltos</h3>
+        <p>Movimientos lentos, sin saltos y sin equipo: 15 minutos al día desde tu sala.</p>
+        <div class="meta">Estático 4:5 abajo ↓</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="media"><video src="Hana-V2-test-1-minuto-9x16.mp4" muted autoplay loop playsinline></video></div>
+      <div class="body">
+        <span class="tag">B · 9:16</span>
+        <h3>Test de 1 minuto</h3>
+        <p>Con tus respuestas armamos tu plan de calistenia asiática de 21 días. Regalo de bienvenida.</p>
+        <div class="meta">Estático 4:5 abajo ↓</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="media"><video src="Hana-V3-rodillas-9x16.mp4" muted autoplay loop playsinline></video></div>
+      <div class="body">
+        <span class="tag">C · 9:16</span>
+        <h3>Rodillas</h3>
+        <p>Moverte sin castigar las rodillas es posible. Movimientos sin impacto, cada uno con versión fácil.</p>
+        <div class="meta">Estático 4:5 abajo ↓</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="media r45"><img src="Hana-E1-sin-saltos-4x5.jpg" alt="Sin saltos 4:5"></div>
+      <div class="body"><span class="tag">A · 4:5</span><h3>Sin saltos (estático)</h3><p>Versión 4:5 para feed.</p></div>
+    </div>
+
+    <div class="card">
+      <div class="media r45"><img src="Hana-E2-plan-21-dias-4x5.jpg" alt="Plan 21 días 4:5"></div>
+      <div class="body"><span class="tag">B · 4:5</span><h3>Plan 21 días (estático)</h3><p>Versión 4:5 para feed.</p></div>
+    </div>
+
+    <div class="card">
+      <div class="media r45"><img src="Hana-E3-rodillas-4x5.jpg" alt="Rodillas 4:5"></div>
+      <div class="body"><span class="tag">C · 4:5</span><h3>Rodillas (estático)</h3><p>Versión 4:5 para feed.</p></div>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  Clips de stock: Pixabay (ver <a href="creditos.md">creditos.md</a>). Copys en <a href="copys-y-plan.md">copys-y-plan.md</a>.
+</footer>
+
+<script>
+  document.querySelectorAll('.fmts').forEach(function(bar){
+    var base = bar.dataset.base, target = document.getElementById(bar.dataset.target);
+    bar.querySelectorAll('button').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        bar.querySelectorAll('button').forEach(function(b){ b.classList.remove('on'); });
+        btn.classList.add('on');
+        var cls = btn.dataset.f === '4x5' ? 'media r45' : 'media';
+        target.className = cls;
+        target.innerHTML = '<video src="'+base+'-'+btn.dataset.f+'.mp4" muted autoplay loop playsinline></video>';
+      });
+    });
+  });
+</script>
+</body>
+</html>

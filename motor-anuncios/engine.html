@@ -1,0 +1,58 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;font-family:Poppins,'Noto Color Emoji',sans-serif;color:#1d1520}
+#bg{position:absolute;inset:0;background:radial-gradient(circle at 50% 38%,#fde2e9 0,#fbeef1 45%,#fffaf5 80%)}
+.abs{position:absolute;left:0;right:0;text-align:center}
+#tag{top:70px;font-weight:800;letter-spacing:8px;font-size:30px;color:#4a2a4f}
+#tag i{display:inline-block;width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#e7a3b6,#8e4a6f);vertical-align:-3px;margin-right:14px}
+#bar{position:absolute;top:0;left:0;height:12px;background:#c2456a}
+.t{position:absolute;left:60px;right:60px;text-align:center;font-weight:900;line-height:1.05;opacity:0}
+.plum{color:#4a2a4f}.rose{color:#c2456a}
+#fig{position:absolute;left:90px;width:900px;height:747px}
+#phone{position:absolute;left:215px;width:650px;height:1180px;border-radius:72px;background:#1d1520;padding:18px;box-shadow:0 50px 90px rgba(74,42,79,.35);opacity:0}
+#phone img{width:100%;height:100%;object-fit:cover;object-position:top;border-radius:56px;display:block}
+.line{position:absolute;left:150px;right:150px;height:150px;border-radius:40px;background:#fff;box-shadow:0 14px 40px rgba(74,42,79,.12);display:flex;align-items:center;gap:30px;padding:0 44px;font-weight:800;font-size:62px;color:#4a2a4f;opacity:0}
+.line b{width:84px;height:84px;border-radius:50%;background:#c2456a;color:#fff;font-size:52px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.card{position:absolute;left:110px;right:110px;background:#fff;border-radius:44px;box-shadow:0 24px 60px rgba(74,42,79,.16);padding:56px 50px;opacity:0}
+.card h3{font-size:58px;font-weight:800;line-height:1.12;color:#1d1520;margin-bottom:34px}
+.opt{border:4px solid #ecdfe4;border-radius:28px;padding:30px 36px;font-size:46px;font-weight:600;margin-top:22px;display:flex;justify-content:space-between;align-items:center;transition:none}
+.opt.on{border-color:#c2456a;background:#fbe9ee;color:#4a2a4f}
+.opt .ck{width:52px;height:52px;border-radius:14px;border:4px solid #d9c6cf;display:flex;align-items:center;justify-content:center;font-size:36px;color:#fff}
+.opt.on .ck{background:#c2456a;border-color:#c2456a}
+#tap{position:absolute;width:120px;height:120px;border-radius:50%;background:rgba(194,69,106,.35);opacity:0;pointer-events:none}
+#cta{position:absolute;left:110px;right:110px;height:170px;border-radius:85px;background:#c2456a;color:#fff;font-size:64px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 24px 50px rgba(194,69,106,.4);opacity:0}
+#disc{position:absolute;left:80px;right:80px;bottom:70px;text-align:center;font-size:28px;color:#6f6472;opacity:0}
+.chip{display:inline-block;background:#fff;border-radius:40px;padding:18px 34px;margin:10px;font-size:40px;font-weight:700;color:#4a2a4f;box-shadow:0 10px 30px rgba(74,42,79,.1)}
+#ring{position:absolute;left:340px;width:400px;height:400px;opacity:0}
+.badge{position:absolute;padding:16px 34px;border-radius:40px;background:#4a2a4f;color:#fff;font-weight:800;font-size:40px;opacity:0}
+</style></head><body>
+<div id="bg"></div><div id="bar"></div>
+<div id="tag" class="abs"><i></i>MÉTODO HANA</div>
+<div id="layer"></div>
+<script>/*FIGURE*/</script>
+<script>
+const EX=/*EXERCISES*/; const FR='frames/';
+const $=s=>document.querySelector(s), L=$('#layer');
+const cl=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const eo=x=>1-Math.pow(1-cl(x),3);
+const back=x=>{x=cl(x);const c1=1.9,c3=c1+1;return 1+c3*Math.pow(x-1,3)+c1*Math.pow(x-1,2)};
+// pop: aparece en t0 con rebote, sale en t1
+function pop(el,t,t0,t1,{dy=40,dur=.35,scale=true}={}){
+  if(t<t0||t>t1+.25){el.style.opacity=0;return}
+  const a=back((t-t0)/dur), o=cl((t-t0)/(dur*.6))*(t>t1?1-cl((t-t1)/.25):1);
+  el.style.opacity=o; el.style.transform=`translateY(${(1-cl((t-t0)/dur))*dy}px) scale(${scale?(.7+.3*a):1})`;
+}
+function mk(html){const d=document.createElement('div');d.innerHTML=html.trim();const e=d.firstChild;L.appendChild(e);return e}
+function txt(s,top,size,cls='plum'){return mk(`<div class="t ${cls}" style="top:${top}px;font-size:${size}px">${s}</div>`)}
+function fig(top){const s=mk(`<svg id="fig" viewBox="0 28 200 166" style="top:${top}px"></svg>`);return s}
+function drawFig(svg,id,t,period=2.4){const e=EX[id];const ph=(1-Math.cos(2*Math.PI*t/period))/2;HanaFig.scene(svg,HanaFig.mix(e.A,e.B,ph),e.prop)}
+function phone(top){return mk(`<div id="phone" style="top:${top}px"><img></div>`)}
+async function setFrame(img,sec){const n=String(Math.min(469,Math.max(1,Math.round(sec*30)+1))).padStart(4,'0');const src=FR+n+'.jpg';if(img.dataset.s!==src){img.dataset.s=src;img.src=src;await img.decode().catch(()=>{})}}
+function cta(top,text){return mk(`<div id="cta" style="top:${top}px">${text}</div>`)}
+function disc(){return mk(`<div id="disc">Contenido educativo. No reemplaza la indicación de tu médico.</div>`)}
+window.DUR=15;
+window.VIDEOS={};
+</script>
+<script>/*SCRIPT*/</script>
+</body></html>

@@ -18,3 +18,5 @@ src/config.local.js
 
 # ad build intermediates
 motor-anuncios/_adtmp/
+# clips de stock (pesados, reproducibles vía anuncios/creditos.md)
+motor-anuncios/stock/

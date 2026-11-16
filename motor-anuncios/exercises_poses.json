@@ -1,0 +1,2910 @@
+[
+ {
+  "id": "respiracion-sol",
+  "name": "Saludo al sol de pie",
+  "zona": "Movilidad",
+  "nivel": 1,
+  "dosis": "8 repeticiones lentas",
+  "pasos": [
+   "De pie, pies al ancho de caderas y rodillas suaves.",
+   "Inhala por la nariz mientras subes los brazos por delante hasta arriba.",
+   "Exhala despacio bajando los brazos. Cada movimiento dura una respiración completa."
+  ],
+  "facil": "Sube los brazos solo hasta la altura de los hombros.",
+  "A": {
+   "hip": [
+    94.5,
+    108.0
+   ],
+   "neck": [
+    94.5,
+    58.0
+   ],
+   "head": [
+    94.5,
+    41.0
+   ],
+   "elbow_n": [
+    96.4,
+    84.9
+   ],
+   "hand_n": [
+    100.7,
+    109.6
+   ],
+   "knee_n": [
+    94.5,
+    147.0
+   ],
+   "ankle_n": [
+    94.5,
+    184.0
+   ],
+   "toe_n": [
+    105.5,
+    184.0
+   ],
+   "elbow_f": [
+    96.4,
+    84.9
+   ],
+   "hand_f": [
+    100.7,
+    109.6
+   ],
+   "knee_f": [
+    94.5,
+    147.0
+   ],
+   "ankle_f": [
+    94.5,
+    184.0
+   ],
+   "toe_f": [
+    105.5,
+    184.0
+   ]
+  },
+  "B": {
+   "hip": [
+    94.5,
+    108.0
+   ],
+   "neck": [
+    94.5,
+    58.0
+   ],
+   "head": [
+    91.5,
+    41.3
+   ],
+   "elbow_n": [
+    96.9,
+    31.1
+   ],
+   "hand_n": [
+    99.0,
+    6.2
+   ],
+   "knee_n": [
+    94.5,
+    147.0
+   ],
+   "ankle_n": [
+    94.5,
+    184.0
+   ],
+   "toe_n": [
+    105.5,
+    184.0
+   ],
+   "elbow_f": [
+    96.9,
+    31.1
+   ],
+   "hand_f": [
+    99.0,
+    6.2
+   ],
+   "knee_f": [
+    94.5,
+    147.0
+   ],
+   "ankle_f": [
+    94.5,
+    184.0
+   ],
+   "toe_f": [
+    105.5,
+    184.0
+   ]
+  }
+ },
+ {
+  "id": "circulos-hombros",
+  "name": "Círculos de hombros y brazos",
+  "zona": "Movilidad",
+  "nivel": 1,
+  "dosis": "10 círculos hacia adelante y 10 hacia atrás",
+  "pasos": [
+   "De pie, brazos estirados a los costados a la altura de los hombros.",
+   "Dibuja círculos pequeños y controlados.",
+   "Agranda los círculos poco a poco sin subir los hombros a las orejas."
+  ],
+  "facil": "Hazlo sentada en una silla.",
+  "A": {
+   "hip": [
+    75.0,
+    108.0
+   ],
+   "neck": [
+    75.0,
+    58.0
+   ],
+   "head": [
+    75.0,
+    41.0
+   ],
+   "elbow_n": [
+    100.4,
+    67.2
+   ],
+   "hand_n": [
+    125.0,
+    71.6
+   ],
+   "knee_n": [
+    75.0,
+    147.0
+   ],
+   "ankle_n": [
+    75.0,
+    184.0
+   ],
+   "toe_n": [
+    86.0,
+    184.0
+   ],
+   "elbow_f": [
+    100.4,
+    67.2
+   ],
+   "hand_f": [
+    125.0,
+    71.6
+   ],
+   "knee_f": [
+    75.0,
+    147.0
+   ],
+   "ankle_f": [
+    75.0,
+    184.0
+   ],
+   "toe_f": [
+    86.0,
+    184.0
+   ]
+  },
+  "B": {
+   "hip": [
+    75.0,
+    108.0
+   ],
+   "neck": [
+    75.0,
+    58.0
+   ],
+   "head": [
+    75.0,
+    41.0
+   ],
+   "elbow_n": [
+    100.4,
+    48.8
+   ],
+   "hand_n": [
+    122.0,
+    36.3
+   ],
+   "knee_n": [
+    75.0,
+    147.0
+   ],
+   "ankle_n": [
+    75.0,
+    184.0
+   ],
+   "toe_n": [
+    86.0,
+    184.0
+   ],
+   "elbow_f": [
+    98.4,
+    71.5
+   ],
+   "hand_f": [
+    121.9,
+    80.1
+   ],
+   "knee_f": [
+    75.0,
+    147.0
+   ],
+   "ankle_f": [
+    75.0,
+    184.0
+   ],
+   "toe_f": [
+    86.0,
+    184.0
+   ]
+  }
+ },
+ {
+  "id": "sentadilla-silla",
+  "name": "Sentadilla a la silla",
+  "zona": "Piernas y glúteos",
+  "nivel": 1,
+  "prop": "chair",
+  "dosis": "3 series de 10",
+  "pasos": [
+   "De pie frente a una silla, pies al ancho de caderas.",
+   "Lleva la cadera atrás y abajo hasta rozar la silla, brazos al frente.",
+   "Empuja el suelo con los talones para volver a subir."
+  ],
+  "facil": "Siéntate del todo en la silla y vuelve a pararte.",
+  "A": {
+   "hip": [
+    94.5,
+    108.0
+   ],
+   "neck": [
+    94.5,
+    58.0
+   ],
+   "head": [
+    94.5,
+    41.0
+   ],
+   "elbow_n": [
+    96.4,
+    84.9
+   ],
+   "hand_n": [
+    100.7,
+    109.6
+   ],
+   "knee_n": [
+    94.5,
+    147.0
+   ],
+   "ankle_n": [
+    94.5,
+    184.0
+   ],
+   "toe_n": [
+    105.5,
+    184.0
+   ],
+   "elbow_f": [
+    96.4,
+    84.9
+   ],
+   "hand_f": [
+    100.7,
+    109.6
+   ],
+   "knee_f": [
+    94.5,
+    147.0
+   ],
+   "ankle_f": [
+    94.5,
+    184.0
+   ],
+   "toe_f": [
+    105.5,
+    184.0
+   ]
+  },
+  "B": {
+   "hip": [
+    62.1,
+    142.3
+   ],
+   "neck": [
+    92.9,
+    102.9
+   ],
+   "head": [
+    103.3,
+    89.5
+   ],
+   "elbow_n": [
+    119.4,
+    107.5
+   ],
+   "hand_n": [
+    144.1,
+    111.9
+   ],
+   "knee_n": [
+    100.9,
+    145.7
+   ],
+   "ankle_n": [
+    94.5,
+    182.1
+   ],
+   "toe_n": [
+    105.3,
+    184.0
+   ],
+   "elbow_f": [
+    119.4,
+    107.5
+   ],
+   "hand_f": [
+    144.1,
+    111.9
+   ],
+   "knee_f": [
+    100.9,
+    145.7
+   ],
+   "ankle_f": [
+    94.5,
+    182.1
+   ],
+   "toe_f": [
+    105.3,
+    184.0
+   ]
+  }
+ },
+ {
+  "id": "talones",
+  "name": "Elevación de talones",
+  "zona": "Piernas y glúteos",
+  "nivel": 1,
+  "dosis": "3 series de 15",
+  "pasos": [
+   "De pie, apoya las manos en el respaldo de una silla.",
+   "Sube los talones despacio, quedándote en puntas de pie un segundo.",
+   "Baja controlando, sin dejar caer el peso."
+  ],
+  "facil": "Haz el movimiento más corto y más lento.",
+  "A": {
+   "hip": [
+    81.5,
+    108.0
+   ],
+   "neck": [
+    81.5,
+    58.0
+   ],
+   "head": [
+    81.5,
+    41.0
+   ],
+   "elbow_n": [
+    95.0,
+    81.4
+   ],
+   "hand_n": [
+    118.5,
+    89.9
+   ],
+   "knee_n": [
+    81.5,
+    147.0
+   ],
+   "ankle_n": [
+    81.5,
+    184.0
+   ],
+   "toe_n": [
+    92.5,
+    184.0
+   ],
+   "elbow_f": [
+    95.0,
+    81.4
+   ],
+   "hand_f": [
+    118.5,
+    89.9
+   ],
+   "knee_f": [
+    81.5,
+    147.0
+   ],
+   "ankle_f": [
+    81.5,
+    184.0
+   ],
+   "toe_f": [
+    92.5,
+    184.0
+   ]
+  },
+  "B": {
+   "hip": [
+    83.5,
+    101.7
+   ],
+   "neck": [
+    83.5,
+    51.7
+   ],
+   "head": [
+    83.5,
+    34.7
+   ],
+   "elbow_n": [
+    97.0,
+    75.1
+   ],
+   "hand_n": [
+    120.5,
+    83.6
+   ],
+   "knee_n": [
+    83.5,
+    140.7
+   ],
+   "ankle_n": [
+    83.5,
+    177.7
+   ],
+   "toe_n": [
+    92.5,
+    184.0
+   ],
+   "elbow_f": [
+    97.0,
+    75.1
+   ],
+   "hand_f": [
+    120.5,
+    83.6
+   ],
+   "knee_f": [
+    83.5,
+    140.7
+   ],
+   "ankle_f": [
+    83.5,
+    177.7
+   ],
+   "toe_f": [
+    92.5,
+    184.0
+   ]
+  }
+ },
+ {
+  "id": "marcha",
+  "name": "Marcha lenta con rodilla arriba",
+  "zona": "Cardio suave",
+  "nivel": 1,
+  "dosis": "1 minuto alternando piernas",
+  "pasos": [
+   "De pie, espalda larga.",
+   "Sube una rodilla hasta la altura de la cadera y bájala con control.",
+   "Alterna piernas acompañando con los brazos."
+  ],
+  "facil": "Sube la rodilla solo hasta donde te resulte cómodo.",
+  "A": {
+   "hip": [
+    94.5,
+    108.0
+   ],
+   "neck": [
+    94.5,
+    58.0
+   ],
+   "head": [
+    94.5,
+    41.0
+   ],
+   "elbow_n": [
+    96.4,
+    84.9
+   ],
+   "hand_n": [
+    100.7,
+    109.6
+   ],
+   "knee_n": [
+    94.5,
+    147.0
+   ],
+   "ankle_n": [
+    94.5,
+    184.0
+   ],
+   "toe_n": [
+    105.5,
+    184.0
+   ],
+   "elbow_f": [
+    96.4,
+    84.9
+   ],
+   "hand_f": [
+    100.7,
+    109.6
+   ],
+   "knee_f": [
+    94.5,
+    147.0
+   ],
+   "ankle_f": [
+    94.5,
+    184.0
+   ],
+   "toe_f": [
+    105.5,
+    184.0
+   ]
+  },
+  "B": {
+   "hip": [
+    94.5,
+    108.0
+   ],
+   "neck": [
+    94.5,
+    58.0
+   ],
+   "head": [
+    94.5,
+    41.0
+   ],
+   "elbow_n": [
+    81.0,
+    81.4
+   ],
+   "hand_n": [
+    93.5,
+    103.0
+   ],
+   "knee_n": [
+    133.5,
+    108.0
+   ],
+   "ankle_n": [
+    133.5,
+    145.0
+   ],
+   "toe_n": [
+    144.5,
+    145.0
+   ],
+   "elbow_f": [
+    110.0,
+    80.1
+   ],
+   "hand_f": [
+    134.9,
+    82.3
+   ],
+   "knee_f": [
+    94.5,
+    147.0
+   ],
+   "ankle_f": [
+    94.5,
+    184.0
+   ],
+   "toe_f": [
+    105.5,
+    184.0
+   ]
+  }
+ },
+ {
+  "id": "bisagra",
+  "name": "Bisagra de cadera",
+  "zona": "Espalda y postura",
+  "nivel": 1,
+  "dosis": "3 series de 10",
+  "pasos": [
+   "De pie, manos en la cintura, rodillas suaves.",
+   "Lleva la cadera hacia atrás inclinando el torso recto hacia adelante.",
+   "Vuelve a subir apretando los glúteos."
+  ],
+  "facil": "Inclínate menos, solo hasta sentir los isquios.",
+  "A": {
+   "hip": [
+    96.7,
+    108.0
+   ],
+   "neck": [
+    96.7,
+    58.0
+   ],
+   "head": [
+    96.7,
+    41.0
+   ],
+   "elbow_n": [
+    87.5,
+    83.4
+   ],
+   "hand_n": [
+    112.5,
+    83.4
+   ],
+   "knee_n": [
+    96.7,
+    147.0
+   ],
+   "ankle_n": [
+    96.7,
+    184.0
+   ],
+   "toe_n": [
+    107.7,
+    184.0
+   ],
+   "elbow_f": [
+    87.5,
+    83.4
+   ],
+   "hand_f": [
+    112.5,
+    83.4
+   ],
+   "knee_f": [
+    96.7,
+    147.0
+   ],
+   "ankle_f": [
+    96.7,
+    184.0
+   ],
+   "toe_f": [
+    107.7,
+    184.0
+   ]
+  },
+  "B": {
+   "hip": [
+    91.2,
+    108.2
+   ],
+   "neck": [
+    135.3,
+    84.7
+   ],
+   "head": [
+    151.5,
+    79.5
+   ],
+   "elbow_n": [
+    111.9,
+    98.2
+   ],
+   "hand_n": [
+    136.9,
+    98.2
+   ],
+   "knee_n": [
+    100.6,
+    146.1
+   ],
+   "ankle_n": [
+    96.7,
+    182.9
+   ],
+   "toe_n": [
+    107.7,
+    184.0
+   ],
+   "elbow_f": [
+    111.9,
+    98.2
+   ],
+   "hand_f": [
+    136.9,
+    98.2
+   ],
+   "knee_f": [
+    100.6,
+    146.1
+   ],
+   "ankle_f": [
+    96.7,
+    182.9
+   ],
+   "toe_f": [
+    107.7,
+    184.0
+   ]
+  }
+ },
+ {
+  "id": "flexion-pared",
+  "name": "Flexión en la pared",
+  "zona": "Brazos y pecho",
+  "nivel": 1,
+  "prop": "wall",
+  "dosis": "3 series de 10",
+  "pasos": [
+   "Frente a una pared, apoya las manos a la altura del pecho.",
+   "Da un paso atrás y lleva el pecho hacia la pared doblando los codos.",
+   "Empuja para volver, con el cuerpo en una línea."
+  ],
+  "facil": "Acércate más a la pared.",
+  "A": {
+   "hip": [
+    79.9,
+    110.1
+   ],
+   "neck": [
+    100.2,
+    64.4
+   ],
+   "head": [
+    107.1,
+    48.9
+   ],
+   "elbow_n": [
+    126.6,
+    58.8
+   ],
+   "hand_n": [
+    151.1,
+    53.6
+   ],
+   "knee_n": [
+    64.0,
+    145.7
+   ],
+   "ankle_n": [
+    48.9,
+    179.5
+   ],
+   "toe_n": [
+    59.0,
+    184.0
+   ],
+   "elbow_f": [
+    126.6,
+    58.8
+   ],
+   "hand_f": [
+    151.1,
+    53.6
+   ],
+   "knee_f": [
+    64.0,
+    145.7
+   ],
+   "ankle_f": [
+    48.9,
+    179.5
+   ],
+   "toe_f": [
+    59.0,
+    184.0
+   ]
+  },
+  "B": {
+   "hip": [
+    86.9,
+    112.7
+   ],
+   "neck": [
+    111.9,
+    69.4
+   ],
+   "head": [
+    120.4,
+    54.7
+   ],
+   "elbow_n": [
+    134.1,
+    84.9
+   ],
+   "hand_n": [
+    150.1,
+    65.7
+   ],
+   "knee_n": [
+    67.4,
+    146.5
+   ],
+   "ankle_n": [
+    48.9,
+    178.5
+   ],
+   "toe_n": [
+    58.5,
+    184.0
+   ],
+   "elbow_f": [
+    134.1,
+    84.9
+   ],
+   "hand_f": [
+    150.1,
+    65.7
+   ],
+   "knee_f": [
+    67.4,
+    146.5
+   ],
+   "ankle_f": [
+    48.9,
+    178.5
+   ],
+   "toe_f": [
+    58.5,
+    184.0
+   ]
+  }
+ },
+ {
+  "id": "zancada-apoyo",
+  "name": "Zancada estática con apoyo",
+  "zona": "Piernas y glúteos",
+  "nivel": 2,
+  "prop": "chair",
+  "dosis": "2 series de 8 por pierna",
+  "pasos": [
+   "Un pie adelante y otro atrás, una mano en la silla.",
+   "Baja la rodilla de atrás hacia el suelo, recto hacia abajo.",
+   "Sube empujando con la pierna de adelante."
+  ],
+  "facil": "Baja solo la mitad del recorrido.",
+  "A": {
+   "hip": [
+    97.7,
+    110.5
+   ],
+   "neck": [
+    97.7,
+    60.5
+   ],
+   "head": [
+    97.7,
+    43.5
+   ],
+   "elbow_n": [
+    109.1,
+    84.9
+   ],
+   "hand_n": [
+    133.3,
+    91.4
+   ],
+   "knee_n": [
+    114.2,
+    145.8
+   ],
+   "ankle_n": [
+    123.8,
+    181.6
+   ],
+   "toe_n": [
+    134.4,
+    178.7
+   ],
+   "elbow_f": [
+    109.1,
+    84.9
+   ],
+   "hand_f": [
+    133.3,
+    91.4
+   ],
+   "knee_f": [
+    81.2,
+    145.8
+   ],
+   "ankle_f": [
+    65.6,
+    179.4
+   ],
+   "toe_f": [
+    75.6,
+    184.0
+   ]
+  },
+  "B": {
+   "hip": [
+    84.9,
+    132.1
+   ],
+   "neck": [
+    84.9,
+    82.1
+   ],
+   "head": [
+    84.9,
+    65.1
+   ],
+   "elbow_n": [
+    96.3,
+    106.6
+   ],
+   "hand_n": [
+    120.5,
+    113.1
+   ],
+   "knee_n": [
+    123.8,
+    135.5
+   ],
+   "ankle_n": [
+    123.8,
+    172.5
+   ],
+   "toe_n": [
+    134.8,
+    172.5
+   ],
+   "elbow_f": [
+    96.3,
+    106.6
+   ],
+   "hand_f": [
+    120.5,
+    113.1
+   ],
+   "knee_f": [
+    74.8,
+    169.8
+   ],
+   "ankle_f": [
+    38.0,
+    173.0
+   ],
+   "toe_f": [
+    38.9,
+    184.0
+   ]
+  }
+ },
+ {
+  "id": "patada-gluteo",
+  "name": "Patada de glúteo de pie",
+  "zona": "Piernas y glúteos",
+  "nivel": 1,
+  "prop": "chair",
+  "dosis": "2 series de 12 por pierna",
+  "pasos": [
+   "Apoya las manos en el respaldo de una silla.",
+   "Lleva una pierna estirada hacia atrás, apretando el glúteo.",
+   "Vuelve sin balancearte ni arquear la espalda."
+  ],
+  "facil": "Hazlo con la rodilla doblada.",
+  "A": {
+   "hip": [
+    76.5,
+    108.0
+   ],
+   "neck": [
+    83.4,
+    58.5
+   ],
+   "head": [
+    85.8,
+    41.7
+   ],
+   "elbow_n": [
+    98.9,
+    80.6
+   ],
+   "hand_n": [
+    123.5,
+    84.9
+   ],
+   "knee_n": [
+    76.5,
+    147.0
+   ],
+   "ankle_n": [
+    76.5,
+    184.0
+   ],
+   "toe_n": [
+    87.5,
+    184.0
+   ],
+   "elbow_f": [
+    98.9,
+    80.6
+   ],
+   "hand_f": [
+    123.5,
+    84.9
+   ],
+   "knee_f": [
+    76.5,
+    147.0
+   ],
+   "ankle_f": [
+    76.5,
+    184.0
+   ],
+   "toe_f": [
+    87.5,
+    184.0
+   ]
+  },
+  "B": {
+   "hip": [
+    76.5,
+    108.0
+   ],
+   "neck": [
+    91.9,
+    60.4
+   ],
+   "head": [
+    97.2,
+    44.3
+   ],
+   "elbow_n": [
+    107.4,
+    82.6
+   ],
+   "hand_n": [
+    132.0,
+    86.9
+   ],
+   "knee_n": [
+    51.4,
+    137.9
+   ],
+   "ankle_n": [
+    27.6,
+    166.2
+   ],
+   "toe_n": [
+    36.0,
+    173.3
+   ],
+   "elbow_f": [
+    107.4,
+    82.6
+   ],
+   "hand_f": [
+    132.0,
+    86.9
+   ],
+   "knee_f": [
+    76.5,
+    147.0
+   ],
+   "ankle_f": [
+    76.5,
+    184.0
+   ],
+   "toe_f": [
+    87.5,
+    184.0
+   ]
+  }
+ },
+ {
+  "id": "equilibrio",
+  "name": "Equilibrio en una pierna",
+  "zona": "Equilibrio",
+  "nivel": 2,
+  "dosis": "3 veces 20 segundos por pierna",
+  "pasos": [
+   "De pie, manos en la cintura, mirada a un punto fijo.",
+   "Sube una rodilla y quédate quieta respirando.",
+   "Baja con control y cambia de pierna."
+  ],
+  "facil": "Apoya una mano en la pared.",
+  "A": {
+   "hip": [
+    96.7,
+    108.0
+   ],
+   "neck": [
+    96.7,
+    58.0
+   ],
+   "head": [
+    96.7,
+    41.0
+   ],
+   "elbow_n": [
+    87.5,
+    83.4
+   ],
+   "hand_n": [
+    112.5,
+    83.4
+   ],
+   "knee_n": [
+    96.7,
+    147.0
+   ],
+   "ankle_n": [
+    96.7,
+    184.0
+   ],
+   "toe_n": [
+    107.7,
+    184.0
+   ],
+   "elbow_f": [
+    87.5,
+    83.4
+   ],
+   "hand_f": [
+    112.5,
+    83.4
+   ],
+   "knee_f": [
+    96.7,
+    147.0
+   ],
+   "ankle_f": [
+    96.7,
+    184.0
+   ],
+   "toe_f": [
+    107.7,
+    184.0
+   ]
+  },
+  "B": {
+   "hip": [
+    96.7,
+    108.0
+   ],
+   "neck": [
+    96.7,
+    58.0
+   ],
+   "head": [
+    96.7,
+    41.0
+   ],
+   "elbow_n": [
+    87.5,
+    83.4
+   ],
+   "hand_n": [
+    112.5,
+    83.4
+   ],
+   "knee_n": [
+    135.1,
+    114.8
+   ],
+   "ankle_n": [
+    138.4,
+    151.6
+   ],
+   "toe_n": [
+    149.3,
+    150.7
+   ],
+   "elbow_f": [
+    87.5,
+    83.4
+   ],
+   "hand_f": [
+    112.5,
+    83.4
+   ],
+   "knee_f": [
+    96.7,
+    147.0
+   ],
+   "ankle_f": [
+    96.7,
+    184.0
+   ],
+   "toe_f": [
+    107.7,
+    184.0
+   ]
+  }
+ },
+ {
+  "id": "puente",
+  "name": "Puente de glúteos",
+  "zona": "Piernas y glúteos",
+  "nivel": 1,
+  "dosis": "3 series de 12",
+  "pasos": [
+   "Boca arriba, rodillas dobladas y pies apoyados.",
+   "Exhala y sube la cadera hasta formar una línea de hombros a rodillas.",
+   "Baja vértebra por vértebra."
+  ],
+  "facil": "Sube menos y mantén 2 segundos.",
+  "A": {
+   "hip": [
+    107.6,
+    174.0
+   ],
+   "neck": [
+    57.6,
+    174.0
+   ],
+   "head": [
+    40.6,
+    174.0
+   ],
+   "elbow_n": [
+    84.6,
+    173.1
+   ],
+   "hand_n": [
+    109.6,
+    172.2
+   ],
+   "knee_n": [
+    127.1,
+    140.2
+   ],
+   "ankle_n": [
+    150.9,
+    168.6
+   ],
+   "toe_n": [
+    159.4,
+    161.5
+   ],
+   "elbow_f": [
+    84.6,
+    173.1
+   ],
+   "hand_f": [
+    109.6,
+    172.2
+   ],
+   "knee_f": [
+    127.1,
+    140.2
+   ],
+   "ankle_f": [
+    150.9,
+    168.6
+   ],
+   "toe_f": [
+    159.4,
+    161.5
+   ]
+  },
+  "B": {
+   "hip": [
+    101.8,
+    150.5
+   ],
+   "neck": [
+    57.6,
+    174.0
+   ],
+   "head": [
+    40.6,
+    174.0
+   ],
+   "elbow_n": [
+    84.5,
+    171.6
+   ],
+   "hand_n": [
+    109.4,
+    169.5
+   ],
+   "knee_n": [
+    140.2,
+    143.8
+   ],
+   "ankle_n": [
+    155.8,
+    177.3
+   ],
+   "toe_n": [
+    165.8,
+    172.6
+   ],
+   "elbow_f": [
+    84.5,
+    171.6
+   ],
+   "hand_f": [
+    109.4,
+    169.5
+   ],
+   "knee_f": [
+    140.2,
+    143.8
+   ],
+   "ankle_f": [
+    155.8,
+    177.3
+   ],
+   "toe_f": [
+    165.8,
+    172.6
+   ]
+  }
+ },
+ {
+  "id": "puente-marcha",
+  "name": "Puente con marcha",
+  "zona": "Abdomen",
+  "nivel": 3,
+  "dosis": "2 series de 8 por pierna",
+  "pasos": [
+   "Sube a la posición de puente.",
+   "Sin que la cadera baje, despega un pie y sube la rodilla.",
+   "Apoya y alterna."
+  ],
+  "facil": "Haz el puente simple, sin despegar los pies.",
+  "A": {
+   "hip": [
+    98.6,
+    150.5
+   ],
+   "neck": [
+    54.4,
+    174.0
+   ],
+   "head": [
+    37.4,
+    174.0
+   ],
+   "elbow_n": [
+    81.3,
+    171.6
+   ],
+   "hand_n": [
+    106.2,
+    169.5
+   ],
+   "knee_n": [
+    137.0,
+    143.8
+   ],
+   "ankle_n": [
+    152.6,
+    177.3
+   ],
+   "toe_n": [
+    162.6,
+    172.6
+   ],
+   "elbow_f": [
+    81.3,
+    171.6
+   ],
+   "hand_f": [
+    106.2,
+    169.5
+   ],
+   "knee_f": [
+    137.0,
+    143.8
+   ],
+   "ankle_f": [
+    152.6,
+    177.3
+   ],
+   "toe_f": [
+    162.6,
+    172.6
+   ]
+  },
+  "B": {
+   "hip": [
+    98.6,
+    150.5
+   ],
+   "neck": [
+    54.4,
+    174.0
+   ],
+   "head": [
+    37.4,
+    174.0
+   ],
+   "elbow_n": [
+    81.3,
+    171.6
+   ],
+   "hand_n": [
+    106.2,
+    169.5
+   ],
+   "knee_n": [
+    108.7,
+    112.9
+   ],
+   "ankle_n": [
+    145.1,
+    119.3
+   ],
+   "toe_n": [
+    147.0,
+    108.4
+   ],
+   "elbow_f": [
+    81.3,
+    171.6
+   ],
+   "hand_f": [
+    106.2,
+    169.5
+   ],
+   "knee_f": [
+    137.0,
+    143.8
+   ],
+   "ankle_f": [
+    152.6,
+    177.3
+   ],
+   "toe_f": [
+    162.6,
+    172.6
+   ]
+  }
+ },
+ {
+  "id": "dead-bug",
+  "name": "Bicho muerto (dead bug)",
+  "zona": "Abdomen",
+  "nivel": 2,
+  "dosis": "2 series de 8 por lado",
+  "pasos": [
+   "Boca arriba, brazos hacia el techo y rodillas a 90°.",
+   "Estira un brazo atrás y la pierna contraria adelante, sin arquear la zona lumbar.",
+   "Vuelve al centro y alterna."
+  ],
+  "facil": "Mueve solo las piernas, de a una.",
+  "A": {
+   "hip": [
+    115.0,
+    174.0
+   ],
+   "neck": [
+    65.0,
+    174.0
+   ],
+   "head": [
+    48.0,
+    174.0
+   ],
+   "elbow_n": [
+    65.0,
+    147.0
+   ],
+   "hand_n": [
+    65.0,
+    122.0
+   ],
+   "knee_n": [
+    115.0,
+    135.0
+   ],
+   "ankle_n": [
+    152.0,
+    135.0
+   ],
+   "toe_n": [
+    152.0,
+    124.0
+   ],
+   "elbow_f": [
+    65.0,
+    147.0
+   ],
+   "hand_f": [
+    65.0,
+    122.0
+   ],
+   "knee_f": [
+    115.0,
+    135.0
+   ],
+   "ankle_f": [
+    152.0,
+    135.0
+   ],
+   "toe_f": [
+    152.0,
+    124.0
+   ]
+  },
+  "B": {
+   "hip": [
+    115.0,
+    174.0
+   ],
+   "neck": [
+    65.0,
+    174.0
+   ],
+   "head": [
+    48.0,
+    174.0
+   ],
+   "elbow_n": [
+    38.1,
+    171.6
+   ],
+   "hand_n": [
+    13.2,
+    169.5
+   ],
+   "knee_n": [
+    153.9,
+    170.6
+   ],
+   "ankle_n": [
+    190.7,
+    167.4
+   ],
+   "toe_n": [
+    189.8,
+    156.4
+   ],
+   "elbow_f": [
+    65.0,
+    147.0
+   ],
+   "hand_f": [
+    65.0,
+    122.0
+   ],
+   "knee_f": [
+    115.0,
+    135.0
+   ],
+   "ankle_f": [
+    152.0,
+    135.0
+   ],
+   "toe_f": [
+    152.0,
+    124.0
+   ]
+  }
+ },
+ {
+  "id": "elevacion-pierna",
+  "name": "Elevación de pierna tumbada",
+  "zona": "Abdomen",
+  "nivel": 1,
+  "dosis": "2 series de 10 por pierna",
+  "pasos": [
+   "Boca arriba, una rodilla doblada y la otra pierna estirada.",
+   "Sube la pierna estirada hasta la altura de la otra rodilla.",
+   "Baja despacio sin tocar el suelo."
+  ],
+  "facil": "Sube la pierna con la rodilla un poco doblada.",
+  "A": {
+   "hip": [
+    95.5,
+    174.0
+   ],
+   "neck": [
+    45.5,
+    174.0
+   ],
+   "head": [
+    28.5,
+    174.0
+   ],
+   "elbow_n": [
+    72.5,
+    173.1
+   ],
+   "hand_n": [
+    97.5,
+    172.2
+   ],
+   "knee_n": [
+    134.5,
+    174.0
+   ],
+   "ankle_n": [
+    171.5,
+    174.0
+   ],
+   "toe_n": [
+    171.5,
+    163.0
+   ],
+   "elbow_f": [
+    72.5,
+    173.1
+   ],
+   "hand_f": [
+    97.5,
+    172.2
+   ],
+   "knee_f": [
+    115.0,
+    140.2
+   ],
+   "ankle_f": [
+    138.8,
+    168.6
+   ],
+   "toe_f": [
+    147.2,
+    161.5
+   ]
+  },
+  "B": {
+   "hip": [
+    95.5,
+    174.0
+   ],
+   "neck": [
+    45.5,
+    174.0
+   ],
+   "head": [
+    28.5,
+    174.0
+   ],
+   "elbow_n": [
+    72.5,
+    173.1
+   ],
+   "hand_n": [
+    97.5,
+    172.2
+   ],
+   "knee_n": [
+    123.1,
+    146.4
+   ],
+   "ankle_n": [
+    149.2,
+    120.3
+   ],
+   "toe_n": [
+    141.5,
+    112.5
+   ],
+   "elbow_f": [
+    72.5,
+    173.1
+   ],
+   "hand_f": [
+    97.5,
+    172.2
+   ],
+   "knee_f": [
+    115.0,
+    140.2
+   ],
+   "ankle_f": [
+    138.8,
+    168.6
+   ],
+   "toe_f": [
+    147.2,
+    161.5
+   ]
+  }
+ },
+ {
+  "id": "plancha-rodillas",
+  "name": "Plancha sobre rodillas",
+  "zona": "Abdomen",
+  "nivel": 2,
+  "dosis": "3 veces 20 segundos",
+  "pasos": [
+   "Antebrazos en el suelo y rodillas apoyadas.",
+   "Alinea cabeza, espalda y cadera, como una tabla.",
+   "Respira sin aguantar el aire."
+  ],
+  "facil": "Baja a 10 segundos y descansa.",
+  "A": {
+   "hip": [
+    90.0,
+    137.7
+   ],
+   "neck": [
+    138.5,
+    149.8
+   ],
+   "head": [
+    155.5,
+    150.3
+   ],
+   "elbow_n": [
+    138.5,
+    176.8
+   ],
+   "hand_n": [
+    163.5,
+    176.8
+   ],
+   "knee_n": [
+    73.5,
+    173.0
+   ],
+   "ankle_n": [
+    36.5,
+    173.0
+   ],
+   "toe_n": [
+    36.5,
+    184.0
+   ],
+   "elbow_f": [
+    138.5,
+    176.8
+   ],
+   "hand_f": [
+    163.5,
+    176.8
+   ],
+   "knee_f": [
+    73.5,
+    173.0
+   ],
+   "ankle_f": [
+    36.5,
+    173.0
+   ],
+   "toe_f": [
+    36.5,
+    184.0
+   ]
+  },
+  "B": {
+   "hip": [
+    95.9,
+    141.1
+   ],
+   "neck": [
+    145.1,
+    149.7
+   ],
+   "head": [
+    162.1,
+    149.1
+   ],
+   "elbow_n": [
+    145.1,
+    176.7
+   ],
+   "hand_n": [
+    170.1,
+    176.7
+   ],
+   "knee_n": [
+    73.5,
+    173.0
+   ],
+   "ankle_n": [
+    36.5,
+    173.0
+   ],
+   "toe_n": [
+    36.5,
+    184.0
+   ],
+   "elbow_f": [
+    145.1,
+    176.7
+   ],
+   "hand_f": [
+    170.1,
+    176.7
+   ],
+   "knee_f": [
+    73.5,
+    173.0
+   ],
+   "ankle_f": [
+    36.5,
+    173.0
+   ],
+   "toe_f": [
+    36.5,
+    184.0
+   ]
+  }
+ },
+ {
+  "id": "perro-pajaro",
+  "name": "Perro-pájaro",
+  "zona": "Espalda y postura",
+  "nivel": 2,
+  "dosis": "2 series de 8 por lado",
+  "pasos": [
+   "En cuatro apoyos, manos bajo hombros y rodillas bajo cadera.",
+   "Estira un brazo adelante y la pierna contraria atrás.",
+   "Mantén 2 segundos sin girar la cadera y alterna."
+  ],
+  "facil": "Estira solo la pierna o solo el brazo.",
+  "A": {
+   "hip": [
+    85.1,
+    132.0
+   ],
+   "neck": [
+    135.1,
+    132.0
+   ],
+   "head": [
+    151.9,
+    129.0
+   ],
+   "elbow_n": [
+    135.1,
+    159.0
+   ],
+   "hand_n": [
+    135.1,
+    184.0
+   ],
+   "knee_n": [
+    85.1,
+    171.0
+   ],
+   "ankle_n": [
+    48.1,
+    171.0
+   ],
+   "toe_n": [
+    48.1,
+    182.0
+   ],
+   "elbow_f": [
+    135.1,
+    159.0
+   ],
+   "hand_f": [
+    135.1,
+    184.0
+   ],
+   "knee_f": [
+    85.1,
+    171.0
+   ],
+   "ankle_f": [
+    48.1,
+    171.0
+   ],
+   "toe_f": [
+    48.1,
+    182.0
+   ]
+  },
+  "B": {
+   "hip": [
+    85.1,
+    132.0
+   ],
+   "neck": [
+    135.1,
+    132.0
+   ],
+   "head": [
+    151.9,
+    129.0
+   ],
+   "elbow_n": [
+    162.1,
+    132.0
+   ],
+   "hand_n": [
+    187.1,
+    132.0
+   ],
+   "knee_n": [
+    46.1,
+    132.0
+   ],
+   "ankle_n": [
+    9.1,
+    132.0
+   ],
+   "toe_n": [
+    9.1,
+    143.0
+   ],
+   "elbow_f": [
+    135.1,
+    159.0
+   ],
+   "hand_f": [
+    135.1,
+    184.0
+   ],
+   "knee_f": [
+    85.1,
+    171.0
+   ],
+   "ankle_f": [
+    48.1,
+    171.0
+   ],
+   "toe_f": [
+    48.1,
+    182.0
+   ]
+  }
+ },
+ {
+  "id": "gato-vaca",
+  "name": "Gato y vaca",
+  "zona": "Espalda y postura",
+  "nivel": 1,
+  "dosis": "10 respiraciones",
+  "pasos": [
+   "En cuatro apoyos.",
+   "Inhala mirando al frente y deja caer el abdomen.",
+   "Exhala redondeando la espalda y mirando al ombligo."
+  ],
+  "facil": "Hazlo sentada en una silla con las manos en las rodillas.",
+  "A": {
+   "hip": [
+    86.5,
+    132.0
+   ],
+   "neck": [
+    136.5,
+    132.0
+   ],
+   "head": [
+    150.5,
+    122.2
+   ],
+   "elbow_n": [
+    136.5,
+    159.0
+   ],
+   "hand_n": [
+    136.5,
+    184.0
+   ],
+   "knee_n": [
+    86.5,
+    171.0
+   ],
+   "ankle_n": [
+    49.5,
+    171.0
+   ],
+   "toe_n": [
+    49.5,
+    182.0
+   ],
+   "elbow_f": [
+    136.5,
+    159.0
+   ],
+   "hand_f": [
+    136.5,
+    184.0
+   ],
+   "knee_f": [
+    86.5,
+    171.0
+   ],
+   "ankle_f": [
+    49.5,
+    171.0
+   ],
+   "toe_f": [
+    49.5,
+    182.0
+   ]
+  },
+  "B": {
+   "hip": [
+    84.5,
+    132.1
+   ],
+   "neck": [
+    134.2,
+    126.8
+   ],
+   "head": [
+    149.8,
+    133.7
+   ],
+   "elbow_n": [
+    135.6,
+    153.8
+   ],
+   "hand_n": [
+    136.9,
+    178.8
+   ],
+   "knee_n": [
+    86.5,
+    171.0
+   ],
+   "ankle_n": [
+    49.5,
+    171.0
+   ],
+   "toe_n": [
+    49.5,
+    182.0
+   ],
+   "elbow_f": [
+    135.6,
+    153.8
+   ],
+   "hand_f": [
+    136.9,
+    178.8
+   ],
+   "knee_f": [
+    86.5,
+    171.0
+   ],
+   "ankle_f": [
+    49.5,
+    171.0
+   ],
+   "toe_f": [
+    49.5,
+    182.0
+   ]
+  }
+ },
+ {
+  "id": "superman",
+  "name": "Superman suave",
+  "zona": "Espalda y postura",
+  "nivel": 2,
+  "dosis": "2 series de 8",
+  "pasos": [
+   "Boca abajo, brazos estirados adelante.",
+   "Despega a la vez brazos, pecho y piernas unos centímetros.",
+   "Mantén 2 segundos y baja."
+  ],
+  "facil": "Despega solo los brazos.",
+  "A": {
+   "hip": [
+    87.0,
+    173.0
+   ],
+   "neck": [
+    137.0,
+    173.0
+   ],
+   "head": [
+    154.0,
+    173.0
+   ],
+   "elbow_n": [
+    164.0,
+    173.0
+   ],
+   "hand_n": [
+    189.0,
+    173.0
+   ],
+   "knee_n": [
+    48.0,
+    173.0
+   ],
+   "ankle_n": [
+    11.0,
+    173.0
+   ],
+   "toe_n": [
+    11.0,
+    184.0
+   ],
+   "elbow_f": [
+    164.0,
+    173.0
+   ],
+   "hand_f": [
+    189.0,
+    173.0
+   ],
+   "knee_f": [
+    48.0,
+    173.0
+   ],
+   "ankle_f": [
+    11.0,
+    173.0
+   ],
+   "toe_f": [
+    11.0,
+    184.0
+   ]
+  },
+  "B": {
+   "hip": [
+    87.0,
+    173.0
+   ],
+   "neck": [
+    136.2,
+    164.3
+   ],
+   "head": [
+    152.4,
+    159.1
+   ],
+   "elbow_n": [
+    162.7,
+    158.7
+   ],
+   "hand_n": [
+    187.1,
+    153.5
+   ],
+   "knee_n": [
+    48.6,
+    166.2
+   ],
+   "ankle_n": [
+    12.2,
+    159.8
+   ],
+   "toe_n": [
+    10.2,
+    170.6
+   ],
+   "elbow_f": [
+    162.7,
+    158.7
+   ],
+   "hand_f": [
+    187.1,
+    153.5
+   ],
+   "knee_f": [
+    48.6,
+    166.2
+   ],
+   "ankle_f": [
+    12.2,
+    159.8
+   ],
+   "toe_f": [
+    10.2,
+    170.6
+   ]
+  }
+ },
+ {
+  "id": "nino",
+  "name": "Postura del niño",
+  "zona": "Movilidad",
+  "nivel": 1,
+  "dosis": "5 respiraciones profundas",
+  "pasos": [
+   "Desde cuatro apoyos, lleva la cadera hacia los talones.",
+   "Estira los brazos adelante y apoya la frente.",
+   "Respira llevando el aire a la espalda."
+  ],
+  "facil": "Pon un almohadón entre glúteos y talones.",
+  "A": {
+   "hip": [
+    85.1,
+    132.0
+   ],
+   "neck": [
+    135.1,
+    132.0
+   ],
+   "head": [
+    151.9,
+    129.0
+   ],
+   "elbow_n": [
+    135.1,
+    159.0
+   ],
+   "hand_n": [
+    135.1,
+    184.0
+   ],
+   "knee_n": [
+    85.1,
+    171.0
+   ],
+   "ankle_n": [
+    48.1,
+    171.0
+   ],
+   "toe_n": [
+    48.1,
+    182.0
+   ],
+   "elbow_f": [
+    135.1,
+    159.0
+   ],
+   "hand_f": [
+    135.1,
+    184.0
+   ],
+   "knee_f": [
+    85.1,
+    171.0
+   ],
+   "ankle_f": [
+    48.1,
+    171.0
+   ],
+   "toe_f": [
+    48.1,
+    182.0
+   ]
+  },
+  "B": {
+   "hip": [
+    53.2,
+    136.6
+   ],
+   "neck": [
+    92.6,
+    167.4
+   ],
+   "head": [
+    108.2,
+    174.0
+   ],
+   "elbow_n": [
+    119.5,
+    165.0
+   ],
+   "hand_n": [
+    144.4,
+    162.8
+   ],
+   "knee_n": [
+    85.1,
+    158.9
+   ],
+   "ankle_n": [
+    48.1,
+    158.9
+   ],
+   "toe_n": [
+    48.1,
+    169.9
+   ],
+   "elbow_f": [
+    119.5,
+    165.0
+   ],
+   "hand_f": [
+    144.4,
+    162.8
+   ],
+   "knee_f": [
+    85.1,
+    158.9
+   ],
+   "ankle_f": [
+    48.1,
+    158.9
+   ],
+   "toe_f": [
+    48.1,
+    169.9
+   ]
+  }
+ },
+ {
+  "id": "isquios",
+  "name": "Estiramiento de isquios sentada",
+  "zona": "Movilidad",
+  "nivel": 1,
+  "dosis": "3 veces 20 segundos",
+  "pasos": [
+   "Sentada en el suelo con las piernas estiradas.",
+   "Inclínate desde la cadera llevando las manos hacia los pies.",
+   "Quédate donde sientas el estiramiento, sin rebotes."
+  ],
+  "facil": "Dobla un poco las rodillas.",
+  "A": {
+   "hip": [
+    67.8,
+    184
+   ],
+   "neck": [
+    59.1,
+    134.8
+   ],
+   "head": [
+    56.2,
+    118.0
+   ],
+   "elbow_n": [
+    76.5,
+    155.4
+   ],
+   "hand_n": [
+    98.1,
+    167.9
+   ],
+   "knee_n": [
+    106.8,
+    184.0
+   ],
+   "ankle_n": [
+    143.8,
+    184.0
+   ],
+   "toe_n": [
+    143.8,
+    173.0
+   ],
+   "elbow_f": [
+    76.5,
+    155.4
+   ],
+   "hand_f": [
+    98.1,
+    167.9
+   ],
+   "knee_f": [
+    106.8,
+    184.0
+   ],
+   "ankle_f": [
+    143.8,
+    184.0
+   ],
+   "toe_f": [
+    143.8,
+    173.0
+   ]
+  },
+  "B": {
+   "hip": [
+    67.8,
+    184
+   ],
+   "neck": [
+    96.5,
+    143.0
+   ],
+   "head": [
+    108.5,
+    131.0
+   ],
+   "elbow_n": [
+    123.1,
+    147.7
+   ],
+   "hand_n": [
+    148.1,
+    147.7
+   ],
+   "knee_n": [
+    106.8,
+    184.0
+   ],
+   "ankle_n": [
+    143.8,
+    184.0
+   ],
+   "toe_n": [
+    143.8,
+    173.0
+   ],
+   "elbow_f": [
+    123.1,
+    147.7
+   ],
+   "hand_f": [
+    148.1,
+    147.7
+   ],
+   "knee_f": [
+    106.8,
+    184.0
+   ],
+   "ankle_f": [
+    143.8,
+    184.0
+   ],
+   "toe_f": [
+    143.8,
+    173.0
+   ]
+  }
+ },
+ {
+  "id": "alcance-puntas",
+  "name": "Alcance cruzado de pie",
+  "zona": "Cardio suave",
+  "nivel": 1,
+  "dosis": "1 minuto alternando",
+  "pasos": [
+   "De pie con los brazos arriba.",
+   "Baja una mano hacia la rodilla o el pie contrario, girando el torso.",
+   "Vuelve arriba y alterna."
+  ],
+  "facil": "Lleva la mano solo hasta la rodilla.",
+  "A": {
+   "hip": [
+    94.5,
+    108.0
+   ],
+   "neck": [
+    94.5,
+    58.0
+   ],
+   "head": [
+    94.5,
+    41.0
+   ],
+   "elbow_n": [
+    96.9,
+    31.1
+   ],
+   "hand_n": [
+    99.0,
+    6.2
+   ],
+   "knee_n": [
+    94.5,
+    147.0
+   ],
+   "ankle_n": [
+    94.5,
+    184.0
+   ],
+   "toe_n": [
+    105.5,
+    184.0
+   ],
+   "elbow_f": [
+    96.9,
+    31.1
+   ],
+   "hand_f": [
+    99.0,
+    6.2
+   ],
+   "knee_f": [
+    94.5,
+    147.0
+   ],
+   "ankle_f": [
+    94.5,
+    184.0
+   ],
+   "toe_f": [
+    105.5,
+    184.0
+   ]
+  },
+  "B": {
+   "hip": [
+    91.0,
+    107.8
+   ],
+   "neck": [
+    126.3,
+    72.4
+   ],
+   "head": [
+    138.3,
+    60.4
+   ],
+   "elbow_n": [
+    139.8,
+    95.8
+   ],
+   "hand_n": [
+    152.3,
+    117.5
+   ],
+   "knee_n": [
+    97.7,
+    146.2
+   ],
+   "ankle_n": [
+    94.5,
+    183.0
+   ],
+   "toe_n": [
+    105.5,
+    184.0
+   ],
+   "elbow_f": [
+    131.0,
+    45.8
+   ],
+   "hand_f": [
+    135.3,
+    21.2
+   ],
+   "knee_f": [
+    97.7,
+    146.2
+   ],
+   "ankle_f": [
+    94.5,
+    183.0
+   ],
+   "toe_f": [
+    105.5,
+    184.0
+   ]
+  }
+ },
+ {
+  "id": "sentadilla-sumo",
+  "name": "Sentadilla sumo con brazos",
+  "zona": "Piernas y glúteos",
+  "nivel": 2,
+  "dosis": "3 series de 12",
+  "pasos": [
+   "Pies más abiertos que la cadera y puntas hacia afuera.",
+   "Baja la cadera recto hacia abajo, rodillas hacia afuera.",
+   "Sube apretando glúteos."
+  ],
+  "facil": "Baja menos y apóyate en una silla.",
+  "A": {
+   "hip": [
+    88.1,
+    108.0
+   ],
+   "neck": [
+    88.1,
+    58.0
+   ],
+   "head": [
+    88.1,
+    41.0
+   ],
+   "elbow_n": [
+    92.8,
+    84.6
+   ],
+   "hand_n": [
+    111.9,
+    68.5
+   ],
+   "knee_n": [
+    88.1,
+    147.0
+   ],
+   "ankle_n": [
+    88.1,
+    184.0
+   ],
+   "toe_n": [
+    99.1,
+    184.0
+   ],
+   "elbow_f": [
+    92.8,
+    84.6
+   ],
+   "hand_f": [
+    111.9,
+    68.5
+   ],
+   "knee_f": [
+    88.1,
+    147.0
+   ],
+   "ankle_f": [
+    88.1,
+    184.0
+   ],
+   "toe_f": [
+    99.1,
+    184.0
+   ]
+  },
+  "B": {
+   "hip": [
+    62.3,
+    128.9
+   ],
+   "neck": [
+    77.8,
+    81.4
+   ],
+   "head": [
+    83.0,
+    65.2
+   ],
+   "elbow_n": [
+    82.4,
+    108.0
+   ],
+   "hand_n": [
+    101.6,
+    91.9
+   ],
+   "knee_n": [
+    97.7,
+    145.4
+   ],
+   "ankle_n": [
+    88.1,
+    181.2
+   ],
+   "toe_n": [
+    98.7,
+    184.0
+   ],
+   "elbow_f": [
+    82.4,
+    108.0
+   ],
+   "hand_f": [
+    101.6,
+    91.9
+   ],
+   "knee_f": [
+    97.7,
+    145.4
+   ],
+   "ankle_f": [
+    88.1,
+    181.2
+   ],
+   "toe_f": [
+    98.7,
+    184.0
+   ]
+  }
+ },
+ {
+  "id": "tai-chi-brazos",
+  "name": "Ola de brazos (tai chi)",
+  "zona": "Movilidad",
+  "nivel": 1,
+  "dosis": "10 olas lentas",
+  "pasos": [
+   "De pie, rodillas suaves, brazos relajados al frente.",
+   "Inhala y sube los brazos como si flotaran en el agua.",
+   "Exhala y bájalos despacio, sin tensión en los hombros."
+  ],
+  "facil": "Hazlo sentada.",
+  "A": {
+   "hip": [
+    80.8,
+    107.2
+   ],
+   "neck": [
+    80.8,
+    57.2
+   ],
+   "head": [
+    80.8,
+    40.2
+   ],
+   "elbow_n": [
+    94.2,
+    80.6
+   ],
+   "hand_n": [
+    119.2,
+    80.6
+   ],
+   "knee_n": [
+    87.5,
+    145.7
+   ],
+   "ankle_n": [
+    81.1,
+    182.1
+   ],
+   "toe_n": [
+    91.9,
+    184.0
+   ],
+   "elbow_f": [
+    94.2,
+    80.6
+   ],
+   "hand_f": [
+    119.2,
+    80.6
+   ],
+   "knee_f": [
+    87.5,
+    145.7
+   ],
+   "ankle_f": [
+    81.1,
+    182.1
+   ],
+   "toe_f": [
+    91.9,
+    184.0
+   ]
+  },
+  "B": {
+   "hip": [
+    80.8,
+    107.2
+   ],
+   "neck": [
+    80.8,
+    57.2
+   ],
+   "head": [
+    79.3,
+    40.3
+   ],
+   "elbow_n": [
+    107.6,
+    54.9
+   ],
+   "hand_n": [
+    130.3,
+    44.3
+   ],
+   "knee_n": [
+    87.5,
+    145.7
+   ],
+   "ankle_n": [
+    81.1,
+    182.1
+   ],
+   "toe_n": [
+    91.9,
+    184.0
+   ],
+   "elbow_f": [
+    107.6,
+    54.9
+   ],
+   "hand_f": [
+    130.3,
+    44.3
+   ],
+   "knee_f": [
+    87.5,
+    145.7
+   ],
+   "ankle_f": [
+    81.1,
+    182.1
+   ],
+   "toe_f": [
+    91.9,
+    184.0
+   ]
+  }
+ },
+ {
+  "id": "respiracion-caja",
+  "name": "Respiración en caja",
+  "zona": "Respiración",
+  "nivel": 1,
+  "dosis": "4 rondas",
+  "pasos": [
+   "De pie o sentada, una mano en el abdomen.",
+   "Inhala 4 tiempos, sostén 4, exhala 4, sostén 4.",
+   "Siente cómo baja el ritmo del corazón."
+  ],
+  "facil": "Usa 3 tiempos en lugar de 4.",
+  "A": {
+   "hip": [
+    95.2,
+    108.0
+   ],
+   "neck": [
+    95.2,
+    58.0
+   ],
+   "head": [
+    95.2,
+    41.0
+   ],
+   "elbow_n": [
+    88.3,
+    84.1
+   ],
+   "hand_n": [
+    111.7,
+    75.5
+   ],
+   "knee_n": [
+    95.2,
+    147.0
+   ],
+   "ankle_n": [
+    95.2,
+    184.0
+   ],
+   "toe_n": [
+    106.2,
+    184.0
+   ],
+   "elbow_f": [
+    88.3,
+    84.1
+   ],
+   "hand_f": [
+    111.7,
+    75.5
+   ],
+   "knee_f": [
+    95.2,
+    147.0
+   ],
+   "ankle_f": [
+    95.2,
+    184.0
+   ],
+   "toe_f": [
+    106.2,
+    184.0
+   ]
+  },
+  "B": {
+   "hip": [
+    95.2,
+    108.0
+   ],
+   "neck": [
+    95.2,
+    58.0
+   ],
+   "head": [
+    93.5,
+    41.1
+   ],
+   "elbow_n": [
+    83.8,
+    82.5
+   ],
+   "hand_n": [
+    107.3,
+    73.9
+   ],
+   "knee_n": [
+    95.2,
+    147.0
+   ],
+   "ankle_n": [
+    95.2,
+    184.0
+   ],
+   "toe_n": [
+    106.2,
+    184.0
+   ],
+   "elbow_f": [
+    83.8,
+    82.5
+   ],
+   "hand_f": [
+    107.3,
+    73.9
+   ],
+   "knee_f": [
+    95.2,
+    147.0
+   ],
+   "ankle_f": [
+    95.2,
+    184.0
+   ],
+   "toe_f": [
+    106.2,
+    184.0
+   ]
+  }
+ }
+]
