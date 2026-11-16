@@ -99,20 +99,52 @@ def overlap_check(final_mp4, layout):
     cap.release()
     return sorted(set(fails))
 
+def word_check(orig_mp4, pres_wav, words_final, ffmpeg):
+    tmp = tempfile.mktemp(suffix='.wav')
+    subprocess.run([ffmpeg, '-y', '-hide_banner', '-loglevel', 'error', '-i', orig_mp4,
+                    '-vn', '-ac', '1', '-ar', '44100', tmp], check=True)
+    sr, orig = load_wav_mono(tmp)
+    _, pres = load_wav_mono(pres_wav)
+    os.remove(tmp)
+    W = int(0.06*sr)  # búsqueda ±60 ms alrededor del tiempo esperado (incluye d=0 exacto)
+    step = max(1, int(sr*0.001))
+    clipped = []
+    for w in words_final:
+        if w.get('nStart') is None:
+            continue
+        o0, o1 = int(w['oStart']*sr), int(w['oEnd']*sr)
+        oseg = orig[o0:o1]
+        if len(oseg) < sr*0.08:
+            continue
+        n0 = int(w['nStart']*sr)
+        a = oseg - oseg.mean(); na = np.linalg.norm(a) + 1e-9
+        best = 0.0
+        offs = set(range(-W, W+1, step)); offs.add(0)  # asegurar la posición exacta d=0
+        for d in sorted(offs):
+            s = n0 + d
+            if s < 0 or s + len(oseg) > len(pres):
+                continue
+            b = pres[s:s+len(oseg)]; b = b - b.mean()
+            ncc = float(np.dot(a, b) / (na * (np.linalg.norm(b)+1e-9)))
+            if ncc > best:
+                best = ncc
+        if best < 0.75:
+            clipped.append(w['w'])
+    return clipped
+
 def main():
     final_mp4, ref_wav, layout_json, ffmpeg = sys.argv[1:5]
     layout = json.load(open(layout_json))
     max_ms, worst_t = sync_check(final_mp4, ref_wav, ffmpeg)
     fails = overlap_check(final_mp4, layout)
-    bysec = {}
-    for t in fails:
-        bysec[int(t)] = bysec.get(int(t), 0) + 1
+    clipped = []
+    if len(sys.argv) >= 7:
+        clipped = word_check(sys.argv[5], ref_wav, json.load(open(sys.argv[6])), ffmpeg)
     res = {'sync_max_ms': round(max_ms, 1), 'sync_worst_t': round(worst_t, 2),
            'overlap_fail_frames': len(fails),
-           'fail_range': [fails[0], fails[-1]] if fails else [],
-           'fails_by_second': bysec}
+           'clipped_words': len(clipped), 'clipped_list': clipped[:20]}
     print(json.dumps(res))
-    ok = max_ms < 40 and len(fails) == 0
+    ok = max_ms < 40 and len(fails) == 0 and len(clipped) == 0
     sys.exit(0 if ok else 2)
 
 if __name__ == '__main__':

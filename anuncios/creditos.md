@@ -70,7 +70,13 @@ El nombre del autor figura en cada página (no se pudo scrapear: Pexels sirve la
   debajo del mentón; stickers debajo del subtítulo (nunca sobre la cara); PiP = recorte circular
   centrado en la cara (cabeza completa). Fuente a CFR 30 antes de cortar; cortes v+a juntos
   (frame-aligned, afade 10 ms) → lip-sync preservado.
-- Verificación automática (`verify-ugc.py`): sincronía por correlación cruzada en ventanas de 1 s
-  (desfase máx ≤5 ms, umbral <40 ms) y superposición cara/texto por cuadro (0 fallas en las 4).
-- Salidas: `Hana-UGC-A-9x16.mp4` / `-4x5.mp4` (20,7 s), `Hana-UGC-B-9x16.mp4` / `-4x5.mp4` (16,7 s).
+- Audio: SIN recorte de silencios (voz con ritmo natural) → 0 palabras cortadas y lip-sync perfecto.
+  (El recorte en huecos >0,35 s quedó opcional con `UGC_NO_CUTS=0`, pero introducía desfases post-corte;
+  se prefirió voz completa, +2 s, como pidió el brief.)
+- Tarjeta "versión fácil": se muestra COMPLETA (fit, sin recortar los costados) con resalte del renglón.
+- Calendario (B): casillas DEBAJO del subtítulo (sin superposición). Cierre 4:5: botón separado del subtítulo.
+- Verificación automática (`verify-ugc.py`, gate): (1) sincronía por correlación cruzada en ventanas de
+  1 s (desfase máx 5 ms, <40 ms); (2) superposición cara/texto por cuadro (0 fallas); (3) palabras
+  completas: cada palabra del alignment presente en el audio final (0 recortadas). Las 4 piezas pasan.
+- Salidas: `Hana-UGC-A-9x16.mp4` / `-4x5.mp4` (22,7 s), `Hana-UGC-B-9x16.mp4` / `-4x5.mp4` (18,3 s).
   (En 4:5, por el encuadre más cerrado, se omite el texto superior fijo para no tapar la cara.)

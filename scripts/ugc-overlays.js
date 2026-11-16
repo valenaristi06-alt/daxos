@@ -111,15 +111,15 @@ async function shot(html, w, h, file) {
   // ---------- overlay de cierre (transparente; fondo = presentadora desenfocada en ffmpeg) ----------
   for (const [w, h, tag] of [[1080, 1920, '9x16'], [1080, 1350, '4x5']]) {
     const html = `<div style="width:${w}px;height:${h}px;display:flex;flex-direction:column;align-items:center;
-      justify-content:center;text-align:center;gap:30px;padding:0 60px">
+      justify-content:center;text-align:center;gap:28px;padding:0 60px">
       <div style="display:flex;align-items:center;gap:18px">
         <div style="width:64px;height:64px;border-radius:50%;background:radial-gradient(circle at 35% 30%, #e6a7bd, ${ACC})"></div>
         <div style="font-family:'Pop9';font-size:52px;color:#fff;letter-spacing:3px;text-shadow:0 3px 10px rgba(0,0,0,.6)">MÉTODO HANA</div>
       </div>
-      <div style="font-family:'Pop9';font-size:110px;line-height:1.02;color:#fff;-webkit-text-stroke:3px ${PLUM};paint-order:stroke fill;text-shadow:0 8px 18px rgba(0,0,0,.5)">HAZ EL TEST<br>GRATIS</div>
-      <div style="font-family:'Pop8';font-size:48px;color:#fff;text-shadow:0 3px 10px rgba(0,0,0,.7)">1 minuto <span style="color:#ffd3df">→</span> tu plan de 21 días</div>
-      <div style="font-family:'Pop6';font-size:38px;color:#fff;text-shadow:0 3px 10px rgba(0,0,0,.7)">🎁 Regalo de bienvenida al final</div>
-      <div id="btn" style="margin-top:8px;font-family:'Pop8';font-size:60px;color:#fff;background:${ACC};padding:26px 60px;border-radius:999px;box-shadow:0 14px 38px rgba(194,69,106,.6)">HAZ EL TEST GRATIS</div>
+      <div style="font-family:'Pop9';font-size:104px;line-height:1.02;color:#fff;-webkit-text-stroke:3px ${PLUM};paint-order:stroke fill;text-shadow:0 8px 18px rgba(0,0,0,.5)">HAZ EL TEST<br>GRATIS</div>
+      <div style="font-family:'Pop8';font-size:46px;color:#fff;text-shadow:0 3px 10px rgba(0,0,0,.7)">1 minuto <span style="color:#ffd3df">→</span> tu plan de 21 días</div>
+      <div style="font-family:'Pop6';font-size:36px;color:#fff;text-shadow:0 3px 10px rgba(0,0,0,.7)">🎁 Regalo de bienvenida al final</div>
+      <div id="btn" style="margin-top:46px;font-family:'Pop8';font-size:58px;color:#fff;background:${ACC};padding:26px 60px;border-radius:999px;box-shadow:0 14px 38px rgba(194,69,106,.6)">HAZ EL TEST GRATIS</div>
     </div>`;
     await shot(html, w, h, `close-ov-${tag}.png`);
   }

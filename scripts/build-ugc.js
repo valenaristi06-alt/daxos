@@ -58,8 +58,11 @@ function faceBoxTarget(L, zoom, face) {
 }
 
 // ---------------- retiming (jump cuts, frame-aligned) ----------------
+// Default: SIN recorte de silencios (voz con ritmo natural) -> 0 palabras cortadas garantizado
+// y lip-sync perfecto. UGC_NO_CUTS=0 reactiva el recorte en huecos > 0.35 s (experimental).
+const NO_CUTS = process.env.UGC_NO_CUTS !== '0';
 function buildRuns(words) {
-  const GAP = 0.25, PAD = 0.08, n = words.length; const segs = []; let si = 0;
+  const GAP = NO_CUTS ? 1e9 : 0.35, PAD = 0.12, n = words.length; const segs = []; let si = 0;
   for (let k = 0; k < n; k++) { const gap = (k < n - 1) ? words[k + 1].start - words[k].end : Infinity; if (gap > GAP) { segs.push([si, k]); si = k + 1; } }
   const runs = []; let acc = 0;
   segs.forEach(([a, b], i) => {
@@ -98,29 +101,40 @@ function splitSeg(presV, W, H, startNew, dur, clip, out) {
   ff(['-i', top, '-i', bot, '-filter_complex', `[0:v][1:v]vstack=inputs=2[v]`, '-map', '[v]', '-t', String(dur), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', out]);
   return out;
 }
-// teléfono ENTERO centrado; scroll/pan DENTRO de la pantalla (el marco no se mueve)
+// teléfono ENTERO centrado; scroll/pan DENTRO de la pantalla (el marco no se mueve).
+// opts.fit = muestra la captura COMPLETA (sin recortar los costados) centrada.
 function phoneSeg(W, H, dur, screenPng, opts, out) {
   opts = opts || {};
-  const bh = Math.round(H * 0.82), pw = Math.round(bh * 0.462), bw = pw + 22;
+  const bh = Math.round(H * 0.82), pw = 2 * Math.round(bh * 0.462 / 2), bw = pw + 22;
   const bx = Math.round((W - bw) / 2), by = Math.round((H - bh) / 2), ox = bx + 11, oy = by + 11, phH = bh - 22;
-  const sc = 1.14, sw = Math.round(pw * sc), sh = Math.round(phH * sc);
-  const yexpr = opts.bottom ? `(ih-${phH})` : `(ih-${phH})*min(1\\,t/${dur})*0.85`;
-  const tapX = ox + Math.round(pw * 0.5), tapY = oy + Math.round(phH * (opts.bottom ? 0.8 : 0.45));
+  let scr, hl;
+  if (opts.fit) {
+    // tarjeta completa: cabe entera por ancho; resalta el renglón "Versión más fácil" (abajo)
+    const cardW = 1164, cardH = 981, chf = Math.round(pw * cardH / cardW), cardTop = oy + Math.round((phH - chf) / 2);
+    scr = `[1:v]scale=${pw}:${phH}:force_original_aspect_ratio=decrease,pad=${pw}:${phH}:(ow-iw)/2:(oh-ih)/2:color=white,setsar=1,fps=30[scr]`;
+    hl = `[p]drawbox=x=${ox + 6}:y=${cardTop + Math.round(chf * 0.86)}:w=${pw - 12}:h=${Math.round(chf * 0.11)}:color=${C.ACC}@0.33:t=fill[p2]`;
+  } else {
+    const sc = 1.14, sw = Math.round(pw * sc), sh = Math.round(phH * sc);
+    const yexpr = `(ih-${phH})*min(1\\,t/${dur})*0.85`;
+    scr = `[1:v]scale=${sw}:${sh}:force_original_aspect_ratio=increase,crop=${pw}:${phH}:(iw-${pw})/2:'${yexpr}',setsar=1,fps=30[scr]`;
+    hl = `[p]null[p2]`;
+  }
+  const tapX = ox + Math.round(pw * 0.5), tapY = oy + Math.round(phH * 0.45);
   const tapEnable = opts.tap ? `lt(mod(t\\,1.4)\\,0.5)` : '0';
   ff(['-f', 'lavfi', '-t', String(dur), '-i', `color=c=${C.SOFT}:s=${W}x${H}:r=30`, '-loop', '1', '-t', String(dur), '-i', screenPng, '-i', RING,
     '-filter_complex',
-    `[1:v]scale=${sw}:${sh}:force_original_aspect_ratio=increase,crop=${pw}:${phH}:(iw-${pw})/2:'${yexpr}',setsar=1,fps=30[scr];[2:v]scale=140:140[rg];` +
+    `${scr};[2:v]scale=140:140[rg];` +
     `[0:v]drawbox=x=${bx - 3}:y=${by - 3}:w=${bw + 6}:h=${bh + 6}:color=black@0.18:t=fill,drawbox=x=${bx}:y=${by}:w=${bw}:h=${bh}:color=${C.PLUM}:t=fill[bg];` +
-    `[bg][scr]overlay=${ox}:${oy}[p];` +
-    (opts.highlight ? `[p]drawbox=x=${ox}:y=${oy + Math.round(phH * 0.78)}:w=${pw}:h=${Math.round(phH * 0.08)}:color=${C.ACC}@0.35:t=fill[p2];` : `[p]null[p2];`) +
+    `[bg][scr]overlay=${ox}:${oy}[p];${hl};` +
     `[p2][rg]overlay=${tapX - 70}:${tapY - 70}:enable='${tapEnable}'[v]`,
     '-map', '[v]', '-t', String(dur), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', out]);
   return { out, bx, by, bw, bh };
 }
-function calendarSeg(W, H, dur, out) {
-  const gw = 7, bs = Math.round(W * 0.10), gap = Math.round(W * 0.028), totalW = gw * bs + (gw - 1) * gap;
-  const x0 = Math.round((W - totalW) / 2), y0 = Math.round(H * 0.52);
-  let boxes = [`drawtext=fontfile=${C.FONT_BLACK}:text='21 DÍAS':fontcolor=${C.PLUM}:fontsize=${Math.round(W * 0.095)}:x=(w-text_w)/2:y=${Math.round(H * 0.33)}`];
+// casillas DEBAJO del subtítulo (capYov), título arriba (no se superponen)
+function calendarSeg(W, H, dur, capYov, out) {
+  const gw = 7, bs = Math.round(W * 0.088), gap = Math.round(W * 0.024), totalW = gw * bs + (gw - 1) * gap;
+  const x0 = Math.round((W - totalW) / 2), y0 = capYov + 235; // debajo de la banda del subtítulo (~+210)
+  let boxes = [`drawtext=fontfile=${C.FONT_BLACK}:text='21 DÍAS':fontcolor=${C.PLUM}:fontsize=${Math.round(W * 0.095)}:x=(w-text_w)/2:y=${Math.round(H * 0.26)}`];
   for (let i = 0; i < 21; i++) {
     const cx = x0 + (i % gw) * (bs + gap), cy = y0 + Math.floor(i / gw) * (bs + gap);
     boxes.push(`drawbox=x=${cx}:y=${cy}:w=${bs}:h=${bs}:color=white@0.95:t=6`);
@@ -143,7 +157,7 @@ function sceneList(VARIANT, words, newT) {
     { anchor: 'son', type: 'split', clip: 2, sticker: 'stk-15min.png' },
     { anchor: 'haces', type: 'phone', screen: 'quiz-edad.png', tap: true, pip: true },
     { anchor: 'y', type: 'phone', screen: 'plan-21.png', pip: true },
-    { anchor: 'y', type: 'phone', screen: 'card-facil.png', bottom: true, highlight: true, pip: true },
+    { anchor: 'y', type: 'phone', screen: 'card-facil.png', fit: true, highlight: true, pip: true },
     { anchor: 'el', type: 'facecta' },
   ] : [
     { anchor: null, type: 'face', sticker: 'stk-anionuevo.png' }, { anchor: 'empieza', type: 'calendar' },
@@ -162,22 +176,30 @@ function buildOne(tag, VARIANT, input, words, meta, faceMed) {
   const { runs, bodyDur, newT } = meta;
   const scenes = sceneList(VARIANT, words, newT);
 
-  // 1) PRES: corte v+a JUNTO por run (frame-aligned, afade 10ms, reencuadre por cara)
-  const runClips = runs.map((r, i) => {
+  // 1) PRES: corte v+a por run con MISMO srcStart/len (locked, frame-aligned).
+  //    Video reencuadrado (sin audio) + audio PCM por run (afade 30ms) -> sin delay de AAC.
+  const runVids = runs.map((r, i) => {
     const o = path.join(TMP, `run-${tag}-${i}.mp4`);
     const { vf } = reframeVf(L, r.zoom, faceMed);
-    const af = `afade=t=in:st=0:d=0.01,afade=t=out:st=${Math.max(0, r.len - 0.01).toFixed(3)}:d=0.01`;
-    ff(['-i', input, '-ss', String(r.srcStart), '-t', String(r.len), '-vf', vf, '-af', af,
-      '-r', '30', '-vsync', 'cfr', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-ar', '44100', '-t', String(r.len), o]);
+    ff(['-i', input, '-ss', String(r.srcStart), '-t', String(r.len), '-an', '-vf', vf,
+      '-r', '30', '-vsync', 'cfr', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-t', String(r.len), o]);
     return o;
   });
-  const plist = path.join(TMP, `pres-${tag}.txt`); fs.writeFileSync(plist, runClips.map(p => `file '${p}'`).join('\n'));
-  const pres = path.join(TMP, `pres-${tag}.mp4`);
-  ff(['-f', 'concat', '-safe', '0', '-i', plist, '-c', 'copy', pres]);
+  const runAuds = runs.map((r, i) => {
+    // 1) extracción limpia (sin filtro: con -ss después de -i, un afade mal puesto silencia el run)
+    const raw = path.join(TMP, `raw-${tag}-${i}.wav`);
+    ff(['-i', input, '-ss', String(r.srcStart), '-t', String(r.len), '-vn', '-ac', '2', '-ar', '44100', '-t', String(r.len), raw]);
+    // 2) afade 30ms sobre el wav limpio (PTS ya en 0 -> el afade funciona bien)
+    const o = path.join(TMP, `rau-${tag}-${i}.wav`);
+    ff(['-i', raw, '-af', `afade=t=in:st=0:d=0.03,afade=t=out:st=${Math.max(0, r.len - 0.03).toFixed(3)}:d=0.03`, '-ac', '2', '-ar', '44100', o]);
+    return o;
+  });
+  const vlist = path.join(TMP, `presV-${tag}.txt`); fs.writeFileSync(vlist, runVids.map(p => `file '${p}'`).join('\n'));
   const presV = path.join(TMP, `presV-${tag}.mp4`);
-  ff(['-i', pres, '-an', '-c:v', 'copy', presV]);
-  const presA = path.join(TMP, `presA-${tag}.wav`);
-  ff(['-i', pres, '-vn', '-ac', '2', '-ar', '44100', presA]);
+  ff(['-f', 'concat', '-safe', '0', '-i', vlist, '-c:v', 'copy', presV]);
+  const alist = path.join(TMP, `presA-${VARIANT}-${tag}.txt`); fs.writeFileSync(alist, runAuds.map(p => `file '${p}'`).join('\n'));
+  const presA = path.join(TMP, `presA-${VARIANT}-${tag}.wav`);
+  ff(['-f', 'concat', '-safe', '0', '-i', alist, '-c:a', 'pcm_s16le', '-ar', '44100', '-ac', '2', presA]);
 
   // 2) escenas no-face -> override + PiP (centrado en la cara) en teléfonos
   const nonface = []; const cuts = [];
@@ -191,8 +213,8 @@ function buildOne(tag, VARIANT, input, words, meta, faceMed) {
     if (sc.type === 'broll') brollSeg(BROLL[sc.clip], W, H, rdur, o);
     else if (sc.type === 'grid') gridSeg(W, H, rdur, o);
     else if (sc.type === 'split') splitSeg(presV, W, H, start, rdur, BROLL[sc.clip], o);
-    else if (sc.type === 'phone') { const r = phoneSeg(W, H, rdur, path.join(SCR, sc.screen), { tap: sc.tap, bottom: sc.bottom, highlight: sc.highlight }, o); sc._phone = r; }
-    else if (sc.type === 'calendar') calendarSeg(W, H, rdur, o);
+    else if (sc.type === 'phone') { const r = phoneSeg(W, H, rdur, path.join(SCR, sc.screen), { tap: sc.tap, fit: sc.fit, highlight: sc.highlight }, o); sc._phone = r; }
+    else if (sc.type === 'calendar') calendarSeg(W, H, rdur, L.capYov, o);
     sc._clip = o; nonface.push(sc);
   }
   // PiP: recorte cuadrado centrado en la cara (reencuadre zoom=1), cara ~62% del círculo
@@ -290,6 +312,8 @@ const INPUT = path.join(UGC, `guion-${VARIANT}-30.mp4`);
   const words = JSON.parse(fs.readFileSync(path.join(UGC, `words-${VARIANT}-align.json`), 'utf8'));
   const faceMed = JSON.parse(fs.readFileSync(path.join(UGC, `face-${VARIANT}.json`), 'utf8')).median;
   const meta = buildRuns(words);
+  // volcado para verificación de palabras completas (orig start/end + tiempo nuevo)
+  fs.writeFileSync(path.join(TMP, `words-final-${VARIANT}.json`), JSON.stringify(words.map((w, i) => ({ w: w.word, oStart: w.start, oEnd: w.end, nStart: meta.newT[i] })), null, 2));
   const results = [];
   for (const tag of TAGS) results.push(buildOne(tag, VARIANT, INPUT, words, meta, faceMed));
   console.log('\nSalidas:'); results.forEach(r => console.log('  ' + path.relative(ROOT, r.outFile) + '  (' + r.dur + 's)'));

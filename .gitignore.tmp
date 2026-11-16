@@ -1,0 +1,28 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+node_modules/
+data/
+data-local-test/
+tmp-audit-screenshots/
+tmp-bh-screenshot.png
+__pycache__/
+*.pyc
+.venv/
+dist/
+build/
+*.log
+src/config.local.js
+/daxos.db
+
+# ad build intermediates
+motor-anuncios/_adtmp/
+# clips de stock (pesados, reproducibles vía anuncios/creditos.md)
+motor-anuncios/stock/
+# voces: muestras y metadata regenerables (se mantiene vo-final.mp3 + words.json)
+motor-anuncios/voces/sample-*.mp3
+motor-anuncios/voces/voces.json
+motor-anuncios/voces/shared.json
+# capturas exploratorias de la app
+motor-anuncios/app/explore-*
