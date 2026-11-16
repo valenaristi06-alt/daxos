@@ -39,32 +39,38 @@
 </header>
 
 <div class="sect">
-  <h2>Reto 21 días — estructura ganadora (con voz)</h2>
-  <p class="hint">Gancho grilla 3×3 · cuerpo con subtítulos palabra por palabra + PiP de la app · demo del plan · cierre. Mismo cuerpo, cambia el gancho de 0–6 s. Tocá para escuchar el audio.</p>
+  <h2>Reto 21 días — estructura ganadora (con voz mexicana)</h2>
+  <p class="hint">Gancho grilla 3×3 · cuerpo con subtítulos palabra por palabra + PiP de la app · demo del plan · cierre. Dos duraciones: 38 s (principal) y 20 s (corta). Mismo cuerpo, cambia el gancho. Tocá para escuchar el audio.</p>
   <div class="grid">
 
     <div class="card">
-      <div class="media" id="m-h1"><video src="Hana-Reto-H1-9x16.mp4" controls muted loop playsinline preload="metadata"></video></div>
+      <div class="media" id="m-h1"><video src="Hana-Reto-H1-38s-9x16.mp4" controls muted loop playsinline preload="metadata"></video></div>
       <div class="body">
         <span class="tag new">NUEVO · H1</span>
         <h3>Gancho "Cada mañana, 15 minutos"</h3>
         <p>"Cada mañana, 15 minutos. <em>Hasta Año Nuevo.</em> Es todo para empezar el año más fuerte."</p>
-        <div class="fmts" data-base="Hana-Reto-H1" data-target="m-h1">
-          <button class="on" data-f="9x16">9:16</button>
-          <button data-f="4x5">4:5</button>
+        <div class="fmts reto" data-base="Hana-Reto-H1" data-target="m-h1" data-dur="38s" data-rat="9x16">
+          <button class="on" data-k="dur" data-v="38s">38 s</button>
+          <button data-k="dur" data-v="20s">20 s</button>
+          <span style="width:10px"></span>
+          <button class="on" data-k="rat" data-v="9x16">9:16</button>
+          <button data-k="rat" data-v="4x5">4:5</button>
         </div>
       </div>
     </div>
 
     <div class="card">
-      <div class="media" id="m-h2"><video src="Hana-Reto-H2-9x16.mp4" controls muted loop playsinline preload="metadata"></video></div>
+      <div class="media" id="m-h2"><video src="Hana-Reto-H2-38s-9x16.mp4" controls muted loop playsinline preload="metadata"></video></div>
       <div class="body">
         <span class="tag new">NUEVO · H2</span>
         <h3>Gancho "Amiga, deberías empezar"</h3>
         <p>"Amiga, deberías empezar este reto de 21 días. <em>Llegas a Año Nuevo más fuerte.</em>"</p>
-        <div class="fmts" data-base="Hana-Reto-H2" data-target="m-h2">
-          <button class="on" data-f="9x16">9:16</button>
-          <button data-f="4x5">4:5</button>
+        <div class="fmts reto" data-base="Hana-Reto-H2" data-target="m-h2" data-dur="38s" data-rat="9x16">
+          <button class="on" data-k="dur" data-v="38s">38 s</button>
+          <button data-k="dur" data-v="20s">20 s</button>
+          <span style="width:10px"></span>
+          <button class="on" data-k="rat" data-v="9x16">9:16</button>
+          <button data-k="rat" data-v="4x5">4:5</button>
         </div>
       </div>
     </div>
@@ -111,14 +117,17 @@
 </footer>
 
 <script>
-  document.querySelectorAll('.fmts').forEach(function(bar){
+  document.querySelectorAll('.fmts.reto').forEach(function(bar){
     var base = bar.dataset.base, target = document.getElementById(bar.dataset.target);
     bar.querySelectorAll('button').forEach(function(btn){
       btn.addEventListener('click', function(){
-        bar.querySelectorAll('button').forEach(function(b){ b.classList.remove('on'); });
+        var k = btn.dataset.k;
+        bar.querySelectorAll('button[data-k="'+k+'"]').forEach(function(b){ b.classList.remove('on'); });
         btn.classList.add('on');
-        target.className = btn.dataset.f === '4x5' ? 'media r45' : 'media';
-        target.innerHTML = '<video src="'+base+'-'+btn.dataset.f+'.mp4" controls muted loop playsinline preload="metadata"></video>';
+        bar.dataset[k] = btn.dataset.v;
+        var rat = bar.dataset.rat;
+        target.className = rat === '4x5' ? 'media r45' : 'media';
+        target.innerHTML = '<video src="'+base+'-'+bar.dataset.dur+'-'+rat+'.mp4" controls muted loop playsinline preload="metadata"></video>';
       });
     });
   });

@@ -19,7 +19,13 @@ El nombre del autor figura en cada página (no se pudo scrapear: Pexels sirve la
 - Proveedor: ElevenLabs (modelo `eleven_multilingual_v2`, endpoint text-to-speech with-timestamps).
 - Voz: **Lucia — Warm Conversational**, es-MX (mexicana), middle-aged. `voice_id = akOBlaKhFd59YlK6xz9u`.
 - Muestras descartadas en `motor-anuncios/voces/`: María de Jesús (Warm & Soothing), Diana (Warm & Expressive).
-- VO + timestamps: `motor-anuncios/voces/vo-final.mp3` + `words.json` (subtítulos palabra por palabra).
+- VO larga (38s): `motor-anuncios/voces/vo-final.mp3` + `words.json` (24.6s).
+- VO corta (20s): `motor-anuncios/voces/vo-short.mp3` + `words-short.json` (8s).
+- Subtítulos palabra por palabra sincronizados al timestamp real de cada palabra.
+
+## Duraciones
+- `*-38s-*` principal (gancho 6s + cuerpo 21s, cortes ~3s + app 8s + cierre 3s).
+- `*-20s-*` corta (gancho 5s + 3 ejercicios + app 4s + cierre 3s).
 
 ## Tipografías
 - Poppins (800 ExtraBold / 900 Black) — OFL, vía `@expo-google-fonts/poppins`.

@@ -21,6 +21,7 @@ const KEY = readKey();
 const MODEL = 'eleven_multilingual_v2';
 
 const SCRIPT = 'Amiga, deberías empezar el reto de veintiún días de calistenia asiática. Son solo quince minutos al día, desde tu sala, sin saltos y sin equipo. Haces un test de un minuto y la app arma tu plan según tu edad y cómo te sientes. Si algo te molesta, tienes una versión más fácil de cada ejercicio. Empiezas el lunes y llegas a Año Nuevo sintiéndote más fuerte. Haz el test, es gratis.';
+const SHORT_SCRIPT = 'El reto de veintiún días de calistenia asiática. Quince minutos al día, desde tu sala, sin saltos. Haz el test, es gratis.';
 const SAMPLE = 'Hola, soy tu guía del Método Hana. Son solo quince minutos al día, desde tu sala, sin saltos y sin equipo.';
 
 function req(method, pathname, body) {
@@ -74,17 +75,16 @@ async function samples(ids) {
   }
 }
 
-async function final(voiceId) {
+async function finalGen(voiceId, text, mp3Name, wordsName) {
   // with-timestamps devuelve audio_base64 + alignment (chars con start/end)
   const { status, buf } = await req('POST', `/v1/text-to-speech/${voiceId}/with-timestamps?output_format=mp3_44100_128`, {
-    text: SCRIPT, model_id: MODEL,
+    text, model_id: MODEL,
     voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true },
   });
   if (status !== 200) { console.error('final falló', status, buf.toString().slice(0, 300)); process.exit(1); }
   const j = JSON.parse(buf.toString());
-  const audio = Buffer.from(j.audio_base64, 'base64');
-  fs.writeFileSync(path.join(VOCES, 'vo-final.mp3'), audio);
-  // construir words.json desde alignment de caracteres
+  fs.writeFileSync(path.join(VOCES, mp3Name), Buffer.from(j.audio_base64, 'base64'));
+  // construir words desde alignment de caracteres
   const al = j.alignment || j.normalized_alignment;
   const chars = al.characters, starts = al.character_start_times_seconds, ends = al.character_end_times_seconds;
   const words = []; let cur = '', s = null, e = null;
@@ -98,10 +98,11 @@ async function final(voiceId) {
     }
   }
   if (cur) words.push({ word: cur, start: s, end: e });
-  fs.writeFileSync(path.join(VOCES, 'words.json'), JSON.stringify(words, null, 2));
-  const dur = ends[ends.length - 1];
-  console.log(`vo-final.mp3 (${dur.toFixed(1)}s) + words.json (${words.length} palabras)`);
+  fs.writeFileSync(path.join(VOCES, wordsName), JSON.stringify(words, null, 2));
+  console.log(`${mp3Name} (${ends[ends.length - 1].toFixed(1)}s) + ${wordsName} (${words.length} palabras)`);
 }
+const final = (v) => finalGen(v, SCRIPT, 'vo-final.mp3', 'words.json');
+const shortVo = (v) => finalGen(v, SHORT_SCRIPT, 'vo-short.mp3', 'words-short.json');
 
 // --- Voice Library (shared voices): buscar femeninas mexicanas ---
 async function shared() {
@@ -133,5 +134,6 @@ async function addShared(ownerId, voiceId, newName) {
   if (cmd === 'add') return addShared(process.argv[3], process.argv[4], process.argv[5]);
   if (cmd === 'samples') return samples((process.argv[3] || '').split(',').filter(Boolean));
   if (cmd === 'final') return final(process.argv[3]);
-  console.error('uso: list | shared | add <owner> <voiceId> <name> | samples <ids> | final <id>');
+  if (cmd === 'short') return shortVo(process.argv[3]);
+  console.error('uso: list | shared | add <owner> <voiceId> <name> | samples <ids> | final <id> | short <id>');
 })().catch(e => { console.error('FATAL', e.message); process.exit(1); });
