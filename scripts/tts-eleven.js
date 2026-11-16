@@ -104,6 +104,85 @@ async function finalGen(voiceId, text, mp3Name, wordsName) {
 const final = (v) => finalGen(v, SCRIPT, 'vo-final.mp3', 'words.json');
 const shortVo = (v) => finalGen(v, SHORT_SCRIPT, 'vo-short.mp3', 'words-short.json');
 
+// --- guiones exactos (forma hablada) para forced alignment ---
+const UGC_SCRIPTS = {
+  A: 'Amiga, si te cuesta arrancar con el ejercicio, prueba esto. Se llama calistenia asiática: movimientos lentos, sin saltos y sin equipo. Son quince minutos al día desde tu sala. Haces un test de un minuto y la app te arma un plan de veintiún días. Y si algo te molesta, cada ejercicio tiene versión fácil. El test es gratis, está aquí abajo.',
+  B: 'Si quieres llegar a Año Nuevo sintiéndote más fuerte, empieza esta semana. Son veintiún días de calistenia asiática, quince minutos al día, sin gimnasio. Respondes un test de un minuto y te arma el plan según tu edad y cómo te sientes. Haz el test, es gratis.',
+};
+
+// --- Forced alignment: alinea el texto exacto al audio (timestamps por palabra) ---
+async function align(audioPath, variant, outName) {
+  const text = UGC_SCRIPTS[variant];
+  if (!text) { console.error('variante desconocida:', variant); process.exit(1); }
+  const { body, contentType } = multipart({ text }, 'file', audioPath);
+  const resp = await new Promise((res, rej) => {
+    const r = https.request({
+      hostname: 'api.elevenlabs.io', path: '/v1/forced-alignment', method: 'POST',
+      headers: { 'xi-api-key': KEY, 'Content-Type': contentType, 'Content-Length': body.length },
+    }, resp => { let d = []; resp.on('data', c => d.push(c)); resp.on('end', () => res({ status: resp.statusCode, buf: Buffer.concat(d) })); });
+    r.on('error', rej); r.write(body); r.end();
+  });
+  if (resp.status !== 200) { console.error('align falló', resp.status, resp.buf.toString().slice(0, 240)); process.exit(1); }
+  const j = JSON.parse(resp.buf.toString());
+  const words = (j.words || []).filter(w => w.text && w.text.trim()).map(w => ({ word: w.text.trim(), start: w.start, end: w.end }));
+  const outPath = path.join(path.dirname(audioPath), outName || `words-${variant}-align.json`);
+  fs.writeFileSync(outPath, JSON.stringify(words, null, 2));
+  console.log(`align ok: ${words.length} palabras -> ${path.relative(ROOT, outPath)}`);
+  console.log('primeras:', words.slice(0, 6).map(w => `${w.word}(${w.start.toFixed(2)})`).join(' '));
+  return words;
+}
+
+// --- Speech-to-text (Scribe): timestamps por palabra del audio del UGC ---
+function multipart(fields, fileField, filePath) {
+  const boundary = '----hana' + Date.now();
+  const parts = [];
+  for (const [k, v] of Object.entries(fields)) {
+    parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`));
+  }
+  const fileBuf = fs.readFileSync(filePath);
+  parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${fileField}"; filename="${path.basename(filePath)}"\r\nContent-Type: application/octet-stream\r\n\r\n`));
+  parts.push(fileBuf);
+  parts.push(Buffer.from(`\r\n--${boundary}--\r\n`));
+  return { body: Buffer.concat(parts), contentType: `multipart/form-data; boundary=${boundary}` };
+}
+function sttRequest(filePath) {
+  const { body, contentType } = multipart({ model_id: 'scribe_v1', timestamps_granularity: 'word' }, 'file', filePath);
+  return new Promise((res, rej) => {
+    const r = https.request({
+      hostname: 'api.elevenlabs.io', path: '/v1/speech-to-text', method: 'POST',
+      headers: { 'xi-api-key': KEY, 'Content-Type': contentType, 'Content-Length': body.length },
+    }, resp => { let d = []; resp.on('data', c => d.push(c)); resp.on('end', () => res({ status: resp.statusCode, buf: Buffer.concat(d) })); });
+    r.on('error', rej); r.write(body); r.end();
+  });
+}
+async function stt(filePath, outName) {
+  const { status, buf } = await sttRequest(filePath);
+  if (status !== 200) { console.error('stt falló', status, buf.toString().slice(0, 240)); process.exit(1); }
+  const j = JSON.parse(buf.toString());
+  const words = (j.words || []).filter(w => w.type === 'word' || !w.type).map(w => ({ word: w.text, start: w.start, end: w.end }));
+  if (outName) fs.writeFileSync(path.join(path.dirname(filePath), outName), JSON.stringify(words, null, 2));
+  console.log(`stt ok: ${words.length} palabras. texto:`, (j.text || '').slice(0, 120));
+  if (words.length) console.log('primeras:', words.slice(0, 6).map(w => `${w.word}(${w.start.toFixed(2)})`).join(' '));
+  return words;
+}
+
+// --- Sound Effects API: pop / swoosh / ding para los cortes del UGC ---
+async function sfx() {
+  const SFX = path.join(ROOT, 'motor-anuncios', 'ugc', 'sfx');
+  fs.mkdirSync(SFX, { recursive: true });
+  const items = [
+    { name: 'pop.mp3', text: 'soft UI pop', dur: 0.6 },
+    { name: 'swoosh.mp3', text: 'fast swoosh transition', dur: 0.8 },
+    { name: 'ding.mp3', text: 'light notification ding', dur: 0.9 },
+  ];
+  for (const it of items) {
+    const { status, buf } = await req('POST', '/v1/sound-generation', { text: it.text, duration_seconds: it.dur, prompt_influence: 0.3 });
+    if (status !== 200) { console.error('sfx falló', it.name, status, buf.toString().slice(0, 160)); continue; }
+    fs.writeFileSync(path.join(SFX, it.name), buf);
+    console.log('sfx:', path.relative(ROOT, path.join(SFX, it.name)), `(${buf.length} bytes)`);
+  }
+}
+
 // --- Voice Library (shared voices): buscar femeninas mexicanas ---
 async function shared() {
   const params = 'gender=female&language=es&page_size=100';
@@ -135,5 +214,8 @@ async function addShared(ownerId, voiceId, newName) {
   if (cmd === 'samples') return samples((process.argv[3] || '').split(',').filter(Boolean));
   if (cmd === 'final') return final(process.argv[3]);
   if (cmd === 'short') return shortVo(process.argv[3]);
-  console.error('uso: list | shared | add <owner> <voiceId> <name> | samples <ids> | final <id> | short <id>');
+  if (cmd === 'sfx') return sfx();
+  if (cmd === 'stt') return stt(process.argv[3], process.argv[4]);
+  if (cmd === 'align') return align(process.argv[3], process.argv[4], process.argv[5]);
+  console.error('uso: list | shared | add <owner> <voiceId> <name> | samples <ids> | final <id> | short <id> | sfx');
 })().catch(e => { console.error('FATAL', e.message); process.exit(1); });

@@ -79,6 +79,40 @@
 </div>
 
 <div class="sect">
+  <h2>UGC — presentadora (voz MX, alta retención)</h2>
+  <p class="hint">Calidad agencia: storyboard por frase anclado a forced alignment. Voz desde el frame 0, cambio cada ~1.5–2.5 s (punch-in 100/112%, B-roll, grilla, split, teléfono con quiz y plan, stickers con emoji, tarjeta "versión fácil", calendario). Subtítulos karaoke (palabra actual en #c2456a), barra de progreso, SFX + música suave, cierre de marca. "Presentadora generada con IA" visible todo el video.</p>
+  <div class="grid">
+
+    <div class="card">
+      <div class="media" id="m-uga"><video src="Hana-UGC-A-9x16.mp4" controls muted loop playsinline preload="metadata"></video></div>
+      <div class="body">
+        <span class="tag new">UGC · A</span>
+        <h3>Guion A — "Si te cuesta arrancar"</h3>
+        <p>Problema → solución: calistenia asiática, 15 min, test gratis. ~23 s.</p>
+        <div class="fmts reto" data-base="Hana-UGC-A" data-target="m-uga" data-dur="" data-rat="9x16">
+          <button class="on" data-k="rat" data-v="9x16">9:16</button>
+          <button data-k="rat" data-v="4x5">4:5</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="media" id="m-ugb"><video src="Hana-UGC-B-9x16.mp4" controls muted loop playsinline preload="metadata"></video></div>
+      <div class="body">
+        <span class="tag new">UGC · B</span>
+        <h3>Guion B — "Llega a Año Nuevo más fuerte"</h3>
+        <p>21 días, 15 min, sin gimnasio, test de 1 minuto. ~18 s.</p>
+        <div class="fmts reto" data-base="Hana-UGC-B" data-target="m-ugb" data-dur="" data-rat="9x16">
+          <button class="on" data-k="rat" data-v="9x16">9:16</button>
+          <button data-k="rat" data-v="4x5">4:5</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="sect">
   <h2>Motor de marca (A · B · C) — sin voz</h2>
   <p class="hint">Piezas anteriores, hechas con el motor de marca (figura Hana + textos). Siguen disponibles.</p>
   <div class="grid">
@@ -126,8 +160,9 @@
         btn.classList.add('on');
         bar.dataset[k] = btn.dataset.v;
         var rat = bar.dataset.rat;
+        var dur = bar.dataset.dur ? bar.dataset.dur + '-' : '';
         target.className = rat === '4x5' ? 'media r45' : 'media';
-        target.innerHTML = '<video src="'+base+'-'+bar.dataset.dur+'-'+rat+'.mp4" controls muted loop playsinline preload="metadata"></video>';
+        target.innerHTML = '<video src="'+base+'-'+dur+rat+'.mp4" controls muted loop playsinline preload="metadata"></video>';
       });
     });
   });

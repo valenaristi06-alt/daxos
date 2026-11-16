@@ -37,3 +37,25 @@ El nombre del autor figura en cada página (no se pudo scrapear: Pexels sirve la
 
 ## Música
 - Sin música (opcional en el brief; no se consiguió pista libre de derechos en esta tanda).
+
+## UGC (presentadora) — calidad agencia, storyboard por frase
+- Videos fuente: `motor-anuncios/ugc/guion-A.mp4`, `guion-B.mp4` (presentadora generada con IA, 704x1280).
+  Marca "Presentadora generada con IA" visible todo el video (disclosure, abajo-izq).
+- Subtítulos karaoke: ElevenLabs Forced Alignment del texto exacto → tiempo por palabra
+  (`words-A-align.json`, `words-B-align.json`). PNG por palabra (Poppins 800, borde negro,
+  palabra actual #c2456a y más grande) renderizados con Playwright (`ugc-overlays.js`).
+  Numerales en pantalla: "21 días", "15 minutos", "1 minuto".
+- Escenas ancladas a tiempos de palabra (cambio cada ~1.5-2.5 s): cara con punch-in (100/112%),
+  grilla 3x3 de B-roll, stickers con emoji (CALISTENIA ASIÁTICA 🌸, 🎆 AÑO NUEVO, 🕒 15 MIN,
+  SIN GIMNASIO), checks ✓ SIN SALTOS/SIN EQUIPO, split-screen, teléfono con quiz real del
+  landing (localhost:4321) y grilla "plan 21 días" (vercel), tarjeta "Versión fácil" (vercel),
+  calendario de 21 casillas (B), CTA que aparece + ▽, cierre de marca.
+- Capturas: `motor-anuncios/ugc/screens/` (quiz edad/zonas/dolor/ruleta, plan-21, card-facil),
+  tomadas con Playwright bloqueando facebook.com/net.
+- SFX: ElevenLabs Sound Effects (pop/swoosh/ding) en `ugc/sfx/`, a volumen bajo.
+- Música: ElevenLabs Music (`ugc/music.mp3`), instrumental suave, a ~-20 dB bajo la voz.
+- Texto superior fijo primeros 2,5 s (para sound-off): A "15 MIN · SIN SALTOS · SIN EQUIPO",
+  B "21 DÍAS ANTES DE AÑO NUEVO". Barra de progreso fina arriba en #c2456a.
+- Salidas: `Hana-UGC-A-9x16.mp4` / `-4x5.mp4` (~23 s), `Hana-UGC-B-9x16.mp4` / `-4x5.mp4` (~19 s).
+- Nota: las pausas >0,25 s caen en los cortes de escena (sin aire muerto); la voz conserva su
+  cadencia natural en vez de recortar el audio.
