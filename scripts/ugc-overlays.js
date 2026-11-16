@@ -101,12 +101,12 @@ async function shot(html, w, h, file) {
   await shot(center(pill('#2f8a5b', '#ffffff', '✓ SIN EQUIPO')), 1080, 240, 'chk-equipo.png');
   await shot(center(pill(ACC, '#ffffff', 'HAZ EL TEST GRATIS 👇', 72), 1080, 260), 1080, 260, 'cta.png');
 
-  // ---------- texto superior (nunca se sale: max 960, caja plum 85%, 2 líneas/autoescala) ----------
+  // ---------- texto superior: tira fina de 1 línea (no toca la cara) ----------
   const topTxt = VARIANT === 'A' ? '15 MIN · SIN SALTOS · SIN EQUIPO' : '21 DÍAS ANTES DE AÑO NUEVO';
-  const topHtml = `<div style="display:flex;align-items:center;justify-content:center;width:1080px;height:260px">
-    <div style="max-width:960px;font-family:'Pop8';font-size:58px;line-height:1.08;color:#fff;background:${PLUM}E6;
-      padding:20px 34px;border-radius:26px;text-align:center;letter-spacing:.5px">${topTxt}</div></div>`;
-  await shot(topHtml, 1080, 260, `top-${VARIANT}.png`);
+  const topHtml = `<div style="display:flex;align-items:center;justify-content:center;width:1080px;height:130px">
+    <div style="font-family:'Pop8';font-size:44px;line-height:1;color:#fff;background:${PLUM}E6;white-space:nowrap;
+      padding:16px 34px;border-radius:999px;text-align:center;letter-spacing:.5px">${topTxt}</div></div>`;
+  await shot(topHtml, 1080, 130, `top-${VARIANT}.png`);
 
   // ---------- overlay de cierre (transparente; fondo = presentadora desenfocada en ffmpeg) ----------
   for (const [w, h, tag] of [[1080, 1920, '9x16'], [1080, 1350, '4x5']]) {

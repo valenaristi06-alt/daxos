@@ -66,4 +66,11 @@ El nombre del autor figura en cada página (no se pudo scrapear: Pexels sirve la
   "1 minuto → tu plan de 21 días", "🎁 Regalo de bienvenida al final", botón + ▽ que rebota + ding.
 - Grid: solo mujeres adultas (se quitó el clip ambiguo/joven).
 - Audio: loudnorm 2 pasadas a -14 LUFS int. / TP ≤ -1 dBTP (+ limiter de seguridad); música a ~-18 dB.
-- Salidas: `Hana-UGC-A-9x16.mp4` / `-4x5.mp4` (20,8 s), `Hana-UGC-B-9x16.mp4` / `-4x5.mp4` (16,7 s).
+- Reencuadre por cara (OpenCV Haar, `face-detect.py`): ojos en el tercio superior; subtítulos
+  debajo del mentón; stickers debajo del subtítulo (nunca sobre la cara); PiP = recorte circular
+  centrado en la cara (cabeza completa). Fuente a CFR 30 antes de cortar; cortes v+a juntos
+  (frame-aligned, afade 10 ms) → lip-sync preservado.
+- Verificación automática (`verify-ugc.py`): sincronía por correlación cruzada en ventanas de 1 s
+  (desfase máx ≤5 ms, umbral <40 ms) y superposición cara/texto por cuadro (0 fallas en las 4).
+- Salidas: `Hana-UGC-A-9x16.mp4` / `-4x5.mp4` (20,7 s), `Hana-UGC-B-9x16.mp4` / `-4x5.mp4` (16,7 s).
+  (En 4:5, por el encuadre más cerrado, se omite el texto superior fijo para no tapar la cara.)
