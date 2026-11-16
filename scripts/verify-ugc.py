@@ -132,19 +132,35 @@ def word_check(orig_mp4, pres_wav, words_final, ffmpeg):
             clipped.append(w['w'])
     return clipped
 
+def cta_subtitle_check(layout, margin=40):
+    # mientras el botón CTA está en pantalla, el subtítulo debe ir ARRIBA con >= margin px
+    ctas = [r for r in layout['rects'] if r.get('tag') == 'cta']
+    caps = [r for r in layout['rects'] if r.get('tag') == 'cap']
+    fails = 0
+    for c in ctas:
+        for cap in caps:
+            if cap['b'] <= c['a'] or c['b'] <= cap['a']:
+                continue  # no coinciden en el tiempo
+            # borde inferior del subtítulo + margen debe estar por encima del borde superior del botón
+            if cap['y1'] + margin > c['y0']:
+                fails += 1
+    return fails
+
 def main():
     final_mp4, ref_wav, layout_json, ffmpeg = sys.argv[1:5]
     layout = json.load(open(layout_json))
     max_ms, worst_t = sync_check(final_mp4, ref_wav, ffmpeg)
     fails = overlap_check(final_mp4, layout)
+    cta_fails = cta_subtitle_check(layout)
     clipped = []
     if len(sys.argv) >= 7:
         clipped = word_check(sys.argv[5], ref_wav, json.load(open(sys.argv[6])), ffmpeg)
     res = {'sync_max_ms': round(max_ms, 1), 'sync_worst_t': round(worst_t, 2),
            'overlap_fail_frames': len(fails),
+           'cta_subtitle_fails': cta_fails,
            'clipped_words': len(clipped), 'clipped_list': clipped[:20]}
     print(json.dumps(res))
-    ok = max_ms < 40 and len(fails) == 0 and len(clipped) == 0
+    ok = max_ms < 40 and len(fails) == 0 and len(clipped) == 0 and cta_fails == 0
     sys.exit(0 if ok else 2)
 
 if __name__ == '__main__':

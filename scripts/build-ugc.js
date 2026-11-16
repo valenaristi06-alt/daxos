@@ -245,22 +245,23 @@ function buildOne(tag, VARIANT, input, words, meta, faceMed) {
   const manifest = JSON.parse(fs.readFileSync(ov(`cap-${VARIANT}-manifest.json`), 'utf8'));
   const ein = ['-i', vScenes]; let ei = 1; const els = []; const rects = [];
   // band = filas visibles de texto dentro del png; onFace = puede caer sobre la cara (se verifica)
-  const addEl = (png, yov, a, b, band, onFace) => { ein.push('-i', ov(png)); els.push({ ix: ei++, x: '(W-w)/2', y: yov, a, b }); if (onFace) rects.push({ a: +a.toFixed(2), b: +b.toFixed(2), y0: yov + band[0], y1: yov + band[1] }); };
+  const addEl = (png, yov, a, b, band, onFace, tag) => { ein.push('-i', ov(png)); els.push({ ix: ei++, x: '(W-w)/2', y: yov, a, b }); if (onFace) rects.push({ a: +a.toFixed(2), b: +b.toFixed(2), y0: yov + band[0], y1: yov + band[1], tag: tag || 'other' }); };
   // texto superior: tira fina arriba (no toca la cara). En 4:5 (angosto) se omite.
-  if (!L.skipTop) addEl(`top-${VARIANT}.png`, L.topYov, 0, 2.5, [15, 110], true);
+  if (!L.skipTop) addEl(`top-${VARIANT}.png`, L.topYov, 0, 2.5, [15, 110], true, 'top');
+  // botón CTA: debajo del subtítulo (>=40 px entre borde inferior del subtítulo y borde superior del botón)
+  const ctaYov = L.capYov + 200;
   scenes.forEach((sc) => {
     const a = sc._start, b = sc._end;
-    if (sc.sticker) addEl(sc.sticker, L.stkYov, a + 0.05, b, [55, 185], true);
+    if (sc.sticker) addEl(sc.sticker, L.stkYov, a + 0.05, b, [55, 185], true, 'stk');
     if (sc.checks) { const mid = (a + b) / 2; addEl(sc.checks[0], L.stkYov, a + 0.1, mid, [55, 185], false); addEl(sc.checks[1], L.stkYov, mid, b, [55, 185], false); }
-    if (sc.type === 'facecta') addEl('cta.png', Math.round(H * 0.62), a + 0.1, b, [55, 205], true);
+    if (sc.type === 'facecta') addEl('cta.png', ctaYov, a + 0.1, b, [55, 205], true, 'cta');
   });
-  manifest.forEach(m => { const a = newT[m.wi]; const b = (m.wi < words.length - 1 && newT[m.wi + 1] != null) ? newT[m.wi + 1] : bodyDur; addEl(m.png, L.capYov, +a.toFixed(2), +b.toFixed(2), [90, 210], true); });
+  manifest.forEach(m => { const a = newT[m.wi]; const b = (m.wi < words.length - 1 && newT[m.wi + 1] != null) ? newT[m.wi + 1] : bodyDur; addEl(m.png, L.capYov, +a.toFixed(2), +b.toFixed(2), [90, 210], true, 'cap'); });
   // inset 0.08s: excluye los bordes donde la escena vecina entra 1-2 cuadros antes
   const faceSpans = scenes.filter(s => s.type === 'face' || s.type === 'facecta').map(s => [+(s._start + 0.08).toFixed(2), +(s._end - 0.08).toFixed(2)]);
   const pipSpansArr = nonface.filter(s => s.pip).map(s => [+(s._start + 0.08).toFixed(2), +(s._end - 0.08).toFixed(2)]);
   fs.writeFileSync(path.join(TMP, `layout-${VARIANT}-${tag}.json`), JSON.stringify({ W, H, bodyDur, rects, faceSpans, pipSpans: pipSpansArr, pip: { x: px, y: py, size: PIP } }, null, 2));
-  let efc = `[0:v]drawbox=x=0:y=0:w='${W}*min(1,t/${bodyDur})':h=10:color=${C.ACC}:t=fill,` +
-    `drawtext=fontfile=${C.FONT_SEMIBOLD}:text='Presentadora generada con IA':fontcolor=white@0.6:fontsize=${Math.round(W * 0.022)}:x=22:y=${H - Math.round(H * 0.03)}:box=1:boxcolor=black@0.25:boxborderw=7[b0];`;
+  let efc = `[0:v]drawbox=x=0:y=0:w='${W}*min(1,t/${bodyDur})':h=10:color=${C.ACC}:t=fill[b0];`;
   let pv = 'b0';
   els.forEach((o, k) => { efc += `[${pv}][${o.ix}:v]overlay=${o.x}:${o.y}:enable='between(t,${o.a},${o.b})'[e${k}];`; pv = `e${k}`; });
   efc = efc.replace(/;$/, '');
