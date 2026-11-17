@@ -234,10 +234,24 @@ async function extractTextFromFile(buffer, mimetype, originalname) {
   const mime = mimetype;
   const name = originalname.toLowerCase();
   if (mime === 'application/pdf' || name.endsWith('.pdf')) {
-    const pdfParseLib = require('pdf-parse');
-    const pdfParse = pdfParseLib.default ?? pdfParseLib;
-    const result = await pdfParse(buffer);
-    return result.text;
+    // Support both pdf-parse v1 (callable default export) and v2 (PDFParse class).
+    const mod = require('pdf-parse');
+    const legacy = typeof mod === 'function' ? mod
+                 : typeof mod.default === 'function' ? mod.default
+                 : null;
+    if (legacy) {
+      const result = await legacy(buffer);
+      return result.text;
+    }
+    const PDFParse = mod.PDFParse || mod.default?.PDFParse;
+    if (!PDFParse) throw new Error('pdf-parse: unsupported module shape');
+    const parser = new PDFParse({ data: buffer });
+    try {
+      const result = await parser.getText();
+      return result.text;
+    } finally {
+      await parser.destroy().catch(() => {});
+    }
   }
   if (
     mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
