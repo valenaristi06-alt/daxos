@@ -917,7 +917,7 @@ app.put('/api/business', requireAuth, async (req, res) => {
       business_hours:        'business_hours'        in req.body ? (bhClean || null)                                            : (currentBiz?.business_hours        ?? null),
       after_hours_instructions: 'after_hours_instructions' in req.body ? (after_hours_instructions ? String(after_hours_instructions).trim() : null) : (currentBiz?.after_hours_instructions ?? null),
       urgent_phone:          'urgent_phone'          in req.body ? (urgent_phone ? String(urgent_phone).trim() : null)          : (currentBiz?.urgent_phone          ?? null),
-      owner_rules:           'owner_rules'           in req.body ? (owner_rules ? String(owner_rules).slice(0, 3000).trim() : null) : (currentBiz?.owner_rules           ?? null),
+      owner_rules:           'owner_rules'           in req.body ? (owner_rules ? String(owner_rules).slice(0, 6000).trim() : null) : (currentBiz?.owner_rules           ?? null),
     });
     console.log('[PUT /api/business] upsertBusiness result id:', business?.id ?? 'null');
     if ('owner_pause_hours' in req.body) setOwnerPauseHours(business.id, owner_pause_hours);
