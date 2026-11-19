@@ -502,6 +502,15 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
           </div>
 
           <div class="field" style="margin-top:24px;">
+            <label class="field-label" for="owner_pause_hours">
+              Pausa cuando escribís vos
+              <span class="tag-optional">Opcional</span>
+            </label>
+            <span class="field-hint">Si respondés un chat desde tu teléfono, el asistente se pausa en esa conversación y se reactiva solo después de estas horas sin que escribas. Dejalo vacío para usar el valor por defecto (24 horas).</span>
+            <input id="owner_pause_hours" type="number" min="1" max="168" step="1" placeholder="24" style="width:120px;">
+          </div>
+
+          <div class="field" style="margin-top:24px;">
             <label class="field-label">
               Documentos que el asistente lee
               <span class="tag-optional">Opcional</span>
@@ -1250,6 +1259,7 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
       const ownerRulesEl = document.getElementById('owner_rules');
       ownerRulesEl.value = b.owner_rules || '';
       document.getElementById('owner-rules-count').textContent = ownerRulesEl.value.length;
+      document.getElementById('owner_pause_hours').value = b.owner_pause_hours ?? '';
       document.getElementById('website_url').value = b.website_url || '';
 
       if (Array.isArray(b.sales_examples)) {
@@ -1493,6 +1503,7 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
         business_context: document.getElementById('business_context').value.trim() || null,
         website_url: document.getElementById('website_url').value.trim() || null,
         owner_rules: document.getElementById('owner_rules').value.trim() || null,
+        owner_pause_hours: document.getElementById('owner_pause_hours').value.trim() || null,
         sales_examples,
         survey_answers: {
           objeciones_precio: document.getElementById('objeciones_precio').value.trim(),

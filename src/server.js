@@ -85,7 +85,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
   incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
   incrementPreviewCall, getPreviewSpendingToday, setSpendingCapOwnerNotified, setSpendingCapNeedsAttention,
   getConvAssistantCountLastHour, setSpendingCapNotified,
@@ -653,7 +653,7 @@ const OWNER_BUSINESS_FIELDS = new Set([
   'wa_provider', 'phone_number_id', 'waba_id', 'wa_payment_confirmed', 'wa_connected_at',
   'kapso_customer_id',
   'urgent_keywords', 'urgent_alert_enabled',
-  'business_hours', 'after_hours_instructions', 'urgent_phone', 'owner_rules',
+  'business_hours', 'after_hours_instructions', 'urgent_phone', 'owner_rules', 'owner_pause_hours',
   'booking_enabled', 'weekly_summary_enabled',
   'agenda_enabled', 'agenda_slot_min', 'agenda_cancel_min_before',
   'billing_requires_invoice', 'billing_legal_name', 'billing_rut', 'billing_address', 'billing_email', 'billing_updated_at',
@@ -877,7 +877,7 @@ async function fetchAndSummarizeWebsite(rawUrl) {
 }
 
 app.put('/api/business', requireAuth, async (req, res) => {
-  const { name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, pause_reply_text, response_delay, pricing_info, urgent_keywords, urgent_alert_enabled, business_hours, after_hours_instructions, urgent_phone, owner_rules } = req.body;
+  const { name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, pause_reply_text, response_delay, pricing_info, urgent_keywords, urgent_alert_enabled, business_hours, after_hours_instructions, urgent_phone, owner_rules, owner_pause_hours } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'El nombre del negocio es requerido' });
 
   const prtClean = pause_reply_text != null ? String(pause_reply_text).trim() : null;
@@ -920,6 +920,7 @@ app.put('/api/business', requireAuth, async (req, res) => {
       owner_rules:           'owner_rules'           in req.body ? (owner_rules ? String(owner_rules).slice(0, 3000).trim() : null) : (currentBiz?.owner_rules           ?? null),
     });
     console.log('[PUT /api/business] upsertBusiness result id:', business?.id ?? 'null');
+    if ('owner_pause_hours' in req.body) setOwnerPauseHours(business.id, owner_pause_hours);
     if (!user.business_id) {
       setUserBusiness(user.id, business.id);
       console.log('[PUT /api/business] setUserBusiness called:', user.id, '->', business.id);
@@ -3696,6 +3697,39 @@ app.post('/webhook', async (req, res) => {
 
     for (const entry of body.entry || []) {
       for (const change of entry.changes || []) {
+        // Coexistence: owner replies sent from the WhatsApp Business App arrive as
+        // smb_message_echoes (requires subscribing to that webhook field in Meta).
+        // from = business number, to = customer. Pause the chat with reason 'owner'.
+        if (change.field === 'smb_message_echoes') {
+          const echoVal = change.value || {};
+          const echoPhoneId = echoVal.metadata?.phone_number_id;
+          const echoBiz = getBusinessByPhoneNumberId(String(echoPhoneId || ''));
+          if (!echoBiz) {
+            logError('webhook-echo-discard', { message: `reason=business_not_found phone_number_id=${echoPhoneId}`, stack: '' });
+            continue;
+          }
+          for (const echo of echoVal.message_echoes || []) {
+            const customerPhone = echo.to;
+            if (!customerPhone) {
+              logError('webhook-echo-discard', { message: `reason=no_to biz=${echoBiz.id}`, stack: '' });
+              continue;
+            }
+            // Dedup against bot sends and double-deliveries.
+            if (echo.id && !tryMarkProcessed(echoBiz.id, echo.id)) {
+              logError('webhook-echo-discard', { message: `reason=duplicate biz=${echoBiz.id} msg_id=${echo.id}`, stack: '' });
+              continue;
+            }
+            const conv = getOrCreateConversation(echoBiz.id, customerPhone);
+            const ownerText = echo.type === 'text' ? (echo.text?.body || '[mensaje vacío]') : `[${echo.type || 'mensaje'}]`;
+            addMessage(conv.id, 'assistant', ownerText);
+            const silentUntilMs = parseSqliteUtc(echoBiz.silent_until);
+            if (!silentUntilMs || Date.now() >= silentUntilMs) {
+              setOwnerPaused(conv.id);
+            }
+            logError('webhook-echo', { message: `smb_echo saved conv=${conv.id} biz=${echoBiz.id} customer=****${String(customerPhone).slice(-4)} text="${ownerText.slice(0, 60)}"`, stack: '' });
+          }
+          continue;
+        }
         if (change.field !== 'messages') {
           logError('webhook-discard', { message: `reason=wrong_field field=${change.field}`, stack: '' });
           continue;
@@ -4399,7 +4433,7 @@ app.post('/webhook/kapso', async (req, res) => {
         // During silent window: save owner reply but don't pause bot or notify
         const silentUntilMs = parseSqliteUtc(business.silent_until);
         if (!silentUntilMs || Date.now() >= silentUntilMs) {
-          setHumanPaused(conv.id);
+          setOwnerPaused(conv.id); // owner wrote from the app → pause with reason 'owner'
         }
         logError('kapso-webhook-echo', {
           message: `business_app saved conv=${conv.id} customer=${customerPhone} text="${ownerText.slice(0, 80)}" silent_skipped=${!!(silentUntilMs && Date.now() < silentUntilMs)}`,
@@ -5568,6 +5602,14 @@ function resumeHumanTimedOut() {
   if (resumed > 0) console.log(`[human-resume-job] resumed=${resumed} conversations after timeout/hours`);
 }
 
+// Auto-resume chats paused because the owner wrote from the app, after N hours of
+// owner silence (per-business owner_pause_hours, default 24). Each new owner message
+// resets owner_paused_at, so the clock restarts on every owner reply.
+function resumeOwnerPaused() {
+  const resumed = autoResumeOwnerPaused();
+  if (resumed > 0) console.log(`[owner-resume-job] resumed=${resumed} conversations after owner silence`);
+}
+
 // Run once at startup (catches any expired bookings from before last restart),
 // then every 30 minutes.
 checkBookingTimeouts({ getCredentialsForBusiness: getBookingCredentials })
@@ -5913,6 +5955,8 @@ async function runWaHealthCheck({ dryRun = (process.env.WA_HEALTH_ALERTS !== 'on
 
 // Human-pause timeout check — every 5 minutes
 setInterval(resumeHumanTimedOut, 5 * 60 * 1000);
+resumeOwnerPaused();
+setInterval(resumeOwnerPaused, 5 * 60 * 1000);
 setInterval(() => {
   runKeywordPauseFollowupJobs().catch(err => logError('pause-followup-job', { message: err.message, stack: '' }));
 }, 5 * 60 * 1000);

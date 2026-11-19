@@ -693,6 +693,24 @@ db.exec(`
     }
   } catch (e) { console.warn('[migration 022] voice_config:', e.message); }
 
+  // Auto-pause when the owner writes from the WhatsApp app (coexistence).
+  // owner_pause_hours: per-business hours of owner silence before auto-resume (NULL = default 24).
+  // owner_paused_at: timestamp of the owner's last message in a chat (clock for auto-resume).
+  if (!applied('023_owner_pause')) {
+    try {
+      const bizCols = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+      if (!bizCols.includes('owner_pause_hours'))
+        db.exec('ALTER TABLE businesses ADD COLUMN owner_pause_hours INTEGER');
+      const convCols = db.prepare('PRAGMA table_info(conversations)').all().map(c => c.name);
+      if (!convCols.includes('owner_paused_at'))
+        db.exec('ALTER TABLE conversations ADD COLUMN owner_paused_at INTEGER');
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('023_owner_pause');
+      console.log('[migration 023] owner_pause_hours + owner_paused_at added');
+    } catch (e) {
+      console.error('[migration 023] failed (non-fatal):', e.message);
+    }
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -958,7 +976,7 @@ function markConversationResumed(conversationId) {
   db.prepare(`
     UPDATE conversations SET
       needs_attention = 0, paused_at = NULL, needs_human = 0, human_paused_at = NULL,
-      paused_reason = NULL,
+      paused_reason = NULL, owner_paused_at = NULL,
       pause_notified_at = NULL, pause_followup_sent = NULL, pause_24h_sent = NULL,
       pause_reply_count = 0, pause_last_reply_at = NULL
     WHERE id = ?
@@ -972,7 +990,7 @@ function resetConversation(convId, businessId, userId) {
     db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(convId);
     db.prepare(`UPDATE conversations SET
       needs_attention = 0, needs_human = 0,
-      paused_reason = NULL, paused_at = NULL, auto_resumed_at = NULL,
+      paused_reason = NULL, paused_at = NULL, auto_resumed_at = NULL, owner_paused_at = NULL,
       human_paused_at = NULL, silent = 0,
       pause_reply_count = 0, pause_last_reply_at = NULL,
       pause_notified_at = NULL, pause_followup_sent = NULL, pause_24h_sent = NULL,
@@ -1015,6 +1033,31 @@ function setOwnerReplyPaused(conversationId) {
 // Resumes a human-paused conversation (timeout or business-hours triggered).
 function clearHumanPause(conversationId) {
   db.prepare('UPDATE conversations SET needs_attention = 0, paused_at = NULL, human_paused_at = NULL, needs_human = 0, auto_resumed_at = unixepoch() WHERE id = ?').run(conversationId);
+}
+
+// Owner wrote from the WhatsApp app (coexistence echo). Pause the bot and (re)start
+// the owner-silence clock. Each new owner message resets owner_paused_at. Uses its own
+// paused_reason/column so neither the human-resume nor the generic auto-resume job touches it.
+function setOwnerPaused(conversationId) {
+  db.prepare(`
+    UPDATE conversations SET
+      needs_attention = 1, paused_reason = 'owner', owner_paused_at = unixepoch(),
+      paused_at = NULL, human_paused_at = NULL, needs_human = 0
+    WHERE id = ?
+  `).run(conversationId);
+}
+
+// Auto-resume owner-paused chats after the per-business silence window (default 24h).
+// nowSec is injectable so the scheduled job and tests can drive the clock.
+function autoResumeOwnerPaused(nowSec = Math.floor(Date.now() / 1000)) {
+  const info = db.prepare(`
+    UPDATE conversations SET needs_attention = 0, paused_reason = NULL, owner_paused_at = NULL, auto_resumed_at = unixepoch()
+    WHERE needs_attention = 1 AND paused_reason = 'owner' AND owner_paused_at IS NOT NULL
+      AND (? - owner_paused_at) >= COALESCE(
+        (SELECT b.owner_pause_hours FROM businesses b WHERE b.id = conversations.business_id), 24
+      ) * 3600
+  `).run(nowSec);
+  return info.changes;
 }
 
 function getConversationsNeedingHumanResume() {
@@ -1292,6 +1335,12 @@ const stmtGetHistoryExcludeSilent = db.prepare(`
 function getConversationHistory(conversation_id, limit = 50, { excludeSilent = false } = {}) {
   if (excludeSilent) return stmtGetHistoryExcludeSilent.all(conversation_id, limit);
   return stmtGetHistory.all(conversation_id, limit);
+}
+
+// Per-business owner-silence window before auto-resume (NULL = default 24h).
+function setOwnerPauseHours(businessId, hours) {
+  const v = hours == null || hours === '' ? null : Math.max(1, Math.min(168, parseInt(hours, 10) || 24));
+  db.prepare('UPDATE businesses SET owner_pause_hours = ? WHERE id = ?').run(v, businessId);
 }
 
 function setConversationLabel(conversationId, label) {
@@ -2140,6 +2189,7 @@ module.exports = {
   setHumanPaused,
   setOwnerReplyPaused,
   clearHumanPause,
+  setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours,
   getConversationsNeedingHumanResume,
   autoResumeExpiredConversations,
   getDailyConversationStats,
