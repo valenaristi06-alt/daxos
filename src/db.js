@@ -711,6 +711,20 @@ db.exec(`
     }
   }
 
+  // Soft-delete conversations from the panel. deleted_at NULL = visible (current behavior).
+  // Messages are kept so trial/grace/spend-cap/billing counters never drop.
+  if (!applied('024_conv_soft_delete')) {
+    try {
+      const convCols = db.prepare('PRAGMA table_info(conversations)').all().map(c => c.name);
+      if (!convCols.includes('deleted_at'))
+        db.exec('ALTER TABLE conversations ADD COLUMN deleted_at INTEGER');
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('024_conv_soft_delete');
+      console.log('[migration 024] conversations.deleted_at added');
+    } catch (e) {
+      console.error('[migration 024] failed (non-fatal):', e.message);
+    }
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -1215,7 +1229,7 @@ const stmtGetConversationsByBusiness = db.prepare(`
     (SELECT MAX(m.created_at) FROM messages m WHERE m.conversation_id = c.id) AS last_msg_at,
     (SELECT m.content FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message
   FROM conversations c
-  WHERE c.business_id = ?
+  WHERE c.business_id = ? AND c.deleted_at IS NULL
   ORDER BY last_msg_at DESC, c.created_at DESC
 `);
 const stmtGetTagsForConversation = db.prepare(`
@@ -1285,9 +1299,22 @@ const stmtCreateConversation = db.prepare(`
 
 function getOrCreateConversation(business_id, customer_id) {
   let row = stmtGetConversation.get(business_id, customer_id);
-  if (row) return row;
+  if (row) {
+    // A new message resurrects a panel-deleted chat (same row keeps counters intact).
+    if (row.deleted_at != null) {
+      db.prepare('UPDATE conversations SET deleted_at = NULL WHERE id = ?').run(row.id);
+      row = { ...row, deleted_at: null };
+    }
+    return row;
+  }
   const result = stmtCreateConversation.run(business_id, customer_id);
   return { id: result.lastInsertRowid, business_id, customer_id };
+}
+
+// Panel-only soft delete. Keeps messages so billing/trial/spend-cap counters never drop.
+function softDeleteConversation(convId, businessId) {
+  const info = db.prepare('UPDATE conversations SET deleted_at = unixepoch() WHERE id = ? AND business_id = ? AND deleted_at IS NULL').run(convId, businessId);
+  return info.changes > 0;
 }
 
 function getConversationCountByBusinessId(businessId) {
@@ -2189,7 +2216,7 @@ module.exports = {
   setHumanPaused,
   setOwnerReplyPaused,
   clearHumanPause,
-  setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours,
+  setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation,
   getConversationsNeedingHumanResume,
   autoResumeExpiredConversations,
   getDailyConversationStats,
