@@ -281,6 +281,15 @@ CÓMO HACERLO BIEN:
     }
   }
 
+  if (runtimeCtx?.priceCap && runtimeCtx.priceCap.max != null) {
+    const pc = runtimeCtx.priceCap;
+    if (pc.remaining > 0) {
+      dynamicLines.push(`\nLÍMITE DE PRECIOS: A este cliente le podés dar como máximo ${pc.remaining} precio(s) más. Si pide más productos que eso, dale el precio de ${pc.remaining} y para el resto decile que lo consultás con el equipo y se lo confirmás. No inventes ni estimes precios.`);
+    } else {
+      dynamicLines.push('\nLÍMITE DE PRECIOS: Ya le diste a este cliente todos los precios permitidos. No des ningún precio nuevo: decile que el resto lo consultás con el equipo y se lo confirmás a la brevedad.');
+    }
+  }
+
   if (runtimeCtx?.needsHuman) {
     dynamicLines.push('\nATENCIÓN: Ya avisaste al equipo del negocio sobre esta conversación. Seguí respondiendo lo que puedas con la información disponible. Si el cliente pregunta por la consulta que requería atención humana, recordale brevemente que ya avisaste y que alguien del equipo se va a comunicar. NO vuelvas a emitir [NEEDS_HUMAN] — ya está registrado.');
   }

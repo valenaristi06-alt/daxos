@@ -725,6 +725,20 @@ db.exec(`
     }
   }
 
+  // Per-business cap on distinct prices quoted to a single customer over 30 days.
+  // NULL = no cap (current behavior). Admin-only, no panel UI.
+  if (!applied('025_price_cap')) {
+    try {
+      const bizCols = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+      if (!bizCols.includes('max_prices_per_client'))
+        db.exec('ALTER TABLE businesses ADD COLUMN max_prices_per_client INTEGER');
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('025_price_cap');
+      console.log('[migration 025] max_prices_per_client added');
+    } catch (e) {
+      console.error('[migration 025] failed (non-fatal):', e.message);
+    }
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -1362,6 +1376,19 @@ const stmtGetHistoryExcludeSilent = db.prepare(`
 function getConversationHistory(conversation_id, limit = 50, { excludeSilent = false } = {}) {
   if (excludeSilent) return stmtGetHistoryExcludeSilent.all(conversation_id, limit);
   return stmtGetHistory.all(conversation_id, limit);
+}
+
+// Assistant (outgoing) message texts for a conversation over the last N days.
+// Used by the per-customer price cap to count distinct prices already quoted.
+function getAssistantMessagesSince(conversationId, days = 30) {
+  return db.prepare(
+    `SELECT content FROM messages WHERE conversation_id = ? AND role = 'assistant' AND created_at >= datetime('now', ?) ORDER BY created_at ASC`
+  ).all(conversationId, `-${days} days`).map(r => r.content);
+}
+
+// Admin-only: set the per-customer price cap (NULL clears it → no cap).
+function setMaxPricesPerClient(businessId, val) {
+  db.prepare('UPDATE businesses SET max_prices_per_client = ? WHERE id = ?').run(val == null ? null : Math.max(0, parseInt(val, 10) || 0), businessId);
 }
 
 // Per-business owner-silence window before auto-resume (NULL = default 24h).
@@ -2217,6 +2244,7 @@ module.exports = {
   setOwnerReplyPaused,
   clearHumanPause,
   setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation,
+  getAssistantMessagesSince, setMaxPricesPerClient,
   getConversationsNeedingHumanResume,
   autoResumeExpiredConversations,
   getDailyConversationStats,
