@@ -85,7 +85,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
   incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
   incrementPreviewCall, getPreviewSpendingToday, setSpendingCapOwnerNotified, setSpendingCapNeedsAttention,
   getConvAssistantCountLastHour, setSpendingCapNotified,
@@ -117,9 +117,10 @@ if (_apiKey) {
   try { setRuntimeConfig('ANTHROPIC_API_KEY', _apiKey); } catch (_) {}
   console.log('[startup] PID=' + process.pid + ' key saved to DB');
 }
-const { generateReply, analyzeStyle, summarizeWebsite, initAnthropicKey, getLastClaudeUsageId } = require('./claude');
+const { generateReply, analyzeStyle, summarizeWebsite, initAnthropicKey, getLastClaudeUsageId, checkOwnerRulesConflict } = require('./claude');
 initAnthropicKey(_apiKey);
 const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = require('./bookings');
+const { extractPricesFromMany, enforcePriceCap } = require('./pricecap');
 const { handleDemoFlow, processFollowups } = require('./demo-flow');
 const { sendWeeklySummaries } = require('./weekly');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
@@ -653,7 +654,7 @@ const OWNER_BUSINESS_FIELDS = new Set([
   'wa_provider', 'phone_number_id', 'waba_id', 'wa_payment_confirmed', 'wa_connected_at',
   'kapso_customer_id',
   'urgent_keywords', 'urgent_alert_enabled',
-  'business_hours', 'after_hours_instructions', 'urgent_phone', 'owner_rules',
+  'business_hours', 'after_hours_instructions', 'urgent_phone', 'owner_rules', 'owner_pause_hours', 'owner_rules_warning',
   'booking_enabled', 'weekly_summary_enabled',
   'agenda_enabled', 'agenda_slot_min', 'agenda_cancel_min_before',
   'billing_requires_invoice', 'billing_legal_name', 'billing_rut', 'billing_address', 'billing_email', 'billing_updated_at',
@@ -877,7 +878,7 @@ async function fetchAndSummarizeWebsite(rawUrl) {
 }
 
 app.put('/api/business', requireAuth, async (req, res) => {
-  const { name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, pause_reply_text, response_delay, pricing_info, urgent_keywords, urgent_alert_enabled, business_hours, after_hours_instructions, urgent_phone, owner_rules } = req.body;
+  const { name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, pause_keywords, pause_reply_text, response_delay, pricing_info, urgent_keywords, urgent_alert_enabled, business_hours, after_hours_instructions, urgent_phone, owner_rules, owner_pause_hours } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'El nombre del negocio es requerido' });
 
   const prtClean = pause_reply_text != null ? String(pause_reply_text).trim() : null;
@@ -917,9 +918,21 @@ app.put('/api/business', requireAuth, async (req, res) => {
       business_hours:        'business_hours'        in req.body ? (bhClean || null)                                            : (currentBiz?.business_hours        ?? null),
       after_hours_instructions: 'after_hours_instructions' in req.body ? (after_hours_instructions ? String(after_hours_instructions).trim() : null) : (currentBiz?.after_hours_instructions ?? null),
       urgent_phone:          'urgent_phone'          in req.body ? (urgent_phone ? String(urgent_phone).trim() : null)          : (currentBiz?.urgent_phone          ?? null),
-      owner_rules:           'owner_rules'           in req.body ? (owner_rules ? String(owner_rules).slice(0, 3000).trim() : null) : (currentBiz?.owner_rules           ?? null),
+      owner_rules:           'owner_rules'           in req.body ? (owner_rules ? String(owner_rules).slice(0, 6000).trim() : null) : (currentBiz?.owner_rules           ?? null),
     });
     console.log('[PUT /api/business] upsertBusiness result id:', business?.id ?? 'null');
+    if ('owner_pause_hours' in req.body) setOwnerPauseHours(business.id, owner_pause_hours);
+
+    // Owner-rules contradiction check — non-blocking, never interrupts the save.
+    if ('owner_rules' in req.body) {
+      if (!business.owner_rules) {
+        setOwnerRulesWarning(business.id, null);
+      } else {
+        checkOwnerRulesConflict(business, business.owner_rules)
+          .then(r => setOwnerRulesWarning(business.id, r.conflict ? r.message : null))
+          .catch(err => console.error('[owner-rules-conflict] failed:', err.message));
+      }
+    }
     if (!user.business_id) {
       setUserBusiness(user.id, business.id);
       console.log('[PUT /api/business] setUserBusiness called:', user.id, '->', business.id);
@@ -1606,6 +1619,20 @@ app.patch('/api/conversations/:id/pause', requireAuth, (req, res) => {
   if (!conv || conv.business_id !== user.business_id) return res.status(404).json({ error: 'Conversación no encontrada.' });
 
   setHumanPaused(conv.id);
+  res.json({ ok: true });
+});
+
+// Soft-delete a conversation from the panel (Daxos only — does not touch WhatsApp).
+// Messages are kept so trial/grace/spend-cap/billing counters never drop.
+app.delete('/api/conversations/:id', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
+
+  const conv = getConversationById(parseInt(req.params.id));
+  if (!conv || conv.business_id !== user.business_id) return res.status(404).json({ error: 'Conversación no encontrada.' });
+
+  const deleted = softDeleteConversation(conv.id, user.business_id);
+  logError('conv-soft-delete', { message: `conv=${conv.id} business_id=${user.business_id} user=${user.id} deleted=${deleted}`, stack: '' });
   res.json({ ok: true });
 });
 
@@ -2315,6 +2342,19 @@ async function notifyOwnerUrgent({ business, owner, contactId, messageText, conv
   return emailOk;
 }
 
+// Best-effort WhatsApp alert to the owner when the price cap trimmed a reply.
+function notifyOwnerPriceCap({ business, owner, contactId, conversationId, waCredentials, dropped }) {
+  if (!owner || !waCredentials) return;
+  const normPhone    = normalizeUruguayPhone(owner.phone);
+  const normBizPhone = normalizeUruguayPhone(business.whatsapp_number);
+  if (!normPhone || normPhone === normBizPhone) return;
+  const convUrl = `${process.env.APP_URL || 'https://daxos.lat'}/conversations.html?conv=${conversationId}`;
+  const waMsg = `ℹ️ ${business.name} — límite de precios\nUn cliente (${contactId}) pidió más precios de los permitidos. El asistente dio los que quedaban y para ${dropped} más dijo que lo consulta con el equipo.\nAbrir: ${convUrl}`;
+  sendWhatsAppMessage(normPhone, waMsg, waCredentials)
+    .then(() => logError('price-cap-alert', { message: `conv ${conversationId} WA ok to ****${normPhone.slice(-4)}`, stack: '' }))
+    .catch(err => logError('price-cap-alert', { message: `conv ${conversationId} WA failed: ${err.message}`, stack: '' }));
+}
+
 function normalizeUruguayPhone(phone) {
   if (!phone) return null;
   let digits = String(phone).replace(/\D/g, '');
@@ -2968,6 +3008,15 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     };
   }
 
+  // Per-customer price cap (NULL = off). Count distinct prices already quoted to this
+  // customer over 30 days and tell the model how many it may still give.
+  let _priceCapPrior = null, _priceCapCtx = null;
+  if (business.max_prices_per_client != null) {
+    _priceCapPrior = extractPricesFromMany(getAssistantMessagesSince(conversation.id, 30));
+    const _remaining = Math.max(0, business.max_prices_per_client - _priceCapPrior.size);
+    _priceCapCtx = { max: business.max_prices_per_client, used: _priceCapPrior.size, remaining: _remaining };
+  }
+
   const runtimeCtx = {
     now: getMvdDate(),
     needsHuman: !!conversation.needs_human,
@@ -2977,6 +3026,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     afterHoursInstructions: _hoursResult.open === false ? (business.after_hours_instructions || null) : null,
     urgentPhone: _hoursResult.open === false ? (business.urgent_phone || null) : null,
     agenda: agendaCtx,
+    priceCap: _priceCapCtx,
   };
   logError('webhook-claude-call', {
     message: `business_id=${business.id} customer=****${customerPhone.slice(-4)}`,
@@ -3423,6 +3473,19 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   imgTextBefore = sanitizeForClient(imgTextBefore, logError);
   imgTextAfter  = sanitizeForClient(imgTextAfter, logError);
 
+  // ── Per-customer price cap: correct the reply if it quotes more distinct new
+  // prices than allowed, then alert the owner. ──────────────────────────────
+  if (_priceCapCtx && _priceCapPrior) {
+    const _pc = enforcePriceCap(reply, _priceCapPrior, _priceCapCtx.remaining);
+    if (_pc.dropped > 0) {
+      reply = _pc.text;
+      logError('price-cap', { message: `biz=${business.id} conv=${conversation.id} dropped=${_pc.dropped} remaining=${_priceCapCtx.remaining} disallowed=${JSON.stringify(_pc.disallowed)}`, stack: '' });
+      try {
+        notifyOwnerPriceCap({ business, owner: getUserByBusinessId(business.id), contactId: customerPhone, conversationId: conversation.id, waCredentials, dropped: _pc.dropped });
+      } catch (_e) { /* notification is best-effort */ }
+    }
+  }
+
   // ── Split-message mode ──────────────────────────────────────────────────
   // parseSplitParts returns null if no "|||" or only one non-empty part.
   const _splitEnabled = business.style_profile?.mensajes_separados === true;
@@ -3696,6 +3759,39 @@ app.post('/webhook', async (req, res) => {
 
     for (const entry of body.entry || []) {
       for (const change of entry.changes || []) {
+        // Coexistence: owner replies sent from the WhatsApp Business App arrive as
+        // smb_message_echoes (requires subscribing to that webhook field in Meta).
+        // from = business number, to = customer. Pause the chat with reason 'owner'.
+        if (change.field === 'smb_message_echoes') {
+          const echoVal = change.value || {};
+          const echoPhoneId = echoVal.metadata?.phone_number_id;
+          const echoBiz = getBusinessByPhoneNumberId(String(echoPhoneId || ''));
+          if (!echoBiz) {
+            logError('webhook-echo-discard', { message: `reason=business_not_found phone_number_id=${echoPhoneId}`, stack: '' });
+            continue;
+          }
+          for (const echo of echoVal.message_echoes || []) {
+            const customerPhone = echo.to;
+            if (!customerPhone) {
+              logError('webhook-echo-discard', { message: `reason=no_to biz=${echoBiz.id}`, stack: '' });
+              continue;
+            }
+            // Dedup against bot sends and double-deliveries.
+            if (echo.id && !tryMarkProcessed(echoBiz.id, echo.id)) {
+              logError('webhook-echo-discard', { message: `reason=duplicate biz=${echoBiz.id} msg_id=${echo.id}`, stack: '' });
+              continue;
+            }
+            const conv = getOrCreateConversation(echoBiz.id, customerPhone);
+            const ownerText = echo.type === 'text' ? (echo.text?.body || '[mensaje vacío]') : `[${echo.type || 'mensaje'}]`;
+            addMessage(conv.id, 'assistant', ownerText);
+            const silentUntilMs = parseSqliteUtc(echoBiz.silent_until);
+            if (!silentUntilMs || Date.now() >= silentUntilMs) {
+              setOwnerPaused(conv.id);
+            }
+            logError('webhook-echo', { message: `smb_echo saved conv=${conv.id} biz=${echoBiz.id} customer=****${String(customerPhone).slice(-4)} text="${ownerText.slice(0, 60)}"`, stack: '' });
+          }
+          continue;
+        }
         if (change.field !== 'messages') {
           logError('webhook-discard', { message: `reason=wrong_field field=${change.field}`, stack: '' });
           continue;
@@ -4399,7 +4495,7 @@ app.post('/webhook/kapso', async (req, res) => {
         // During silent window: save owner reply but don't pause bot or notify
         const silentUntilMs = parseSqliteUtc(business.silent_until);
         if (!silentUntilMs || Date.now() >= silentUntilMs) {
-          setHumanPaused(conv.id);
+          setOwnerPaused(conv.id); // owner wrote from the app → pause with reason 'owner'
         }
         logError('kapso-webhook-echo', {
           message: `business_app saved conv=${conv.id} customer=${customerPhone} text="${ownerText.slice(0, 80)}" silent_skipped=${!!(silentUntilMs && Date.now() < silentUntilMs)}`,
@@ -5568,6 +5664,14 @@ function resumeHumanTimedOut() {
   if (resumed > 0) console.log(`[human-resume-job] resumed=${resumed} conversations after timeout/hours`);
 }
 
+// Auto-resume chats paused because the owner wrote from the app, after N hours of
+// owner silence (per-business owner_pause_hours, default 24). Each new owner message
+// resets owner_paused_at, so the clock restarts on every owner reply.
+function resumeOwnerPaused() {
+  const resumed = autoResumeOwnerPaused();
+  if (resumed > 0) console.log(`[owner-resume-job] resumed=${resumed} conversations after owner silence`);
+}
+
 // Run once at startup (catches any expired bookings from before last restart),
 // then every 30 minutes.
 checkBookingTimeouts({ getCredentialsForBusiness: getBookingCredentials })
@@ -5913,6 +6017,8 @@ async function runWaHealthCheck({ dryRun = (process.env.WA_HEALTH_ALERTS !== 'on
 
 // Human-pause timeout check — every 5 minutes
 setInterval(resumeHumanTimedOut, 5 * 60 * 1000);
+resumeOwnerPaused();
+setInterval(resumeOwnerPaused, 5 * 60 * 1000);
 setInterval(() => {
   runKeywordPauseFollowupJobs().catch(err => logError('pause-followup-job', { message: err.message, stack: '' }));
 }, 5 * 60 * 1000);
@@ -6161,6 +6267,23 @@ function requireBearerToken(req, res, next) {
   if (req.headers.authorization !== `Bearer ${secret}`) return res.status(403).json({ error: 'Token inválido' });
   next();
 }
+
+// Per-customer price cap — admin only, no panel UI. Mirrors the bearer-token +
+// audit pattern. Body: { max_prices_per_client: <int> | null }. NULL clears the cap.
+app.put('/admin/api/business/:id/price-cap', requireBearerToken, (req, res) => {
+  const bizId = parseInt(req.params.id, 10);
+  const biz = getBusinessById(bizId);
+  if (!biz) return res.status(404).json({ error: 'Negocio no encontrado' });
+  let { max_prices_per_client } = req.body || {};
+  if (max_prices_per_client === '' || max_prices_per_client === undefined) max_prices_per_client = null;
+  if (max_prices_per_client !== null && (!Number.isInteger(max_prices_per_client) || max_prices_per_client < 0)) {
+    return res.status(400).json({ error: 'max_prices_per_client debe ser un entero >= 0 o null' });
+  }
+  const prev = biz.max_prices_per_client ?? null;
+  setMaxPricesPerClient(bizId, max_prices_per_client);
+  logError('price-cap-audit', { message: `business_id=${bizId} name="${biz.name}" prev=${prev} new=${max_prices_per_client == null ? 'null' : max_prices_per_client}`, stack: '' });
+  res.json({ ok: true, business_id: bizId, max_prices_per_client: max_prices_per_client });
+});
 
 app.post('/admin/api/run-trial-check', requireBearerToken, async (req, res) => {
   try {

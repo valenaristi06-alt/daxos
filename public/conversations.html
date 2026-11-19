@@ -721,6 +721,7 @@
             </select>
             ${!isPaused ? `<button class="btn-pause-toggle" onclick="pauseConv(${id})">Pausar esta conversación</button>` : ''}
             ${isOwnerConv ? `<button class="btn-reset-conv" onclick="showResetModal(${id})">Reiniciar</button>` : ''}
+            <button class="btn-reset-conv" onclick="deleteConv(${id})">Borrar chat</button>
           </div>
         </div>
         ${is_excluded ? `
@@ -812,6 +813,15 @@
       if (!res.ok) return;
       const btn = document.querySelector(`.conv-item[data-id="${id}"]`);
       if (btn) openConv(id, btn);
+    }
+
+    // ── Delete (soft) conversation — Daxos only, does NOT touch WhatsApp ──
+    async function deleteConv(id) {
+      if (!confirm('¿Borrar este chat del panel? Se elimina solo de Daxos, no de WhatsApp. No afecta tu facturación ni tus límites.')) return;
+      const res = await fetch(`/api/conversations/${id}`, { method: 'DELETE' });
+      if (!res.ok) { alert('No se pudo borrar el chat.'); return; }
+      backToList();
+      await loadList();
     }
 
     // ── Send from panel ──

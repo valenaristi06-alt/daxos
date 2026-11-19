@@ -693,6 +693,65 @@ db.exec(`
     }
   } catch (e) { console.warn('[migration 022] voice_config:', e.message); }
 
+  // Auto-pause when the owner writes from the WhatsApp app (coexistence).
+  // owner_pause_hours: per-business hours of owner silence before auto-resume (NULL = default 24).
+  // owner_paused_at: timestamp of the owner's last message in a chat (clock for auto-resume).
+  if (!applied('023_owner_pause')) {
+    try {
+      const bizCols = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+      if (!bizCols.includes('owner_pause_hours'))
+        db.exec('ALTER TABLE businesses ADD COLUMN owner_pause_hours INTEGER');
+      const convCols = db.prepare('PRAGMA table_info(conversations)').all().map(c => c.name);
+      if (!convCols.includes('owner_paused_at'))
+        db.exec('ALTER TABLE conversations ADD COLUMN owner_paused_at INTEGER');
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('023_owner_pause');
+      console.log('[migration 023] owner_pause_hours + owner_paused_at added');
+    } catch (e) {
+      console.error('[migration 023] failed (non-fatal):', e.message);
+    }
+  }
+
+  // Soft-delete conversations from the panel. deleted_at NULL = visible (current behavior).
+  // Messages are kept so trial/grace/spend-cap/billing counters never drop.
+  if (!applied('024_conv_soft_delete')) {
+    try {
+      const convCols = db.prepare('PRAGMA table_info(conversations)').all().map(c => c.name);
+      if (!convCols.includes('deleted_at'))
+        db.exec('ALTER TABLE conversations ADD COLUMN deleted_at INTEGER');
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('024_conv_soft_delete');
+      console.log('[migration 024] conversations.deleted_at added');
+    } catch (e) {
+      console.error('[migration 024] failed (non-fatal):', e.message);
+    }
+  }
+
+  // Per-business cap on distinct prices quoted to a single customer over 30 days.
+  // NULL = no cap (current behavior). Admin-only, no panel UI.
+  if (!applied('025_price_cap')) {
+    try {
+      const bizCols = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+      if (!bizCols.includes('max_prices_per_client'))
+        db.exec('ALTER TABLE businesses ADD COLUMN max_prices_per_client INTEGER');
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('025_price_cap');
+      console.log('[migration 025] max_prices_per_client added');
+    } catch (e) {
+      console.error('[migration 025] failed (non-fatal):', e.message);
+    }
+  }
+
+  // Stores the contradiction warning computed when owner_rules is saved. NULL = none.
+  if (!applied('026_owner_rules_warning')) {
+    try {
+      const bizCols = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+      if (!bizCols.includes('owner_rules_warning'))
+        db.exec('ALTER TABLE businesses ADD COLUMN owner_rules_warning TEXT');
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('026_owner_rules_warning');
+      console.log('[migration 026] owner_rules_warning added');
+    } catch (e) {
+      console.error('[migration 026] failed (non-fatal):', e.message);
+    }
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -958,7 +1017,7 @@ function markConversationResumed(conversationId) {
   db.prepare(`
     UPDATE conversations SET
       needs_attention = 0, paused_at = NULL, needs_human = 0, human_paused_at = NULL,
-      paused_reason = NULL,
+      paused_reason = NULL, owner_paused_at = NULL,
       pause_notified_at = NULL, pause_followup_sent = NULL, pause_24h_sent = NULL,
       pause_reply_count = 0, pause_last_reply_at = NULL
     WHERE id = ?
@@ -972,7 +1031,7 @@ function resetConversation(convId, businessId, userId) {
     db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(convId);
     db.prepare(`UPDATE conversations SET
       needs_attention = 0, needs_human = 0,
-      paused_reason = NULL, paused_at = NULL, auto_resumed_at = NULL,
+      paused_reason = NULL, paused_at = NULL, auto_resumed_at = NULL, owner_paused_at = NULL,
       human_paused_at = NULL, silent = 0,
       pause_reply_count = 0, pause_last_reply_at = NULL,
       pause_notified_at = NULL, pause_followup_sent = NULL, pause_24h_sent = NULL,
@@ -1015,6 +1074,31 @@ function setOwnerReplyPaused(conversationId) {
 // Resumes a human-paused conversation (timeout or business-hours triggered).
 function clearHumanPause(conversationId) {
   db.prepare('UPDATE conversations SET needs_attention = 0, paused_at = NULL, human_paused_at = NULL, needs_human = 0, auto_resumed_at = unixepoch() WHERE id = ?').run(conversationId);
+}
+
+// Owner wrote from the WhatsApp app (coexistence echo). Pause the bot and (re)start
+// the owner-silence clock. Each new owner message resets owner_paused_at. Uses its own
+// paused_reason/column so neither the human-resume nor the generic auto-resume job touches it.
+function setOwnerPaused(conversationId) {
+  db.prepare(`
+    UPDATE conversations SET
+      needs_attention = 1, paused_reason = 'owner', owner_paused_at = unixepoch(),
+      paused_at = NULL, human_paused_at = NULL, needs_human = 0
+    WHERE id = ?
+  `).run(conversationId);
+}
+
+// Auto-resume owner-paused chats after the per-business silence window (default 24h).
+// nowSec is injectable so the scheduled job and tests can drive the clock.
+function autoResumeOwnerPaused(nowSec = Math.floor(Date.now() / 1000)) {
+  const info = db.prepare(`
+    UPDATE conversations SET needs_attention = 0, paused_reason = NULL, owner_paused_at = NULL, auto_resumed_at = unixepoch()
+    WHERE needs_attention = 1 AND paused_reason = 'owner' AND owner_paused_at IS NOT NULL
+      AND (? - owner_paused_at) >= COALESCE(
+        (SELECT b.owner_pause_hours FROM businesses b WHERE b.id = conversations.business_id), 24
+      ) * 3600
+  `).run(nowSec);
+  return info.changes;
 }
 
 function getConversationsNeedingHumanResume() {
@@ -1172,7 +1256,7 @@ const stmtGetConversationsByBusiness = db.prepare(`
     (SELECT MAX(m.created_at) FROM messages m WHERE m.conversation_id = c.id) AS last_msg_at,
     (SELECT m.content FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message
   FROM conversations c
-  WHERE c.business_id = ?
+  WHERE c.business_id = ? AND c.deleted_at IS NULL
   ORDER BY last_msg_at DESC, c.created_at DESC
 `);
 const stmtGetTagsForConversation = db.prepare(`
@@ -1242,9 +1326,22 @@ const stmtCreateConversation = db.prepare(`
 
 function getOrCreateConversation(business_id, customer_id) {
   let row = stmtGetConversation.get(business_id, customer_id);
-  if (row) return row;
+  if (row) {
+    // A new message resurrects a panel-deleted chat (same row keeps counters intact).
+    if (row.deleted_at != null) {
+      db.prepare('UPDATE conversations SET deleted_at = NULL WHERE id = ?').run(row.id);
+      row = { ...row, deleted_at: null };
+    }
+    return row;
+  }
   const result = stmtCreateConversation.run(business_id, customer_id);
   return { id: result.lastInsertRowid, business_id, customer_id };
+}
+
+// Panel-only soft delete. Keeps messages so billing/trial/spend-cap counters never drop.
+function softDeleteConversation(convId, businessId) {
+  const info = db.prepare('UPDATE conversations SET deleted_at = unixepoch() WHERE id = ? AND business_id = ? AND deleted_at IS NULL').run(convId, businessId);
+  return info.changes > 0;
 }
 
 function getConversationCountByBusinessId(businessId) {
@@ -1292,6 +1389,30 @@ const stmtGetHistoryExcludeSilent = db.prepare(`
 function getConversationHistory(conversation_id, limit = 50, { excludeSilent = false } = {}) {
   if (excludeSilent) return stmtGetHistoryExcludeSilent.all(conversation_id, limit);
   return stmtGetHistory.all(conversation_id, limit);
+}
+
+// Assistant (outgoing) message texts for a conversation over the last N days.
+// Used by the per-customer price cap to count distinct prices already quoted.
+function getAssistantMessagesSince(conversationId, days = 30) {
+  return db.prepare(
+    `SELECT content FROM messages WHERE conversation_id = ? AND role = 'assistant' AND created_at >= datetime('now', ?) ORDER BY created_at ASC`
+  ).all(conversationId, `-${days} days`).map(r => r.content);
+}
+
+// Admin-only: set the per-customer price cap (NULL clears it → no cap).
+function setMaxPricesPerClient(businessId, val) {
+  db.prepare('UPDATE businesses SET max_prices_per_client = ? WHERE id = ?').run(val == null ? null : Math.max(0, parseInt(val, 10) || 0), businessId);
+}
+
+// Persist the owner_rules contradiction warning (NULL = no conflict).
+function setOwnerRulesWarning(businessId, warning) {
+  db.prepare('UPDATE businesses SET owner_rules_warning = ? WHERE id = ?').run(warning || null, businessId);
+}
+
+// Per-business owner-silence window before auto-resume (NULL = default 24h).
+function setOwnerPauseHours(businessId, hours) {
+  const v = hours == null || hours === '' ? null : Math.max(1, Math.min(168, parseInt(hours, 10) || 24));
+  db.prepare('UPDATE businesses SET owner_pause_hours = ? WHERE id = ?').run(v, businessId);
 }
 
 function setConversationLabel(conversationId, label) {
@@ -2140,6 +2261,8 @@ module.exports = {
   setHumanPaused,
   setOwnerReplyPaused,
   clearHumanPause,
+  setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation,
+  getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning,
   getConversationsNeedingHumanResume,
   autoResumeExpiredConversations,
   getDailyConversationStats,

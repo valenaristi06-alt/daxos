@@ -490,15 +490,27 @@ El precio es $3.500. Si querés, coordinamos un horario para que lo veas."></tex
               Instrucciones libres
               <span class="tag-optional">Opcional</span>
             </label>
-            <span class="field-hint">Escribí cualquier regla específica para tu negocio. El asistente las aplica en cada respuesta. Las reglas de seguridad del sistema siempre tienen más peso, pero con instrucciones bien redactadas podés moldear casi cualquier comportamiento. Máximo 3.000 caracteres.</span>
-            <textarea id="owner_rules" rows="8" maxlength="3000" placeholder="Veterinaria: Si el cliente menciona un animal en emergencia, priorizá siempre dar el teléfono de guardia antes de cualquier otra información.
+            <span class="field-hint">Escribí cualquier regla específica para tu negocio. El asistente las aplica en cada respuesta. Las reglas de seguridad del sistema siempre tienen más peso, pero con instrucciones bien redactadas podés moldear casi cualquier comportamiento. Máximo 6.000 caracteres.</span>
+            <textarea id="owner_rules" rows="8" maxlength="6000" placeholder="Veterinaria: Si el cliente menciona un animal en emergencia, priorizá siempre dar el teléfono de guardia antes de cualquier otra información.
 
 Salón de belleza: Nunca confirmes turnos directamente — siempre decí que el equipo va a confirmar.
 
 E-commerce: Si preguntan por demoras de envío, mencioná que los plazos son estimativos y pueden variar.
 
 Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempre derivá a la consulta."></textarea>
-            <p style="font-size:11px; color:#555; text-align:right; margin-top:4px;"><span id="owner-rules-count">0</span> / 3000</p>
+            <p style="font-size:11px; color:#555; text-align:right; margin-top:4px;"><span id="owner-rules-count">0</span> / 6000</p>
+            <div id="owner-rules-warning" style="display:none; margin-top:8px; padding:8px 12px; background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.35); border-radius:6px; font-size:12px; color:#f59e0b;">
+              ⚠️ <span id="owner-rules-warning-text"></span>
+            </div>
+          </div>
+
+          <div class="field" style="margin-top:24px;">
+            <label class="field-label" for="owner_pause_hours">
+              Pausa cuando escribís vos
+              <span class="tag-optional">Opcional</span>
+            </label>
+            <span class="field-hint">Si respondés un chat desde tu teléfono, el asistente se pausa en esa conversación y se reactiva solo después de estas horas sin que escribas. Dejalo vacío para usar el valor por defecto (24 horas).</span>
+            <input id="owner_pause_hours" type="number" min="1" max="168" step="1" placeholder="24" style="width:120px;">
           </div>
 
           <div class="field" style="margin-top:24px;">
@@ -1250,6 +1262,14 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
       const ownerRulesEl = document.getElementById('owner_rules');
       ownerRulesEl.value = b.owner_rules || '';
       document.getElementById('owner-rules-count').textContent = ownerRulesEl.value.length;
+      const ownerWarnBox = document.getElementById('owner-rules-warning');
+      if (b.owner_rules_warning) {
+        document.getElementById('owner-rules-warning-text').textContent = b.owner_rules_warning;
+        ownerWarnBox.style.display = '';
+      } else {
+        ownerWarnBox.style.display = 'none';
+      }
+      document.getElementById('owner_pause_hours').value = b.owner_pause_hours ?? '';
       document.getElementById('website_url').value = b.website_url || '';
 
       if (Array.isArray(b.sales_examples)) {
@@ -1493,6 +1513,7 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
         business_context: document.getElementById('business_context').value.trim() || null,
         website_url: document.getElementById('website_url').value.trim() || null,
         owner_rules: document.getElementById('owner_rules').value.trim() || null,
+        owner_pause_hours: document.getElementById('owner_pause_hours').value.trim() || null,
         sales_examples,
         survey_answers: {
           objeciones_precio: document.getElementById('objeciones_precio').value.trim(),
