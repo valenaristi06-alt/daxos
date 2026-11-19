@@ -739,6 +739,19 @@ db.exec(`
     }
   }
 
+  // Stores the contradiction warning computed when owner_rules is saved. NULL = none.
+  if (!applied('026_owner_rules_warning')) {
+    try {
+      const bizCols = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+      if (!bizCols.includes('owner_rules_warning'))
+        db.exec('ALTER TABLE businesses ADD COLUMN owner_rules_warning TEXT');
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('026_owner_rules_warning');
+      console.log('[migration 026] owner_rules_warning added');
+    } catch (e) {
+      console.error('[migration 026] failed (non-fatal):', e.message);
+    }
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -1389,6 +1402,11 @@ function getAssistantMessagesSince(conversationId, days = 30) {
 // Admin-only: set the per-customer price cap (NULL clears it → no cap).
 function setMaxPricesPerClient(businessId, val) {
   db.prepare('UPDATE businesses SET max_prices_per_client = ? WHERE id = ?').run(val == null ? null : Math.max(0, parseInt(val, 10) || 0), businessId);
+}
+
+// Persist the owner_rules contradiction warning (NULL = no conflict).
+function setOwnerRulesWarning(businessId, warning) {
+  db.prepare('UPDATE businesses SET owner_rules_warning = ? WHERE id = ?').run(warning || null, businessId);
 }
 
 // Per-business owner-silence window before auto-resume (NULL = default 24h).
@@ -2244,7 +2262,7 @@ module.exports = {
   setOwnerReplyPaused,
   clearHumanPause,
   setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation,
-  getAssistantMessagesSince, setMaxPricesPerClient,
+  getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning,
   getConversationsNeedingHumanResume,
   autoResumeExpiredConversations,
   getDailyConversationStats,

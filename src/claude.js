@@ -36,12 +36,14 @@ function buildSystemPrompt(business, label, bookingContext = null, runtimeCtx = 
     `Respondé siempre en el idioma que usa el cliente.`,
   ];
 
+  staticLines.push('\nJERARQUÍA DE PRIORIDADES (de mayor a menor) — ante cualquier conflicto, seguí la regla de mayor prioridad:\n1) Reglas de seguridad y formato de este sistema (coherencia con lo cargado, derivación, pagos, formato de WhatsApp). No se pueden anular.\n2) REGLAS DEL NEGOCIO que cargó el dueño (instrucciones libres).\n3) El resto de la configuración (precios, largo de mensajes, estilo, horarios, turnos).\nLas reglas del dueño pueden modificar o anular cualquier punto del nivel 3, pero nunca las del nivel 1.');
+
   if (business.business_context) {
     staticLines.push(`\nContexto del negocio: ${business.business_context}`);
   }
 
   if (business.pricing_info) {
-    staticLines.push(`\nPRECIOS Y SERVICIOS — información oficial cargada por el dueño del negocio. Usá estos datos para responder cualquier consulta sobre precios, planes o servicios de forma directa y confiada. Si la pregunta del cliente está cubierta aquí, respondé con estos datos y NO uses [NEEDS_HUMAN]:\n${business.pricing_info}`);
+    staticLines.push(`\nPRECIOS Y SERVICIOS — información oficial cargada por el dueño del negocio. Usá estos datos para responder consultas sobre precios, planes o servicios de forma directa y confiada, salvo que las REGLAS DEL NEGOCIO del dueño indiquen otra cosa (por ejemplo, limitar cuántos precios dar). Si la pregunta del cliente está cubierta aquí, respondé con estos datos y NO uses [NEEDS_HUMAN]:\n${business.pricing_info}`);
   }
 
   if (business.website_summary) {
@@ -92,7 +94,7 @@ function buildSystemPrompt(business, label, bookingContext = null, runtimeCtx = 
   }
 
   if (business.owner_rules) {
-    staticLines.push(`\nREGLAS DEL NEGOCIO — instrucciones específicas del dueño. Seguí estas reglas al redactar cada respuesta:\n${business.owner_rules}`);
+    staticLines.push(`\nREGLAS DEL NEGOCIO — instrucciones específicas del dueño. Tienen prioridad sobre el resto de la configuración (precios, largo, estilo, horarios, turnos) y la anulan cuando chocan, pero nunca por encima de las reglas de seguridad del sistema. Seguí estas reglas al redactar cada respuesta:\n${business.owner_rules}`);
   }
 
   staticLines.push('\nSé breve, amable y enfocado en ayudar al cliente a comprar o consultar.');
@@ -485,4 +487,48 @@ async function summarizeWebsite(text) {
   return response.content[0].text.trim();
 }
 
-module.exports = { initAnthropicKey, generateReply, analyzeStyle, summarizeWebsite, getLastClaudeUsageId, buildSystemPrompt, _pushTestMockReply };
+// Builds the prompt used to check whether the owner's free instructions contradict
+// the rest of the business configuration. Pure + exported so it is unit-testable.
+function buildOwnerRulesConflictPrompt(business, ownerRules) {
+  const cfg = [];
+  if (business.pricing_info) cfg.push(`Precios y servicios cargados:\n${business.pricing_info}`);
+  if (business.style_profile?.largo_mensajes) cfg.push(`Largo de mensajes configurado: ${business.style_profile.largo_mensajes}`);
+  cfg.push(`Modo de respuesta: ${business.response_mode || 'texto'}`);
+  if (business.business_hours) cfg.push(`Horarios de atención: ${business.business_hours}`);
+  if (business.booking_enabled || business.agenda_enabled) cfg.push('El negocio tiene turnos/agenda habilitados.');
+
+  return `Sos un validador de configuración. Un negocio cargó estas REGLAS DEL DUEÑO (instrucciones libres) y esta CONFIGURACIÓN. Decime si las reglas del dueño CONTRADICEN algún punto de la configuración (precios, largo de mensajes, modo de respuesta, horarios, turnos). Una regla que simplemente agrega un matiz no es contradicción; sí lo es cuando pide algo incompatible con lo configurado (ej: la regla dice "no des más de 2 precios" pero hay una lista larga de precios para dar).
+
+REGLAS DEL DUEÑO:
+${ownerRules}
+
+CONFIGURACIÓN:
+${cfg.join('\n')}
+
+Respondé SOLO un JSON válido, sin markdown: {"conflict": true|false, "message": "<si conflict es true, una frase clara y corta para el dueño explicando qué choca; si es false, cadena vacía>"}.`;
+}
+
+// Runs the conflict check against the model. `opts.call(prompt)` is injectable for tests.
+async function checkOwnerRulesConflict(business, ownerRules, opts = {}) {
+  if (!ownerRules || !ownerRules.trim()) return { conflict: false, message: '' };
+  const prompt = buildOwnerRulesConflictPrompt(business, ownerRules);
+  const call = opts.call || (async (p) => {
+    const resp = await getClient().messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 300,
+      messages: [{ role: 'user', content: p }],
+    });
+    return resp.content[0].text;
+  });
+  // Any failure (model error, timeout, bad JSON) must NOT block the save: return "no
+  // conflict" so the owner's instructions are kept without a (possibly wrong) warning.
+  try {
+    const raw = String(await call(prompt)).trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
+    const parsed = JSON.parse(raw);
+    return { conflict: !!parsed.conflict, message: parsed.conflict ? String(parsed.message || '') : '' };
+  } catch (_) {
+    return { conflict: false, message: '' };
+  }
+}
+
+module.exports = { initAnthropicKey, generateReply, analyzeStyle, summarizeWebsite, getLastClaudeUsageId, buildSystemPrompt, _pushTestMockReply, buildOwnerRulesConflictPrompt, checkOwnerRulesConflict };

@@ -499,6 +499,9 @@ E-commerce: Si preguntan por demoras de envío, mencioná que los plazos son est
 
 Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempre derivá a la consulta."></textarea>
             <p style="font-size:11px; color:#555; text-align:right; margin-top:4px;"><span id="owner-rules-count">0</span> / 6000</p>
+            <div id="owner-rules-warning" style="display:none; margin-top:8px; padding:8px 12px; background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.35); border-radius:6px; font-size:12px; color:#f59e0b;">
+              ⚠️ <span id="owner-rules-warning-text"></span>
+            </div>
           </div>
 
           <div class="field" style="margin-top:24px;">
@@ -1259,6 +1262,13 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
       const ownerRulesEl = document.getElementById('owner_rules');
       ownerRulesEl.value = b.owner_rules || '';
       document.getElementById('owner-rules-count').textContent = ownerRulesEl.value.length;
+      const ownerWarnBox = document.getElementById('owner-rules-warning');
+      if (b.owner_rules_warning) {
+        document.getElementById('owner-rules-warning-text').textContent = b.owner_rules_warning;
+        ownerWarnBox.style.display = '';
+      } else {
+        ownerWarnBox.style.display = 'none';
+      }
       document.getElementById('owner_pause_hours').value = b.owner_pause_hours ?? '';
       document.getElementById('website_url').value = b.website_url || '';
 
