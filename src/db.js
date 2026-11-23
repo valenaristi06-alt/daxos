@@ -752,6 +752,23 @@ db.exec(`
     }
   }
 
+  // Owner-controlled master switch: bot_paused=1 means the assistant replies to no
+  // customer (saves incoming messages, sends nothing). Default 0 = current behavior.
+  // bot_paused_at: ISO UTC when it was paused (NULL while active).
+  if (!applied('027_bot_paused')) {
+    try {
+      const bizCols = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+      if (!bizCols.includes('bot_paused'))
+        db.exec('ALTER TABLE businesses ADD COLUMN bot_paused INTEGER NOT NULL DEFAULT 0');
+      if (!bizCols.includes('bot_paused_at'))
+        db.exec('ALTER TABLE businesses ADD COLUMN bot_paused_at TEXT');
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('027_bot_paused');
+      console.log('[migration 027] bot_paused + bot_paused_at added');
+    } catch (e) {
+      console.error('[migration 027] failed (non-fatal):', e.message);
+    }
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -2327,6 +2344,7 @@ module.exports = {
   setBookingState,
   getBookingState,
   setWeeklySummaryEnabled,
+  setBotPaused,
   getWeeklyStats,
   getBusinessesWithWeeklySummary,
   setRuntimeConfig,
@@ -2425,6 +2443,13 @@ module.exports = {
 
 function setWeeklySummaryEnabled(businessId, enabled) {
   db.prepare('UPDATE businesses SET weekly_summary_enabled = ? WHERE id = ?').run(enabled ? 1 : 0, businessId);
+}
+
+// Owner master switch. paused=true → bot replies to no customer. Scoped by caller to
+// the owner's own business, so one business can never pause another.
+function setBotPaused(businessId, paused) {
+  db.prepare('UPDATE businesses SET bot_paused = ?, bot_paused_at = ? WHERE id = ?')
+    .run(paused ? 1 : 0, paused ? new Date().toISOString() : null, businessId);
 }
 
 function addBusinessImage(businessId, label, filePath) {

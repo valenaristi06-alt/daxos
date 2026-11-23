@@ -85,7 +85,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
   incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
   incrementPreviewCall, getPreviewSpendingToday, setSpendingCapOwnerNotified, setSpendingCapNeedsAttention,
   getConvAssistantCountLastHour, setSpendingCapNotified,
@@ -656,6 +656,7 @@ const OWNER_BUSINESS_FIELDS = new Set([
   'urgent_keywords', 'urgent_alert_enabled',
   'business_hours', 'after_hours_instructions', 'urgent_phone', 'owner_rules', 'owner_pause_hours', 'owner_rules_warning',
   'booking_enabled', 'weekly_summary_enabled',
+  'bot_paused', 'bot_paused_at',
   'agenda_enabled', 'agenda_slot_min', 'agenda_cancel_min_before',
   'billing_requires_invoice', 'billing_legal_name', 'billing_rut', 'billing_address', 'billing_email', 'billing_updated_at',
   'spending_cap_hit_today',
@@ -668,6 +669,10 @@ function ownerView(biz) {
     if (k in biz) out[k] = biz[k];
   }
   out.agenda_plan_ok = _agendaAccessOk(biz);
+  // admin_silenced: a Daxos admin set silent_until in the future. The owner can see
+  // this but cannot clear it (their switch only controls bot_paused).
+  const _silMs = biz.silent_until ? parseSqliteUtc(biz.silent_until) : null;
+  out.admin_silenced = !!(_silMs && Date.now() < _silMs);
   return out;
 }
 
@@ -827,6 +832,17 @@ app.patch('/api/business/wa-payment-confirmed', requireAuth, (req, res) => {
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   setWaPaymentConfirmed(user.business_id);
   res.json({ ok: true });
+});
+
+// Owner master switch for the whole assistant. Scoped to the caller's own business
+// (req.session → user.business_id), so a business can never pause another. The owner
+// can only set bot_paused; they cannot clear an admin silence (silent_until).
+app.post('/api/business/bot-paused', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
+  const paused = req.body?.paused === true || req.body?.paused === 1 || req.body?.paused === '1';
+  setBotPaused(user.business_id, paused);
+  res.json({ ok: true, bot_paused: paused ? 1 : 0 });
 });
 
 // SSRF guard — shared implementation in src/ssrf.js
@@ -2532,6 +2548,20 @@ function parseSqliteUtc(s) {
   return new Date(s.endsWith('Z') || s.includes('+') ? s : s + 'Z').getTime();
 }
 
+// Single source of truth for "the bot must stay silent for this business right now".
+// Covers both the owner master switch (bot_paused) and an admin time-based silence
+// (silent_until). Every place that used to check silent_until uses this instead, so the
+// silence logic is not duplicated. When true, callers save the incoming message but send
+// nothing to the customer.
+function isBotMuted(business) {
+  if (business.bot_paused) return true;
+  if (business.silent_until) {
+    const ms = parseSqliteUtc(business.silent_until);
+    if (ms && Date.now() < ms) return true;
+  }
+  return false;
+}
+
 // Uruguay is UTC-3 year-round. Days elapsed are full 24-hour periods from trialStartsAt.
 function trialDaysElapsed(trialStartsAt) {
   const ms = parseSqliteUtc(trialStartsAt);
@@ -2585,19 +2615,19 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
       return;
     }
   }
-  // ── Silent window ────────────────────────────────────────────────────────
-  if (business.silent_until) {
-    const silentUntilMs = parseSqliteUtc(business.silent_until);
-    if (silentUntilMs && Date.now() < silentUntilMs) {
-      const conv = getOrCreateConversation(business.id, customerPhone);
-      addMessage(conv.id, 'user', text, 1);
-      setConversationSilent(conv.id, 1);
-      logError('silent-window', {
-        message: `business_id=${business.id} msgId=${msgId} msgTimestamp=${msgTimestamp} field=${msgTimestampField || 'unknown'} silent_until=${business.silent_until}`,
-        stack: '',
-      });
-      return;
-    }
+  // ── Silent window / bot paused ───────────────────────────────────────────
+  // Admin silence (silent_until) or owner master switch (bot_paused): save the
+  // incoming message so it shows in the panel, but reply nothing. Applies to new
+  // and existing chats. On resume, old messages are NOT answered (no replay).
+  if (isBotMuted(business)) {
+    const conv = getOrCreateConversation(business.id, customerPhone);
+    addMessage(conv.id, 'user', text, 1);
+    setConversationSilent(conv.id, 1);
+    logError('silent-window', {
+      message: `business_id=${business.id} msgId=${msgId} msgTimestamp=${msgTimestamp} field=${msgTimestampField || 'unknown'} silent_until=${business.silent_until} bot_paused=${business.bot_paused ? 1 : 0}`,
+      stack: '',
+    });
+    return;
   }
   // ── Excluded contacts ─────────────────────────────────────────────────────
   {
@@ -4560,13 +4590,10 @@ app.post('/webhook/kapso', async (req, res) => {
         }
         _imgFallbackSent.set(imgFbKey, true);
         logKapsoEvent(`image_fallback_sent reason=${reason}`);
-        if (business.silent_until) {
-          const silentUntilMs = parseSqliteUtc(business.silent_until);
-          if (silentUntilMs && Date.now() < silentUntilMs) {
-            addMessage(imgConv.id, 'user', imgStoredText, 1);
-            logKapsoEvent(`image_fallback_suppressed reason=silent_until`);
-            return;
-          }
+        if (isBotMuted(business)) {
+          addMessage(imgConv.id, 'user', imgStoredText, 1);
+          logKapsoEvent(`image_fallback_suppressed reason=${business.bot_paused ? 'bot_paused' : 'silent_until'}`);
+          return;
         }
         addMessage(imgConv.id, 'user', imgStoredText);
         if (imgConv.needs_attention || isTrialExpired(business)) {
