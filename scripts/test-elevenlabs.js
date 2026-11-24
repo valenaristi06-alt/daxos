@@ -279,6 +279,8 @@ async function runIntegrationTests() {
   // State captured by mocks
   let lastElRequest = null;   // { voiceId, body }
   let metaCalls = [];         // all calls to mock meta
+  // Mutable ElevenLabs account subscription (for the 80% admin alert tests)
+  let elSubscription = { character_count: 0, character_limit: 1000000, next_character_count_reset_unix: 1111 };
 
   // Mock ElevenLabs server
   await new Promise(resolve => {
@@ -293,6 +295,9 @@ async function runIntegrationTests() {
           catch { lastElRequest = { voiceId, body }; }
           res.writeHead(200, { 'Content-Type': 'audio/mpeg' });
           res.end(MOCK_MP3);
+        } else if (req.method === 'GET' && req.url === '/v1/user/subscription') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(elSubscription));
         } else {
           res.writeHead(404); res.end('{}');
         }
@@ -593,6 +598,101 @@ async function runIntegrationTests() {
       r.end();
     });
     assert(r8.status === 403, 'C4: wrong token → 403');
+  }
+
+  // Bearer-admin request helper (reused by C5–C7)
+  const adminToken = process.env.ADMIN_SET_WA_TOKEN || 'test-admin-voice-token';
+  function adminReq(method, urlPath, body) {
+    return new Promise((resolve, reject) => {
+      const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` };
+      const r = http.request({ hostname: 'localhost', port: TEST_PORT, path: urlPath, method, headers }, (res) => {
+        let data = '';
+        res.on('data', c => { data += c; });
+        res.on('end', () => { try { resolve({ status: res.statusCode, body: JSON.parse(data) }); } catch { resolve({ status: res.statusCode, body: data }); } });
+      });
+      r.on('error', reject);
+      if (body) r.write(JSON.stringify(body));
+      r.end();
+    });
+  }
+
+  function seedTtsCharsThisMonth(bizId, chars) {
+    db.prepare("INSERT INTO claude_usage (business_id, model, input_tokens, output_tokens, tts_chars, created_at) VALUES (?, 'test', 0, 0, ?, datetime('now'))").run(bizId, chars);
+    db.pragma('wal_checkpoint(FULL)');
+  }
+
+  // ── Test C5: monthly audio cap hit → replies in TEXT + owner notified once ──
+  {
+    console.log('\n  C5: monthly audio $ cap hit → text fallback + owner notice');
+    await seedUser('c5@el-test.com');
+    const biz = getBusinessByEmail('c5@el-test.com');
+    configBusiness(biz.id, {
+      phone_number_id: 'pnid-c5', wa_provider: 'meta', wa_access_token: 'fake-wa-token',
+      wa_connected_at: new Date().toISOString(), plan: 'crecimiento', plan_paid_at: new Date().toISOString(),
+      response_mode: 'audio', voice_id: 'voice-id-c5', response_delay: 0, // multilingual_v2 → $0.18/1k
+    });
+    // crecimiento cap = $10 → at $0.18/1k that's ~55.5k chars. Seed 60k → over cap.
+    seedTtsCharsThisMonth(biz.id, 60000);
+
+    lastElRequest = null; metaCalls = [];
+    await req('POST', '/webhook', metaPayload('pnid-c5', '59899000005', 'Hola'));
+    await sleep(3000);
+
+    assert(lastElRequest === null, 'C5: EL TTS NOT called (audio over monthly cap)');
+    const textSent = metaCalls.some(c => c.url.includes('/messages') && c.body?.type === 'text');
+    assert(textSent, 'C5: a text message was sent (bot never goes silent)');
+    const c5after = getBusinessByEmail('c5@el-test.com');
+    const nowMonth = new Date().toISOString().slice(0, 7);
+    assert(c5after.audio_cap_notified_month === nowMonth, 'C5: owner notified flag set for this month');
+  }
+
+  // ── Test C6: turbo stretches further → same chars NOT capped ──
+  {
+    console.log('\n  C6: turbo ($0.04/1k) — same 60k chars stays under the $10 cap');
+    await seedUser('c6@el-test.com');
+    const biz = getBusinessByEmail('c6@el-test.com');
+    configBusiness(biz.id, {
+      phone_number_id: 'pnid-c6', wa_provider: 'meta', wa_access_token: 'fake-wa-token',
+      wa_connected_at: new Date().toISOString(), plan: 'crecimiento', plan_paid_at: new Date().toISOString(),
+      response_mode: 'audio', voice_id: 'voice-id-c6', voice_tts_model: 'eleven_v4_turbo', response_delay: 0,
+    });
+    seedTtsCharsThisMonth(biz.id, 60000); // 60k × $0.04/1k = $2.4 < $10 → audio still allowed
+
+    lastElRequest = null; metaCalls = [];
+    await req('POST', '/webhook', metaPayload('pnid-c6', '59899000006', 'Hola'));
+    await sleep(3000);
+
+    assert(lastElRequest !== null, 'C6: EL TTS called (turbo keeps it under cap)');
+    if (lastElRequest) assert(lastElRequest.body?.model_id === 'eleven_v4_turbo', 'C6: used turbo model');
+  }
+
+  // ── Test C7: ElevenLabs account 80% → admin alert, once per period ──
+  {
+    console.log('\n  C7: ElevenLabs 80% usage → admin alert (once per period)');
+    elSubscription = { character_count: 850000, character_limit: 1000000, next_character_count_reset_unix: 2222 };
+    const r1 = await adminReq('POST', '/admin/api/run-elevenlabs-check');
+    assert(r1.status === 200 && r1.body.alerted === true, 'C7: 85% → alerted=true');
+    assert(Math.abs(r1.body.pct - 0.85) < 1e-6, 'C7: pct reported = 0.85');
+
+    const r2 = await adminReq('POST', '/admin/api/run-elevenlabs-check');
+    assert(r2.status === 200 && r2.body.alerted === false, 'C7: same period again → not re-alerted');
+
+    // New billing period + still ≥80% → alerts again
+    elSubscription = { character_count: 900000, character_limit: 1000000, next_character_count_reset_unix: 3333 };
+    const r3 = await adminReq('POST', '/admin/api/run-elevenlabs-check');
+    assert(r3.status === 200 && r3.body.alerted === true, 'C7: new period ≥80% → alerts again');
+
+    // Below 80% → no alert
+    elSubscription = { character_count: 500000, character_limit: 1000000, next_character_count_reset_unix: 3333 };
+    const r4 = await adminReq('POST', '/admin/api/run-elevenlabs-check');
+    assert(r4.status === 200 && r4.body.alerted === false, 'C7: 50% → no alert');
+
+    // Wrong token → 403
+    const r5 = await new Promise((resolve, reject) => {
+      const r = http.request({ hostname: 'localhost', port: TEST_PORT, path: '/admin/api/run-elevenlabs-check', method: 'POST', headers: { 'Authorization': 'Bearer wrong' } }, (res) => { res.resume(); resolve({ status: res.statusCode }); });
+      r.on('error', reject); r.end();
+    });
+    assert(r5.status === 403, 'C7: wrong token → 403');
   }
 
   db.close();

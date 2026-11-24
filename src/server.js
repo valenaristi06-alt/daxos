@@ -50,6 +50,25 @@ function _getTtsDailyCap(plan) {
   const override = getRuntimeConfig ? (() => { try { return getRuntimeConfig(`cap_daily_tts_${plan}`); } catch { return null; } })() : null;
   return override ? parseInt(override, 10) : (_CAP_TTS_CHARS[plan] ?? 20000);
 }
+
+// Audio is billed by a MONTHLY dollar cap per plan (0 = plan has no audio). The char budget
+// it buys depends on the TTS model each business uses — cheaper models stretch further.
+const _CAP_AUDIO_MONTHLY_USD = { crecimiento: 10, a_medida: 30 };
+function _getAudioMonthlyCapUsd(plan) {
+  const override = getRuntimeConfig ? (() => { try { return getRuntimeConfig(`cap_audio_monthly_${plan}`); } catch { return null; } })() : null;
+  if (override != null && override !== '') { const n = parseFloat(override); if (isFinite(n)) return n; }
+  return _CAP_AUDIO_MONTHLY_USD[plan] ?? 0;
+}
+// ElevenLabs price per 1.000 characters by model (overridable via env).
+const _TTS_PRICE_PER_1K = {
+  eleven_multilingual_v2: parseFloat(process.env.TTS_PRICE_MULTILINGUAL_V2 || '0.18'),
+  eleven_v4:              parseFloat(process.env.TTS_PRICE_V4             || '0.08'),
+  eleven_v4_turbo:        parseFloat(process.env.TTS_PRICE_V4_TURBO       || '0.04'),
+};
+function _ttsPricePer1k(model) {
+  const m = model || 'eleven_multilingual_v2'; // NULL column = default multilingual_v2
+  return _TTS_PRICE_PER_1K[m] ?? _TTS_PRICE_PER_1K.eleven_multilingual_v2;
+}
 function _getConvHourlyCap() {
   const override = getRuntimeConfig ? (() => { try { return getRuntimeConfig('cap_conv_hourly'); } catch { return null; } })() : null;
   return override ? parseInt(override, 10) : _CAP_CONV_HOURLY;
@@ -92,7 +111,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, getBusinessByCrmUserId, createCrmBusiness, createPartnerLoginToken, getPartnerLoginToken, markPartnerLoginTokenUsed, getMonthlyConvCount, getMonthlyUsage, setCrmCapOwnerNotified, setCrmQuota, getPartnerUsageByMonth, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, markConversationPausedByCrmCap, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setConfigChatEnabled, saveConfigDraft, getConfigDraft, clearConfigDraft, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, getBusinessByCrmUserId, createCrmBusiness, createPartnerLoginToken, getPartnerLoginToken, markPartnerLoginTokenUsed, getMonthlyConvCount, getMonthlyUsage, setCrmCapOwnerNotified, setAudioCapNotifiedMonth, setCrmQuota, getPartnerUsageByMonth, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, markConversationPausedByCrmCap, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setConfigChatEnabled, saveConfigDraft, getConfigDraft, clearConfigDraft, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
   incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
   incrementPreviewCall, getPreviewSpendingToday, setSpendingCapOwnerNotified, setSpendingCapNeedsAttention,
   getConvAssistantCountLastHour, setSpendingCapNotified,
@@ -276,7 +295,7 @@ async function extractTextFromFile(buffer, mimetype, originalname) {
 const fs = require('fs');
 const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, markReadAndTyping, downloadKapsoMedia, downloadMetaMedia, parseSplitParts, splitAndSend, sanitizeForClient } = require('./whatsapp');
 const { getFreeSlots, formatSlotsForPrompt, formatSlotsForClient, formatAppointmentsBlock, getMaxBookingDate, isSlotsMapFresh, utcIsoToMvdHHMM, getMvdDow, DOW_LABELS, getBizHoursForDow, getAllSlotsForDate } = require('./agenda');
-const { generateAudioBuffer, transcribeAudio } = require('./elevenlabs');
+const { generateAudioBuffer, transcribeAudio, getSubscriptionUsage } = require('./elevenlabs');
 const { convertToOgg } = require('./audio');
 
 // "120" → "2 horas", "90" → "1 hora 30 min", "45" → "45 min"
@@ -3957,10 +3976,38 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   const isFirstMessage = history.length === 0;
   const wantsAudio = business.response_mode === 'audio' ||
                      (business.response_mode === 'audio_key' && isFirstMessage);
-  // TTS daily chars cap check
-  const ttsDailyCap = !business.plan_cortesia ? _getTtsDailyCap(business.plan) : Infinity;
-  const ttsSpending = getSpendingToday(business.id);
-  const ttsCapHit   = ttsDailyCap !== Infinity && (ttsSpending.elevenlabs_chars + _replyForTTS.length > ttsDailyCap);
+  // Monthly audio dollar cap. The model price decides how many chars the budget buys, so a
+  // business on turbo gets more audio for the same cap. When hit, the bot keeps replying in
+  // TEXT (never goes silent) and the owner is told once per month.
+  const audioMonthlyCapUsd = business.plan_cortesia ? Infinity : _getAudioMonthlyCapUsd(business.plan);
+  const ttsPrice = _ttsPricePer1k(business.voice_tts_model);
+  const monthAudioChars = (audioMonthlyCapUsd === Infinity) ? 0 : getMonthlyUsage(business.id).tts_chars;
+  const monthAudioCost  = monthAudioChars / 1000 * ttsPrice;
+  const thisAudioCost   = _replyForTTS.length / 1000 * ttsPrice;
+  const ttsCapHit = audioMonthlyCapUsd !== Infinity && (monthAudioCost + thisAudioCost > audioMonthlyCapUsd);
+
+  // Owner notice once per month when audio would have been sent but the monthly cap blocks it.
+  if (ttsCapHit && wantsAudio && business.voice_id && planAllowsAudio && replyFitsAudio) {
+    const capMonth = new Date().toISOString().slice(0, 7);
+    if (business.audio_cap_notified_month !== capMonth) {
+      setAudioCapNotifiedMonth(business.id, capMonth);
+      const audioOwner = getUserByBusinessId(business.id);
+      const ownerMsg = 'Llegaste al límite de audios del mes, tu asistente sigue respondiendo por texto.';
+      logError('audio-cap', { message: `biz=${business.id} plan=${business.plan} month=${capMonth} cost=${monthAudioCost.toFixed(2)}/${audioMonthlyCapUsd} model=${business.voice_tts_model || 'eleven_multilingual_v2'}`, stack: '' });
+      if (audioOwner?.email) {
+        sendAdminNotificationEmail({ adminEmail: audioOwner.email, event: 'audio-cap', data: {
+          business_name: business.name, mensaje: ownerMsg, mes: capMonth,
+        }}).catch(err => logError('audio-cap-email', { message: err.message, stack: '' }));
+      }
+      if (audioOwner?.phone) {
+        const audioOwnerPhone = normalizeContactPhone(audioOwner.phone);
+        if (audioOwnerPhone) {
+          sendWhatsAppMessage(audioOwnerPhone, `🔔 ${ownerMsg}`, waCredentials)
+            .catch(err => logError('audio-cap-wa', { message: err.message, stack: '' }));
+        }
+      }
+    }
+  }
 
   // Meta: mark as read + show typing before sending the first part.
   // Skipped when needsHuman — message should stay unread (owner still needs to see it).
@@ -6103,6 +6150,36 @@ resumeHumanTimedOut();
 
 let _lastWeeklySummaryDate = null;
 let _lastTrialCheckDate    = null;
+let _lastElevenCheckDate   = null;
+
+// Alert the admin when the ElevenLabs account reaches 80% of its monthly character limit.
+// Fires once per billing period (keyed by the reset timestamp). Never prints the API key.
+async function checkElevenLabsUsage() {
+  if (!process.env.ELEVENLABS_API_KEY) return { skipped: 'no_api_key' };
+  let usage;
+  try { usage = await getSubscriptionUsage(); }
+  catch (e) { logError('elevenlabs-usage-check', { message: e.message, stack: '' }); return { error: e.message }; }
+  const { character_count, character_limit, next_reset_unix } = usage;
+  if (!character_limit) return { skipped: 'no_limit' };
+  const pct = character_count / character_limit;
+  const periodKey = String(next_reset_unix || new Date().toISOString().slice(0, 7));
+  let alerted = false;
+  if (pct >= 0.8) {
+    const already = (() => { try { return getRuntimeConfig('elevenlabs_80_alerted_period'); } catch { return null; } })();
+    if (already !== periodKey) {
+      setRuntimeConfig('elevenlabs_80_alerted_period', periodKey);
+      alerted = true;
+      logError('elevenlabs-usage', { message: `ElevenLabs at ${(pct * 100).toFixed(1)}% (${character_count}/${character_limit})`, stack: '' });
+      const adminEmail = process.env.ADMIN_EMAIL;
+      if (adminEmail) {
+        sendAdminNotificationEmail({ adminEmail, event: 'elevenlabs-usage-80', data: {
+          usado: character_count, limite: character_limit, porcentaje: `${(pct * 100).toFixed(1)}%`,
+        }}).catch(err => logError('elevenlabs-usage-email', { message: err.message, stack: '' }));
+      }
+    }
+  }
+  return { pct: parseFloat(pct.toFixed(4)), character_count, character_limit, alerted };
+}
 
 // dryRun=true (default via TRIAL_CHECK_DRY_RUN env): only logs what it would do, no DB writes or sends.
 // Set TRIAL_CHECK_DRY_RUN=0 in env to enable real sends.
@@ -6498,6 +6575,12 @@ setInterval(() => {
     _lastTrialCheckDate = todayStr;
     runDailyTrialCheck().catch(err => logError('trial-daily-check', { message: err.message, stack: err.stack || '' }));
   }
+
+  // Daily ElevenLabs account usage check at 09:00 Uruguay time (alerts admin at 80%).
+  if (uyHour === 9 && _lastElevenCheckDate !== todayStr) {
+    _lastElevenCheckDate = todayStr;
+    checkElevenLabsUsage().catch(err => logError('elevenlabs-usage-check', { message: err.message, stack: err.stack || '' }));
+  }
 }, 30 * 60 * 1000);
 
 // Demo follow-up scheduler — every 10 minutes
@@ -6705,6 +6788,11 @@ app.put('/admin/api/business/:id/price-cap', requireBearerToken, (req, res) => {
   setMaxPricesPerClient(bizId, max_prices_per_client);
   logError('price-cap-audit', { message: `business_id=${bizId} name="${biz.name}" prev=${prev} new=${max_prices_per_client == null ? 'null' : max_prices_per_client}`, stack: '' });
   res.json({ ok: true, business_id: bizId, max_prices_per_client: max_prices_per_client });
+});
+
+app.post('/admin/api/run-elevenlabs-check', requireBearerToken, async (_req, res) => {
+  try { res.json({ ok: true, ...(await checkElevenLabsUsage()) }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/admin/api/run-trial-check', requireBearerToken, async (req, res) => {
