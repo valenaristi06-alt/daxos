@@ -288,6 +288,54 @@ body {
 
 .trial-banner--upgrade { flex-direction: column; align-items: flex-start; gap: 10px; }
 
+/* Interruptor "Asistente" (pausa general) y franja de aviso — reusa tokens del panel */
+.bot-pause-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: transparent;
+  border: 1px solid var(--border-2);
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  min-height: 30px;
+  transition: border-color 0.15s, color 0.15s;
+}
+.bot-pause-chip:hover { border-color: var(--border); }
+.bot-pause-chip[disabled] { cursor: default; opacity: 0.85; }
+.bot-pause-chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  flex-shrink: 0;
+}
+.bot-pause-chip.is-paused .bot-pause-chip-dot { background: #c45c1a; }
+.bot-pause-resume {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  border: 1px solid rgba(196, 92, 26, 0.4);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-2);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  min-height: 34px;
+  flex-shrink: 0;
+}
+.bot-pause-resume:hover { border-color: rgba(196, 92, 26, 0.7); }
+/* Punto ámbar para el estado "Pausado" en Inicio (selector compuesto para ganar al verde) */
+.inicio-status-dot.inicio-status-dot--paused { background: #c45c1a; }
+
 .plan-upgrade-wrap { display: flex; flex-direction: column; gap: 10px; width: 100%; }
 
 .plan-upgrade-note {
