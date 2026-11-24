@@ -840,6 +840,20 @@ db.exec(`
     }
   }
 
+  // Migration 031: monthly audio spend cap. audio_cap_notified_month stores the 'YYYY-MM'
+  // of the last "hit the monthly audio cap" notice sent to the owner (one per month).
+  if (!applied('031_audio_monthly_cap')) {
+    try {
+      const bizCols031 = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+      if (!bizCols031.includes('audio_cap_notified_month'))
+        db.exec('ALTER TABLE businesses ADD COLUMN audio_cap_notified_month TEXT');
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('031_audio_monthly_cap');
+      console.log('[migration 031] audio_cap_notified_month added');
+    } catch (e) {
+      console.error('[migration 031] failed (non-fatal):', e.message);
+    }
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -1416,6 +1430,11 @@ function getMonthlyUsage(businessId) {
 
 function setCrmCapOwnerNotified(businessId, dayStr) {
   db.prepare('UPDATE businesses SET crm_cap_owner_notified_at = ? WHERE id = ?').run(dayStr, businessId);
+}
+
+// Records that the owner was told the monthly audio cap was reached (stores 'YYYY-MM').
+function setAudioCapNotifiedMonth(businessId, monthStr) {
+  db.prepare('UPDATE businesses SET audio_cap_notified_month = ? WHERE id = ?').run(monthStr, businessId);
 }
 
 // Per-CRM-account usage for a calendar month ('YYYY-MM', UTC). One row per business that
@@ -2460,6 +2479,7 @@ module.exports = {
   getMonthlyConvCount,
   getMonthlyUsage,
   setCrmCapOwnerNotified,
+  setAudioCapNotifiedMonth,
   setCrmQuota,
   getPartnerUsageByMonth,
   markConversationPausedByCrmCap,

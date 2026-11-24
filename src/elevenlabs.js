@@ -193,8 +193,28 @@ async function transcribeAudio(buffer, contentType) {
   return (data.text || '').trim();
 }
 
+// Account-level character usage for the current billing period. Used to alert the admin
+// when the ElevenLabs account nears its limit. Never logs the API key.
+async function getSubscriptionUsage() {
+  requireKey();
+  const res = await fetchWithTimeout(`${BASE}/user/subscription`, {
+    method: 'GET',
+    headers: { 'xi-api-key': API_KEY },
+  });
+  if (!res.ok) {
+    const err = await res.text().catch(() => '');
+    throw new Error(`ElevenLabs subscription ${res.status}: ${err.slice(0, 200)}`);
+  }
+  const d = await res.json();
+  return {
+    character_count: Number(d.character_count) || 0,
+    character_limit: Number(d.character_limit) || 0,
+    next_reset_unix: d.next_character_count_reset_unix ?? null,
+  };
+}
+
 module.exports = {
-  cloneVoice, generatePreview, generateAudioBuffer, deleteVoice, transcribeAudio,
+  cloneVoice, generatePreview, generateAudioBuffer, deleteVoice, transcribeAudio, getSubscriptionUsage,
   // Exported for unit tests only — not part of the public API
   _ttsBody: ttsBody,
   _normalizeTtsText: normalizeTtsText,
