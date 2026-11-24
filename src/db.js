@@ -769,6 +769,29 @@ db.exec(`
     }
   }
 
+  // Borrador del chat configurador (Fase 1). Tabla aparte: vacía no cambia nada en
+  // producción (ninguna lectura de negocio la consulta). No toca la config real.
+  if (!applied('028_config_drafts')) {
+    try {
+      db.exec(`CREATE TABLE IF NOT EXISTS config_drafts (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        business_id  INTEGER NOT NULL REFERENCES businesses(id),
+        field        TEXT NOT NULL,
+        value        TEXT,
+        source       TEXT,
+        confidence   REAL,
+        needs_confirm INTEGER NOT NULL DEFAULT 0,
+        status       TEXT NOT NULL DEFAULT 'pending',
+        created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+      )`);
+      db.exec('CREATE INDEX IF NOT EXISTS idx_config_drafts_biz ON config_drafts(business_id, status)');
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('028_config_drafts');
+      console.log('[migration 028] config_drafts created');
+    } catch (e) {
+      console.error('[migration 028] failed (non-fatal):', e.message);
+    }
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -2345,6 +2368,9 @@ module.exports = {
   getBookingState,
   setWeeklySummaryEnabled,
   setBotPaused,
+  saveConfigDraft,
+  getConfigDraft,
+  clearConfigDraft,
   getWeeklyStats,
   getBusinessesWithWeeklySummary,
   setRuntimeConfig,
@@ -2450,6 +2476,32 @@ function setWeeklySummaryEnabled(businessId, enabled) {
 function setBotPaused(businessId, paused) {
   db.prepare('UPDATE businesses SET bot_paused = ?, bot_paused_at = ? WHERE id = ?')
     .run(paused ? 1 : 0, paused ? new Date().toISOString() : null, businessId);
+}
+
+// ─── Borrador del configurador (Fase 1) ───────────────────────────────────────
+// Reemplaza el borrador 'pending' del negocio por el nuevo set de filas.
+// No toca businesses/users: el "Aplicar" es Fase 2.
+function saveConfigDraft(businessId, rows) {
+  const del = db.prepare("DELETE FROM config_drafts WHERE business_id = ? AND status = 'pending'");
+  const ins = db.prepare(
+    "INSERT INTO config_drafts (business_id, field, value, source, confidence, needs_confirm) VALUES (?, ?, ?, ?, ?, ?)"
+  );
+  const tx = db.transaction((bid, rws) => {
+    del.run(bid);
+    for (const r of rws) {
+      const value = r.value == null ? null : (typeof r.value === 'string' ? r.value : JSON.stringify(r.value));
+      ins.run(bid, r.field, value, r.source || null, r.confidence == null ? null : r.confidence, r.needs_confirm ? 1 : 0);
+    }
+  });
+  tx(businessId, rows || []);
+}
+
+function getConfigDraft(businessId) {
+  return db.prepare("SELECT * FROM config_drafts WHERE business_id = ? AND status = 'pending' ORDER BY id").all(businessId);
+}
+
+function clearConfigDraft(businessId) {
+  db.prepare('DELETE FROM config_drafts WHERE business_id = ?').run(businessId);
 }
 
 function addBusinessImage(businessId, label, filePath) {

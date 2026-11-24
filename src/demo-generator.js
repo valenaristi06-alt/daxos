@@ -1,57 +1,14 @@
 'use strict';
 
 const Anthropic = require('@anthropic-ai/sdk');
+// La extracción estructurada ahora vive en el motor de lectura (Fase 1).
+// El demo la reusa desde ahí: misma función, misma llamada a Anthropic, sin cambios.
+const { extractBusinessData } = require('./reader');
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const SCRAPE_MODEL   = 'claude-haiku-4-5-20251001';
 const CHAT_MODEL     = process.env.DEMO_CHAT_MODEL || 'claude-sonnet-4-6';
 const MAX_CHAT_MSGS  = 10;
-
-// ─── Data extraction ──────────────────────────────────────────────────────────
-
-const EXTRACT_SYSTEM = `Sos un extractor de información estructurada. A partir del texto de un sitio web, extraé información del negocio en JSON con esta forma exacta:
-
-{
-  "nombre":               "<nombre del negocio o null>",
-  "rubro":                "<sector/industria en 2-4 palabras o null>",
-  "descripcion":          "<qué hace el negocio, 1-2 oraciones, o null>",
-  "servicios":            ["<servicio o producto 1>", "<servicio o producto 2>"] o [],
-  "preguntas_frecuentes": ["<pregunta: respuesta breve>"] o [],
-  "promos":               ["<promoción o descuento activo>"] o [],
-  "sedes": [{"nombre": null, "direccion": null, "horario": null, "telefono": null}] o [],
-  "ubicacion":            "<ciudad/país si se menciona o null>",
-  "tono":                 "formal" | "informal" | "neutro",
-  "publico":              "<a quiénes va dirigido, 1 oración, o null>"
-}
-
-Reglas:
-- Si un dato no aparece claramente en el texto, usá null o [] (nunca inventes).
-- Respondé SOLO con el JSON, sin explicaciones ni markdown.`;
-
-async function extractBusinessData(pages, logCost) {
-  const combined = pages
-    .map((p) => `=== ${p.url} ===\n${p.text}`)
-    .join('\n\n')
-    .slice(0, 30_000);
-
-  const resp = await client.messages.create({
-    model: SCRAPE_MODEL,
-    max_tokens: 512,
-    system: EXTRACT_SYSTEM,
-    messages: [{ role: 'user', content: combined }],
-  });
-
-  const usage = resp.usage;
-  if (logCost) logCost({ event: 'extract', inTokens: usage.input_tokens, outTokens: usage.output_tokens });
-
-  const raw = resp.content[0]?.text?.trim() ?? '{}';
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return {};
-  }
-}
 
 // ─── Demo system prompt ───────────────────────────────────────────────────────
 
