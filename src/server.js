@@ -85,7 +85,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setConfigChatEnabled, saveConfigDraft, getConfigDraft, clearConfigDraft, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
   incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
   incrementPreviewCall, getPreviewSpendingToday, setSpendingCapOwnerNotified, setSpendingCapNeedsAttention,
   getConvAssistantCountLastHour, setSpendingCapNotified,
@@ -656,7 +656,7 @@ const OWNER_BUSINESS_FIELDS = new Set([
   'urgent_keywords', 'urgent_alert_enabled',
   'business_hours', 'after_hours_instructions', 'urgent_phone', 'owner_rules', 'owner_pause_hours', 'owner_rules_warning',
   'booking_enabled', 'weekly_summary_enabled',
-  'bot_paused', 'bot_paused_at',
+  'bot_paused', 'bot_paused_at', 'config_chat_enabled',
   'agenda_enabled', 'agenda_slot_min', 'agenda_cancel_min_before',
   'billing_requires_invoice', 'billing_legal_name', 'billing_rut', 'billing_address', 'billing_email', 'billing_updated_at',
   'spending_cap_hit_today',
@@ -843,6 +843,126 @@ app.post('/api/business/bot-paused', requireAuth, (req, res) => {
   const paused = req.body?.paused === true || req.body?.paused === 1 || req.body?.paused === '1';
   setBotPaused(user.business_id, paused);
   res.json({ ok: true, bot_paused: paused ? 1 : 0 });
+});
+
+// ─── Chat configurador (Fase 2) ───────────────────────────────────────────────
+const reader = require('./reader');          // módulo (no destructurado) para poder mockear en tests
+const configChat = require('./config-chat');
+const configChatUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+
+// Admin: prende/apaga el flag por negocio.
+app.post('/admin/api/config-chat-flag/:id', requireAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!getBusinessById(id)) return res.status(404).json({ error: 'Negocio no encontrado.' });
+  const enabled = req.body?.enabled === true || req.body?.enabled === 1 || req.body?.enabled === '1';
+  setConfigChatEnabled(id, enabled);
+  res.json({ ok: true, config_chat_enabled: enabled ? 1 : 0 });
+});
+
+function _ccContext(user, business) {
+  return {
+    userPhone: user?.phone || null,
+    bookingEnabled: !!(business && business.booking_enabled),
+    hasSalesExamples: !!(business && Array.isArray(business.sales_examples) && business.sales_examples.length),
+  };
+}
+
+// Estado: flag, plan (para audio), borrador, resumen, próxima pregunta, si ya está configurado.
+app.get('/api/config-chat/state', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
+  const business = getBusinessById(user.business_id);
+  if (!business?.config_chat_enabled) return res.json({ enabled: false });
+  const rows = getConfigDraft(user.business_id);
+  const planAllowsVoice = ['crecimiento', 'a_medida'].includes(String(business.plan || '').toLowerCase());
+  const configured = !!(business.business_context || business.pricing_info || (business.sales_examples || []).length);
+  res.json({
+    enabled: true,
+    plan_allows_voice: planAllowsVoice,
+    configured,
+    draft: rows,
+    summary: configChat.summary(rows),
+    next_question: configChat.nextQuestion(rows, _ccContext(user, business)),
+  });
+});
+
+// Ingesta: texto / url / audio / imágenes → lector → borrador.
+app.post('/api/config-chat/ingest', requireAuth, configChatUpload.fields([{ name: 'audio', maxCount: 1 }, { name: 'images', maxCount: 5 }]), async (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
+  const business = getBusinessById(user.business_id);
+  if (!business?.config_chat_enabled) return res.status(403).json({ error: 'No habilitado.' });
+  try {
+    const inputs = {};
+    if (req.body?.text && req.body.text.trim()) inputs.text = req.body.text.trim();
+    if (req.body?.url && req.body.url.trim()) inputs.url = req.body.url.trim();
+    const audioFile = req.files?.audio?.[0];
+    if (audioFile) inputs.audios = [{ buffer: audioFile.buffer, contentType: audioFile.mimetype }];
+    const imgFiles = req.files?.images || [];
+    if (imgFiles.length) inputs.images = imgFiles.map((f) => ({ base64: f.buffer.toString('base64'), mediaType: f.mimetype }));
+    // Test-only: permite inyectar el borrador sin pegarle al modelo (NODE_ENV=test).
+    const isFake = process.env.NODE_ENV === 'test' && req.body && req.body._fakeDraft;
+    if (!isFake && !inputs.text && !inputs.url && !inputs.audios && !inputs.images) {
+      return res.status(400).json({ error: 'Mandá texto, audio, una URL o capturas.' });
+    }
+    const newRows = isFake ? JSON.parse(req.body._fakeDraft) : await reader.buildDraft(inputs);
+    // Fusionar con el borrador existente: lo nuevo gana por campo.
+    const prev = getConfigDraft(user.business_id);
+    const byField = {};
+    for (const r of prev) byField[r.field] = r;
+    for (const r of newRows) byField[r.field] = r;
+    const merged = Object.values(byField);
+    saveConfigDraft(user.business_id, merged);
+    res.json({ ok: true, draft: merged, summary: configChat.summary(merged), next_question: configChat.nextQuestion(merged, _ccContext(user, business)) });
+  } catch (e) {
+    logError('config-chat-ingest', { message: e.message, stack: e.stack || '' });
+    res.status(500).json({ error: 'No pude leer eso. Probá de nuevo o escribilo.' });
+  }
+});
+
+// Respuesta a una pregunta (texto o botón). Guarda en el borrador con origen "respuesta".
+app.post('/api/config-chat/answer', requireAuth, async (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
+  const business = getBusinessById(user.business_id);
+  if (!business?.config_chat_enabled) return res.status(403).json({ error: 'No habilitado.' });
+  const field = String(req.body?.field || '').trim();
+  let value = req.body?.value;
+  if (!field) return res.status(400).json({ error: 'Falta el campo.' });
+  if (field === 'sales_examples' && typeof value === 'string') value = value.split('\n').map((s) => s.trim()).filter(Boolean);
+  const rows = getConfigDraft(user.business_id).filter((r) => r.field !== field);
+  if (value != null && value !== '') {
+    rows.push({ field, value: Array.isArray(value) ? JSON.stringify(value) : String(value), source: 'respuesta', confidence: 1, needs_confirm: field === 'pricing_info' ? 1 : 0 });
+  }
+  saveConfigDraft(user.business_id, rows);
+  const fresh = getConfigDraft(user.business_id);
+  res.json({ ok: true, draft: fresh, summary: configChat.summary(fresh), next_question: configChat.nextQuestion(fresh, _ccContext(user, business)) });
+});
+
+// Plan de cambios (negocio ya configurado) vs aplicar.
+app.get('/api/config-chat/changes', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
+  const business = getBusinessById(user.business_id);
+  if (!business?.config_chat_enabled) return res.status(403).json({ error: 'No habilitado.' });
+  const rows = getConfigDraft(user.business_id);
+  res.json({ changes: configChat.changePlan(rows, business, user.phone) });
+});
+
+// Aplicar: escribe en el panel. acceptedFields = lista (omitida = todos). Nunca pisa sin
+// que el campo esté en la lista cuando el negocio ya estaba configurado.
+app.post('/api/config-chat/apply', requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  if (!user?.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
+  const business = getBusinessById(user.business_id);
+  if (!business?.config_chat_enabled) return res.status(403).json({ error: 'No habilitado.' });
+  const rows = getConfigDraft(user.business_id);
+  const accepted = Array.isArray(req.body?.acceptedFields) ? req.body.acceptedFields : null;
+  const result = configChat.applyAccepted(user.business_id, rows, accepted, {
+    getBusinessById, upsertBusiness, setUserPhone, setBookingEnabled, userId: user.id,
+  });
+  clearConfigDraft(user.business_id);
+  res.json({ ok: true, applied: result.appliedFields });
 });
 
 // SSRF guard — shared implementation in src/ssrf.js

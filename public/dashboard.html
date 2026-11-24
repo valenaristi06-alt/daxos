@@ -215,6 +215,16 @@
     <div id="activation-panel" style="display:none"></div>
     <div id="trial-banner" style="display:none"></div>
 
+    <!-- Chat configurador (Fase 2) — arriba de todo, encima de los bloques. Oculto sin flag. -->
+    <section id="config-chat" class="cfg-chat" style="display:none" aria-live="polite">
+      <div class="cfg-chat-head">
+        <span class="cfg-chat-dot" aria-hidden="true"></span>
+        <span class="cfg-chat-title" id="cfg-chat-title">Configurá tu asistente</span>
+      </div>
+      <div class="cfg-chat-msgs" id="cfg-chat-msgs"></div>
+      <div class="cfg-chat-foot" id="cfg-chat-foot"></div>
+    </section>
+
     <div id="form-skeleton" style="display:flex;flex-direction:column;gap:24px;margin-bottom:32px;">
       <div class="skeleton skeleton-line skeleton-line--mid" style="height:18px"></div>
       <div class="skeleton skeleton-line skeleton-line--full" style="height:44px"></div>
@@ -2720,5 +2730,6 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
     loadExcludedContacts();
 
   </script>
+  <script src="/js/config-chat.js" defer></script>
 </body>
 </html>

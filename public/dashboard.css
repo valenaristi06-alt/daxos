@@ -2879,3 +2879,51 @@ select option { background: #1a1a1a; }
   height: 64px;
 }
 
+/* ── Chat configurador (Fase 2) ── reusa tokens del panel ── */
+.cfg-chat {
+  border: 1px solid rgba(196, 92, 26, 0.3);
+  background: rgba(196, 92, 26, 0.05);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 28px;
+}
+.cfg-chat-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.cfg-chat-dot { width: 8px; height: 8px; border-radius: 50%; background: #c45c1a; flex-shrink: 0; }
+.cfg-chat-title { font-size: 14px; font-weight: 700; color: var(--text, #eee); }
+.cfg-chat-msgs { display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow-y: auto; margin-bottom: 12px; }
+.cfg-bub { font-size: 13px; line-height: 1.4; padding: 9px 12px; border-radius: 10px; max-width: 85%; }
+.cfg-bub--bot { background: #1b1b1b; border: 1px solid #2a2a2a; color: var(--muted-2, #ccc); align-self: flex-start; }
+.cfg-bub--me { background: #c45c1a; color: #fff; align-self: flex-end; }
+.cfg-ta, .cfg-input {
+  width: 100%; box-sizing: border-box; background: #141414; border: 1px solid #2e2e2e;
+  border-radius: 6px; color: #eee; font-size: 13px; padding: 9px 11px; font-family: inherit; resize: vertical;
+}
+.cfg-btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.cfg-chip {
+  display: inline-flex; align-items: center; background: transparent; border: 1px solid var(--border-2, #333);
+  border-radius: 999px; padding: 7px 13px; font-size: 12px; font-weight: 600; color: var(--muted, #bbb);
+  cursor: pointer; min-height: 32px;
+}
+.cfg-chip:hover { border-color: #c45c1a; color: #eee; }
+.cfg-chip--opt { border-color: rgba(196, 92, 26, 0.4); }
+.cfg-send {
+  display: inline-flex; align-items: center; justify-content: center; background: #c45c1a; color: #fff;
+  border: 0; border-radius: 6px; padding: 8px 18px; font-size: 13px; font-weight: 700; cursor: pointer;
+  min-height: 36px; margin-left: auto;
+}
+.cfg-send:hover { opacity: 0.9; }
+.cfg-apply { margin-left: 0; margin-top: 12px; width: 100%; }
+.cfg-summary { border: 1px solid #2a2a2a; border-radius: 8px; padding: 12px; background: #141414; }
+.cfg-summary-title { font-size: 13px; font-weight: 700; color: #eee; margin-bottom: 10px; }
+.cfg-sum-block { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #c45c1a; margin: 12px 0 6px; }
+.cfg-sum-item { padding: 6px 0; border-top: 1px solid #222; }
+.cfg-sum-label { font-size: 13px; font-weight: 600; color: #eee; }
+.cfg-sum-flag { font-size: 10px; font-weight: 600; color: #c45c1a; border: 1px solid rgba(196,92,26,.4); border-radius: 4px; padding: 1px 5px; margin-left: 6px; }
+.cfg-sum-val { font-size: 12px; color: var(--muted-2, #ccc); margin: 2px 0; }
+.cfg-sum-src { font-size: 11px; color: var(--muted, #888); font-style: italic; }
+.cfg-change { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid #222; font-size: 13px; color: #eee; cursor: pointer; }
+.cfg-change input { margin-top: 3px; }
+.cfg-chg-from { font-size: 12px; color: #f87171; }
+.cfg-chg-to { font-size: 12px; color: #4ade80; }
+@media (max-width: 480px) { .cfg-bub { max-width: 100%; } .cfg-send { width: 100%; margin-left: 0; } }
+
