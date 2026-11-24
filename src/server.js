@@ -111,7 +111,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, getBusinessByCrmUserId, createCrmBusiness, createPartnerLoginToken, getPartnerLoginToken, markPartnerLoginTokenUsed, getMonthlyConvCount, getMonthlyUsage, setCrmCapOwnerNotified, setAudioCapNotifiedMonth, setCrmQuota, getPartnerUsageByMonth, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, markConversationPausedByCrmCap, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setConfigChatEnabled, saveConfigDraft, getConfigDraft, clearConfigDraft, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, getBusinessByCrmUserId, createCrmBusiness, createPartnerLoginToken, getPartnerLoginToken, markPartnerLoginTokenUsed, getMonthlyConvCount, getMonthlyUsage, setCrmCapOwnerNotified, setAudioCapNotifiedMonth, setCrmQuota, getPartnerUsageByMonth, createEmbedSession, getEmbedSession, purgeExpiredEmbedSessions, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, markConversationPausedByCrmCap, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setConfigChatEnabled, saveConfigDraft, getConfigDraft, clearConfigDraft, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
   incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
   incrementPreviewCall, getPreviewSpendingToday, setSpendingCapOwnerNotified, setSpendingCapNeedsAttention,
   getConvAssistantCountLastHour, setSpendingCapNotified,
@@ -686,7 +686,7 @@ const OWNER_BUSINESS_FIELDS = new Set([
   'agenda_enabled', 'agenda_slot_min', 'agenda_cancel_min_before',
   'billing_requires_invoice', 'billing_legal_name', 'billing_rut', 'billing_address', 'billing_email', 'billing_updated_at',
   'spending_cap_hit_today',
-  'crm_conv_cap', 'crm_spend_cap_usd', 'audio_enabled',
+  'crm_conv_cap', 'audio_enabled',
 ]);
 
 function ownerView(biz) {
@@ -705,8 +705,33 @@ function ownerView(biz) {
 
 // --- Auth routes ---
 
+// The embed (inside the partner CRM iframe) cannot use cookies — Safari/iPhone block
+// third-party cookies. It authenticates with a bearer token in the X-Embed-Token header,
+// resolved here to the owning user. reqUserId() is what handlers used by both the normal
+// panel (cookie) and the embed (token) read instead of req.session.userId.
+const EMBED_SESSION_TTL_SEC = 8 * 60 * 60; // 8 hours
+
+function resolveEmbedSession(rawToken) {
+  if (!rawToken) return null;
+  const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const row = getEmbedSession(hash);
+  if (!row) return null;
+  if (row.expires_at < Math.floor(Date.now() / 1000)) return null;
+  return row;
+}
+
+app.use((req, _res, next) => {
+  if (!req.session?.userId) {
+    const row = resolveEmbedSession(req.headers['x-embed-token']);
+    if (row) { req.embedUserId = row.user_id; req.embedTheme = row.theme; }
+  }
+  next();
+});
+
+function reqUserId(req) { return req.session?.userId ?? req.embedUserId ?? null; }
+
 function requireAuth(req, res, next) {
-  if (req.session?.userId) return next();
+  if (reqUserId(req)) return next();
   res.status(401).json({ error: 'No autenticado' });
 }
 
@@ -771,6 +796,39 @@ app.post('/auth/logout', (req, res) => {
 // is never logged; every call is audited via logError('partner-audit', …).
 
 const PARTNER_LOGIN_TTL_SEC = 60; // one-time login links expire in 60 seconds
+
+// Origins allowed to frame /embed (comma-separated env). Everything else stays unframable.
+const PARTNER_EMBED_ORIGINS = (process.env.PARTNER_EMBED_ORIGINS || 'https://pupi-pi.vercel.app')
+  .split(',').map(s => s.trim()).filter(Boolean);
+// Partner brand shown to crm-plan owners instead of "Daxos".
+const PARTNER_NAME = process.env.PARTNER_NAME || 'Pupi';
+// Default theme (Pupi look). The CRM can override any field via login-link { theme }.
+const EMBED_DEFAULT_THEME = {
+  background: '#0B0D14',
+  surface:    'rgba(255,255,255,0.04)',
+  border:     'rgba(255,255,255,0.08)',
+  accent:     '#2563EB',
+  text:       '#FFFFFF',
+  textMuted:  '#9CA3AF',
+  radius:     '20px',
+  font:       "'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+};
+const EMBED_THEME_KEYS = Object.keys(EMBED_DEFAULT_THEME);
+// Only accept string theme values ≤120 chars (keeps CSS injection out of the iframe).
+function sanitizeTheme(raw) {
+  const out = {};
+  if (raw && typeof raw === 'object') {
+    for (const k of EMBED_THEME_KEYS) {
+      const v = raw[k];
+      if (typeof v === 'string' && v.length <= 120 && !/[<>;{}]/.test(v)) out[k] = v;
+    }
+  }
+  return out; // merged with defaults on read
+}
+// Owner-facing brand: crm accounts belong to the partner, so they see the partner's name.
+function ownerBrand(business) {
+  return business && business.plan === 'crm' ? PARTNER_NAME : 'Daxos';
+}
 
 function _partnerAudit(req, fields) {
   // Deliberately omits the Authorization header / key. ip helps trace abuse.
@@ -934,12 +992,13 @@ app.get('/api/partner/usage', requirePartnerKey, (req, res) => {
 
 // Issue a single-use login link (60s) for a CRM-created account only.
 app.post('/api/partner/login-link', requirePartnerKey, (req, res) => {
-  const { crm_user_id } = req.body || {};
+  const { crm_user_id, mode, theme } = req.body || {};
   const crmUserId = crm_user_id != null ? String(crm_user_id).trim() : '';
   if (!crmUserId) {
     _partnerAudit(req, { action: 'login_link', crm_user_id: 'missing', result: 'bad_request' });
     return res.status(400).json({ error: 'crm_user_id es requerido' });
   }
+  const embedMode = mode === 'embed';
   // Only CRM-created businesses have a crm_user_id → login-link works for them only.
   const business = getBusinessByCrmUserId(crmUserId);
   if (!business) {
@@ -951,16 +1010,15 @@ app.post('/api/partner/login-link', requirePartnerKey, (req, res) => {
     _partnerAudit(req, { action: 'login_link', crm_user_id: crmUserId, result: 'no_owner', biz: business.id });
     return res.status(404).json({ error: 'Cuenta no encontrada' });
   }
+  const cleanTheme = embedMode ? sanitizeTheme(theme) : null;
   const rawToken  = crypto.randomBytes(32).toString('hex');
   const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
   const expiresAt = Math.floor(Date.now() / 1000) + PARTNER_LOGIN_TTL_SEC;
-  createPartnerLoginToken(owner.id, tokenHash, expiresAt);
+  createPartnerLoginToken(owner.id, tokenHash, expiresAt, embedMode ? 'embed' : 'enter', cleanTheme);
   const appUrl = process.env.APP_URL || 'https://daxos.lat';
-  _partnerAudit(req, { action: 'login_link', crm_user_id: crmUserId, result: 'issued', biz: business.id });
-  res.json({
-    url: `${appUrl}/api/partner/enter?token=${rawToken}`,
-    expires_at: new Date(expiresAt * 1000).toISOString(),
-  });
+  const url = embedMode ? `${appUrl}/embed?token=${rawToken}` : `${appUrl}/api/partner/enter?token=${rawToken}`;
+  _partnerAudit(req, { action: 'login_link', crm_user_id: crmUserId, result: 'issued', biz: business.id, mode: embedMode ? 'embed' : 'enter' });
+  res.json({ url, expires_at: new Date(expiresAt * 1000).toISOString() });
 });
 
 // Consume a login link: validate, mark used, start the owner session, land on the panel.
@@ -979,6 +1037,76 @@ app.get('/api/partner/enter', (req, res) => {
   req.session.userId = row.user_id;
   _partnerAudit(req, { action: 'enter', result: 'ok', user: row.user_id });
   res.redirect(303, '/inicio.html');
+});
+
+// ── Embedded mode (Daxos shown inside the partner CRM iframe) ──────────────────
+
+// The ONLY page allowed to be framed by the partner origins. helmet sets
+// X-Frame-Options: SAMEORIGIN on everything; here we drop it and use CSP
+// frame-ancestors, which (unlike XFO) can whitelist specific origins. The rest of
+// Daxos keeps SAMEORIGIN → unframable by any other site.
+app.get('/embed', (req, res) => {
+  res.removeHeader('X-Frame-Options');
+  res.setHeader('Content-Security-Policy', `frame-ancestors ${PARTNER_EMBED_ORIGINS.join(' ')}`);
+  res.sendFile(path.join(__dirname, '../public/embed.html'));
+});
+
+// Exchange the one-time 60s embed link for a longer-lived token-based session.
+// No cookies — the token is returned in the body and sent back as X-Embed-Token.
+app.post('/api/embed/session', (req, res) => {
+  const raw = (req.body && typeof req.body.token === 'string') ? req.body.token : '';
+  if (!raw) return res.status(401).json({ error: 'token requerido' });
+  const tokenHash = crypto.createHash('sha256').update(raw).digest('hex');
+  const row = getPartnerLoginToken(tokenHash);
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (!row || row.used || row.expires_at < nowSec || row.mode !== 'embed') {
+    const reason = !row ? 'not_found' : row.used ? 'already_used' : row.mode !== 'embed' ? 'wrong_mode' : 'expired';
+    _partnerAudit(req, { action: 'embed_session', result: reason });
+    return res.status(401).json({ error: 'Enlace inválido o vencido' });
+  }
+  markPartnerLoginTokenUsed(row.id);
+  try { purgeExpiredEmbedSessions(); } catch (_) {}
+  const theme = { ...EMBED_DEFAULT_THEME, ...(row.theme ? (() => { try { return JSON.parse(row.theme); } catch { return {}; } })() : {}) };
+  const embedRaw  = crypto.randomBytes(32).toString('hex');
+  const embedHash = crypto.createHash('sha256').update(embedRaw).digest('hex');
+  const expiresAt = nowSec + EMBED_SESSION_TTL_SEC;
+  createEmbedSession(row.user_id, embedHash, theme, expiresAt);
+  _partnerAudit(req, { action: 'embed_session', result: 'ok', user: row.user_id });
+  res.json({ embed_token: embedRaw, expires_at: new Date(expiresAt * 1000).toISOString(), theme, partner_name: PARTNER_NAME, origins: PARTNER_EMBED_ORIGINS });
+});
+
+// State for the 3-step embed: connection, configured flag, pause switch, monthly usage vs cap.
+app.get('/api/embed/state', requireAuth, (req, res) => {
+  let business = getBusinessByUserId(reqUserId(req));
+  if (!business) return res.json({ business: null });
+  // The configurador (step 2) is part of the embed product → ensure it's on for crm.
+  if (business.plan === 'crm' && !business.config_chat_enabled) {
+    try { setConfigChatEnabled(business.id, true); business = getBusinessById(business.id); } catch (_) {}
+  }
+  const convs   = getMonthlyConvCount(business.id);
+  const usage   = getMonthlyUsage(business.id);
+  const cost    = _estimateCostBreakdown(usage);
+  // Percent of the plan used = the higher of conversations-vs-cap and spend-vs-cap.
+  // The owner NEVER sees dollars: only the percentage and the conversation count.
+  const convCap  = _getCrmConvCap(business);
+  const convPct  = convCap > 0 ? convs / convCap : 0;
+  const spendCap = business.crm_spend_cap_usd;
+  const spendPct = (spendCap != null && spendCap > 0) ? cost.total / spendCap : 0;
+  const percentUsed = Math.round(Math.max(convPct, spendPct) * 100);
+  res.json({
+    partner_name: PARTNER_NAME,
+    theme: { ...EMBED_DEFAULT_THEME, ...(req.embedTheme ? (() => { try { return JSON.parse(req.embedTheme); } catch { return {}; } })() : {}) },
+    connected:  !!business.phone_number_id,
+    configured: !!(business.business_context || business.pricing_info || (business.sales_examples || []).length),
+    bot_paused: !!business.bot_paused,
+    config_chat_enabled: !!business.config_chat_enabled,
+    plan: business.plan,
+    usage: {
+      conversations: convs,
+      conv_cap:      convCap,
+      percent_used:  percentUsed,
+    },
+  });
 });
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -1036,7 +1164,7 @@ app.get('/reset-password', (req, res) => {
 });
 
 app.get('/auth/me', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user) return res.status(401).json({ error: 'Sesión inválida' });
   res.json({ id: user.id, email: user.email, phone: user.phone || null });
 });
@@ -1044,7 +1172,7 @@ app.get('/auth/me', requireAuth, (req, res) => {
 app.put('/auth/me', requireAuth, (req, res) => {
   const { phone } = req.body;
   setUserPhone(req.session.userId, phone ? phone.trim() : null);
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   res.json({ id: user.id, email: user.email, phone: user.phone || null });
 });
 
@@ -1060,7 +1188,7 @@ app.get('/api/config', (req, res) => {
 });
 
 app.get('/api/business', requireAuth, (req, res) => {
-  const business = getBusinessByUserId(req.session.userId);
+  const business = getBusinessByUserId(reqUserId(req));
   if (!business) return res.json(null);
   const spending_cap_hit_today = !business.plan_cortesia &&
     (getSpendingToday(business.id).anthropic_calls >= _getAnthropicDailyCap(business.plan));
@@ -1072,7 +1200,7 @@ app.get('/api/business', requireAuth, (req, res) => {
 });
 
 app.patch('/api/business/wa-payment-confirmed', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   setWaPaymentConfirmed(user.business_id);
   res.json({ ok: true });
@@ -1082,7 +1210,7 @@ app.patch('/api/business/wa-payment-confirmed', requireAuth, (req, res) => {
 // (req.session → user.business_id), so a business can never pause another. The owner
 // can only set bot_paused; they cannot clear an admin silence (silent_until).
 app.post('/api/business/bot-paused', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
   const paused = req.body?.paused === true || req.body?.paused === 1 || req.body?.paused === '1';
   setBotPaused(user.business_id, paused);
@@ -1113,7 +1241,7 @@ function _ccContext(user, business) {
 
 // Estado: flag, plan (para audio), borrador, resumen, próxima pregunta, si ya está configurado.
 app.get('/api/config-chat/state', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
   const business = getBusinessById(user.business_id);
   if (!business?.config_chat_enabled) return res.json({ enabled: false });
@@ -1132,7 +1260,7 @@ app.get('/api/config-chat/state', requireAuth, (req, res) => {
 
 // Ingesta: texto / url / audio / imágenes → lector → borrador.
 app.post('/api/config-chat/ingest', requireAuth, configChatUpload.fields([{ name: 'audio', maxCount: 1 }, { name: 'images', maxCount: 5 }]), async (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
   const business = getBusinessById(user.business_id);
   if (!business?.config_chat_enabled) return res.status(403).json({ error: 'No habilitado.' });
@@ -1166,7 +1294,7 @@ app.post('/api/config-chat/ingest', requireAuth, configChatUpload.fields([{ name
 
 // Respuesta a una pregunta (texto o botón). Guarda en el borrador con origen "respuesta".
 app.post('/api/config-chat/answer', requireAuth, async (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
   const business = getBusinessById(user.business_id);
   if (!business?.config_chat_enabled) return res.status(403).json({ error: 'No habilitado.' });
@@ -1185,7 +1313,7 @@ app.post('/api/config-chat/answer', requireAuth, async (req, res) => {
 
 // Plan de cambios (negocio ya configurado) vs aplicar.
 app.get('/api/config-chat/changes', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
   const business = getBusinessById(user.business_id);
   if (!business?.config_chat_enabled) return res.status(403).json({ error: 'No habilitado.' });
@@ -1196,7 +1324,7 @@ app.get('/api/config-chat/changes', requireAuth, (req, res) => {
 // Aplicar: escribe en el panel. acceptedFields = lista (omitida = todos). Nunca pisa sin
 // que el campo esté en la lista cuando el negocio ya estaba configurado.
 app.post('/api/config-chat/apply', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
   const business = getBusinessById(user.business_id);
   if (!business?.config_chat_enabled) return res.status(403).json({ error: 'No habilitado.' });
@@ -1273,7 +1401,7 @@ app.put('/api/business', requireAuth, async (req, res) => {
   }
 
   try {
-    const user = getUserById(req.session.userId);
+    const user = getUserById(reqUserId(req));
     console.log('[PUT /api/business] sessionUserId:', req.session.userId, '| user:', user?.id ?? 'NOT FOUND', '| existing business_id:', user?.business_id ?? 'null');
 
     const currentBiz = user.business_id ? getBusinessById(user.business_id) : null;
@@ -1343,7 +1471,7 @@ app.put('/api/business', requireAuth, async (req, res) => {
 });
 
 app.put('/api/business/billing', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'No tenés un negocio configurado.' });
 
   let { billing_requires_invoice, billing_legal_name, billing_rut, billing_address, billing_email } = req.body;
@@ -1404,7 +1532,7 @@ app.put('/api/business/billing', requireAuth, (req, res) => {
 });
 
 app.post('/api/business/analyze-style', requireAuth, async (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.status(400).json({ error: 'No tenés un negocio configurado' });
 
   const business = getBusinessById(user.business_id);
@@ -1425,7 +1553,7 @@ app.post('/api/business/analyze-style', requireAuth, async (req, res) => {
 app.patch('/api/business/booking-enabled', requireAuth, (req, res) => {
   const { enabled } = req.body;
   if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be boolean' });
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   setBookingEnabled(user.business_id, enabled);
   console.log(`[booking-enabled] business=${user.business_id} enabled=${enabled}`);
@@ -1435,7 +1563,7 @@ app.patch('/api/business/booking-enabled', requireAuth, (req, res) => {
 app.patch('/api/business/weekly-summary-enabled', requireAuth, (req, res) => {
   const { enabled } = req.body;
   if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be boolean' });
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   setWeeklySummaryEnabled(user.business_id, enabled);
   res.json({ ok: true, weekly_summary_enabled: enabled });
@@ -1444,7 +1572,7 @@ app.patch('/api/business/weekly-summary-enabled', requireAuth, (req, res) => {
 app.patch('/api/business/split-messages', requireAuth, (req, res) => {
   const { enabled } = req.body;
   if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be boolean' });
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   setStyleProfile(user.business_id, { mensajes_separados: enabled });
   res.json({ ok: true, mensajes_separados: enabled });
@@ -1475,7 +1603,7 @@ function _agendaAccessOk(biz) {
 app.patch('/api/business/agenda-enabled', requireAuth, (req, res) => {
   const { enabled } = req.body;
   if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled must be boolean' });
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   const biz = getBusinessById(user.business_id);
   if (!_agendaAccessOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
@@ -1494,7 +1622,7 @@ app.patch('/api/business/agenda-cancel-min', requireAuth, (req, res) => {
   const { minutes } = req.body;
   if (typeof minutes !== 'number' || minutes < 0 || !Number.isInteger(minutes))
     return res.status(400).json({ error: 'minutes debe ser entero >= 0' });
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   const biz = getBusinessById(user.business_id);
   if (!_agendaAccessOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
@@ -1503,13 +1631,13 @@ app.patch('/api/business/agenda-cancel-min', requireAuth, (req, res) => {
 });
 
 app.get('/api/agenda/services', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   res.json(getAgendaServices(user.business_id));
 });
 
 app.post('/api/agenda/services', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   const biz = getBusinessById(user.business_id);
   if (!_agendaAccessOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
@@ -1523,7 +1651,7 @@ app.post('/api/agenda/services', requireAuth, (req, res) => {
 });
 
 app.delete('/api/agenda/services/:id', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   const biz = getBusinessById(user.business_id);
   if (!_agendaAccessOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
@@ -1538,7 +1666,7 @@ app.delete('/api/agenda/services/:id', requireAuth, (req, res) => {
 });
 
 app.get('/api/agenda/appointments', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   const { date, from, to } = req.query;
   if (from !== undefined || to !== undefined) {
@@ -1566,7 +1694,7 @@ app.get('/api/agenda/appointments', requireAuth, (req, res) => {
 });
 
 app.get('/api/agenda/slots', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   const biz = getBusinessById(user.business_id);
   if (!_agendaAccessOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
@@ -1583,7 +1711,7 @@ app.get('/api/agenda/slots', requireAuth, (req, res) => {
 });
 
 app.post('/api/agenda/appointments', requireAuth, async (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   const biz = getBusinessById(user.business_id);
   if (!_agendaAccessOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
@@ -1652,7 +1780,7 @@ app.post('/api/agenda/appointments', requireAuth, async (req, res) => {
 });
 
 app.patch('/api/agenda/appointments/:id/cancel', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   const biz = getBusinessById(user.business_id);
   if (!_agendaAccessOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
@@ -1686,7 +1814,7 @@ app.patch('/api/agenda/appointments/:id/cancel', requireAuth, (req, res) => {
 });
 
 app.patch('/api/agenda/appointments/:id/reschedule', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   const biz = getBusinessById(user.business_id);
   if (!_agendaAccessOk(biz)) return res.status(403).json({ error: 'La agenda está disponible desde el plan Crecimiento.' });
@@ -1751,7 +1879,7 @@ app.post('/api/business/voice', requireAuth, upload.single('audio'), async (req,
   const audioMagicErr = validateUploadBytes(req.file.buffer, ['audio/']);
   if (audioMagicErr) return res.status(400).json({ error: 'El archivo no parece ser de audio.' });
 
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) {
     return res.status(400).json({ error: 'Guardá el negocio antes de subir la voz.' });
   }
@@ -1782,7 +1910,7 @@ app.post('/api/business/voice', requireAuth, upload.single('audio'), async (req,
 });
 
 app.post('/api/business/voice/preview', requireAuth, async (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.status(400).json({ error: 'No tenés un negocio configurado.' });
 
   const business = getBusinessById(user.business_id);
@@ -1806,7 +1934,7 @@ app.post('/api/business/voice/preview', requireAuth, async (req, res) => {
 });
 
 app.get('/api/debug/seed-conversations', requireAdmin, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'No business_id' });
   const biz = user.business_id;
 
@@ -1838,7 +1966,7 @@ app.get('/api/debug/seed-conversations', requireAdmin, (req, res) => {
 });
 
 app.get('/api/debug/me', requireAdmin, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   const convCount = user?.business_id
     ? getConversationsByBusinessId(user.business_id).length
     : 0;
@@ -1846,8 +1974,8 @@ app.get('/api/debug/me', requireAdmin, (req, res) => {
 });
 
 // Registers business as pending ES connection (20-min window) for server-side auto-connect.
-app.post('/api/es-pending', requireAuth, rateLimitWith(10, 15 * 60 * 1000, req => `es-pending:${req.session.userId}`), (req, res) => {
-  const business = getBusinessByUserId(req.session.userId);
+app.post('/api/es-pending', requireAuth, rateLimitWith(10, 15 * 60 * 1000, req => `es-pending:${req.session?.userId ?? req.embedUserId}`), (req, res) => {
+  const business = getBusinessByUserId(reqUserId(req));
   if (!business) return res.status(404).json({ error: 'Negocio no encontrado' });
   if (business.phone_number_id) return res.status(400).json({ error: 'Ya conectado' });
   cleanExpiredEsPending();
@@ -1858,7 +1986,7 @@ app.post('/api/es-pending', requireAuth, rateLimitWith(10, 15 * 60 * 1000, req =
 app.post('/api/debug/es-log', requireAuth, rateLimitWith(5, 15 * 60 * 1000, req => `es-log:user:${req.session.userId}`), (req, res) => {
   const { msg } = req.body;
   if (!msg || typeof msg !== 'string') return res.status(400).json({ error: 'msg requerido' });
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   logError('es-debug', {
     message: `business_id=${user?.business_id ?? 'null'} user_id=${user?.id ?? 'null'} ${String(msg).slice(0, 200)}`,
     stack: '',
@@ -1867,7 +1995,7 @@ app.post('/api/debug/es-log', requireAuth, rateLimitWith(5, 15 * 60 * 1000, req 
 });
 
 app.get('/api/conversations', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.json([]);
   const convs = getConversationsByBusinessId(user.business_id);
   const excludedPhones = new Set(getExcludedContacts(user.business_id).map(c => c.phone));
@@ -1878,7 +2006,7 @@ app.get('/api/conversations', requireAuth, (req, res) => {
 });
 
 app.get('/api/conversations/:id/messages', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   const conv = getConversationById(Number(req.params.id));
   if (!conv || !user.business_id || conv.business_id !== user.business_id) {
     return res.status(404).json({ error: 'No encontramos esa conversación' });
@@ -1894,7 +2022,7 @@ app.get('/api/conversations/:id/messages', requireAuth, (req, res) => {
 });
 
 app.get('/api/stats', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.json({ conversation_count: 0, last_message: null });
   const conversation_count = getConversationCountByBusinessId(user.business_id);
   const last_message = getLastCustomerMessage(user.business_id);
@@ -1902,25 +2030,25 @@ app.get('/api/stats', requireAuth, (req, res) => {
 });
 
 app.get('/api/stats/daily', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.json([]);
   res.json(getDailyConversationStats(user.business_id));
 });
 
 app.get('/api/stats/today', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.json({ messages24h: 0, uniqueClientsToday: 0, pausedToday: 0, resolvedToday: 0 });
   res.json(getTodayStats(user.business_id));
 });
 
 app.get('/api/stats/messages-daily', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.json([]);
   res.json(getDailyMessageStats(user.business_id));
 });
 
 app.patch('/api/conversations/:id/label', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
 
   const conv = getConversationById(parseInt(req.params.id));
@@ -1937,13 +2065,13 @@ app.patch('/api/conversations/:id/label', requireAuth, (req, res) => {
 // --- Tags ---
 
 app.get('/api/tags', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   res.json(getTagsByBusiness(user.business_id));
 });
 
 app.post('/api/tags', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   const { name, color } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'name requerido.' });
@@ -1959,7 +2087,7 @@ app.post('/api/tags', requireAuth, (req, res) => {
 });
 
 app.delete('/api/tags/:id', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   const result = deleteTag(user.business_id, Number(req.params.id));
   if (result === false) return res.status(404).json({ error: 'Etiqueta no encontrada.' });
@@ -1968,7 +2096,7 @@ app.delete('/api/tags/:id', requireAuth, (req, res) => {
 });
 
 app.put('/api/conversations/:id/tags', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   const conv = getConversationById(parseInt(req.params.id));
   if (!conv || conv.business_id !== user.business_id) return res.status(404).json({ error: 'Conversación no encontrada.' });
@@ -1981,7 +2109,7 @@ app.put('/api/conversations/:id/tags', requireAuth, (req, res) => {
 });
 
 app.patch('/api/conversations/:id/resume', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
 
   const conv = getConversationById(parseInt(req.params.id));
@@ -1992,7 +2120,7 @@ app.patch('/api/conversations/:id/resume', requireAuth, (req, res) => {
 });
 
 app.patch('/api/conversations/:id/pause', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
 
   const conv = getConversationById(parseInt(req.params.id));
@@ -2005,7 +2133,7 @@ app.patch('/api/conversations/:id/pause', requireAuth, (req, res) => {
 // Soft-delete a conversation from the panel (Daxos only — does not touch WhatsApp).
 // Messages are kept so trial/grace/spend-cap/billing counters never drop.
 app.delete('/api/conversations/:id', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
 
   const conv = getConversationById(parseInt(req.params.id));
@@ -2025,7 +2153,7 @@ function ownerPhoneMatchesCustomer(ownerPhone, customerId) {
 }
 
 app.post('/api/conversations/:id/reset', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   const conv = getConversationById(parseInt(req.params.id));
   if (!conv || conv.business_id !== user.business_id) return res.status(404).json({ error: 'Conversación no encontrada.' });
@@ -2042,13 +2170,13 @@ app.post('/api/conversations/:id/reset', requireAuth, (req, res) => {
 // ── Excluded contacts ──────────────────────────────────────────────────────
 
 app.get('/api/excluded-contacts', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.json([]);
   res.json(getExcludedContacts(user.business_id));
 });
 
 app.post('/api/excluded-contacts', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   const { phones } = req.body;
   if (!phones || typeof phones !== 'string') return res.status(400).json({ error: 'phones requerido.' });
@@ -2059,7 +2187,7 @@ app.post('/api/excluded-contacts', requireAuth, (req, res) => {
 });
 
 app.delete('/api/excluded-contacts/:phone', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   const result = removeExcludedContact(user.business_id, req.params.phone, 'panel');
   if (!result.ok) return res.status(result.error === 'not_found' ? 404 : 400).json({ error: result.error });
@@ -2067,7 +2195,7 @@ app.delete('/api/excluded-contacts/:phone', requireAuth, (req, res) => {
 });
 
 app.post('/api/excluded-contacts/batch', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   const { action, conversationIds } = req.body;
   if (!action || !['add', 'remove'].includes(action))
@@ -2096,7 +2224,7 @@ app.post('/api/excluded-contacts/batch', requireAuth, (req, res) => {
 });
 
 app.post('/api/conversations/:id/exclude', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   const conv = getConversationById(parseInt(req.params.id));
   if (!conv || conv.business_id !== user.business_id) return res.status(404).json({ error: 'Conversación no encontrada.' });
@@ -2106,7 +2234,7 @@ app.post('/api/conversations/:id/exclude', requireAuth, (req, res) => {
 });
 
 app.delete('/api/conversations/:id/exclude', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   const conv = getConversationById(parseInt(req.params.id));
   if (!conv || conv.business_id !== user.business_id) return res.status(404).json({ error: 'Conversación no encontrada.' });
@@ -2116,7 +2244,7 @@ app.delete('/api/conversations/:id/exclude', requireAuth, (req, res) => {
 });
 
 app.post('/api/conversations/:id/send', requireAuth, rateLimitWith(30, 15 * 60 * 1000, req => `panel-send:user:${req.session.userId}`), async (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
 
   const conv = getConversationById(parseInt(req.params.id));
@@ -2184,7 +2312,7 @@ app.post('/api/conversations/:id/send', requireAuth, rateLimitWith(30, 15 * 60 *
 });
 
 app.post('/api/business/document', requireAuth, documentUpload.single('document'), async (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
   if (!req.file) return res.status(400).json({ error: 'No se recibió ningún archivo.' });
   const magicErr = validateUploadBytes(req.file.buffer, ['application/pdf']);
@@ -2203,7 +2331,7 @@ app.post('/api/business/document', requireAuth, documentUpload.single('document'
 });
 
 app.delete('/api/business/document', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
 
   const business = getBusinessById(user.business_id);
@@ -2215,7 +2343,7 @@ app.delete('/api/business/document', requireAuth, (req, res) => {
 });
 
 app.get('/api/business/document/download', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   const business = getBusinessById(user.business_id);
   if (!business?.document_path || !fs.existsSync(business.document_path)) {
@@ -2229,13 +2357,13 @@ app.get('/api/business/document/download', requireAuth, (req, res) => {
 const IMAGE_LIMIT = 20;
 
 app.get('/api/business/images', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   res.json(getBusinessImages(user.business_id));
 });
 
 app.post('/api/business/images', requireAuth, imageUpload.single('image'), async (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   if (!req.file) return res.status(400).json({ error: 'Archivo requerido.' });
   const detectedImg = detectMimeFromBytes(req.file.buffer);
@@ -2261,7 +2389,7 @@ app.post('/api/business/images', requireAuth, imageUpload.single('image'), async
 });
 
 app.delete('/api/business/images/:id', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
 
   const filePath = deleteBusinessImage(user.business_id, Number(req.params.id));
@@ -2272,7 +2400,7 @@ app.delete('/api/business/images/:id', requireAuth, (req, res) => {
 });
 
 app.get('/api/business/documents', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   const docs = getBusinessDocuments(user.business_id);
   const total = docs.reduce((s, d) => s + d.charCount, 0);
@@ -2280,7 +2408,7 @@ app.get('/api/business/documents', requireAuth, (req, res) => {
 });
 
 app.post('/api/business/documents', requireAuth, scriptUpload.single('doc'), async (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   if (!req.file) return res.status(400).json({ error: 'Sin archivo.' });
   // Reject files that are clearly not document types (images, audio, etc.)
@@ -2316,7 +2444,7 @@ app.post('/api/business/documents', requireAuth, scriptUpload.single('doc'), asy
 });
 
 app.delete('/api/business/documents/:id', requireAuth, (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'Sin negocio.' });
   const deleted = deleteBusinessDocument(user.business_id, Number(req.params.id));
   if (!deleted) return res.status(404).json({ error: 'Documento no encontrado.' });
@@ -2324,7 +2452,7 @@ app.delete('/api/business/documents/:id', requireAuth, (req, res) => {
 });
 
 app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
-  const user = getUserById(req.session.userId);
+  const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.status(400).json({ error: 'Configurá tu negocio primero.' });
 
   const business = getBusinessById(user.business_id);
@@ -3199,18 +3327,23 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
         setCrmCapOwnerNotified(business.id, todayMvd);
         const owner = getUserByBusinessId(business.id);
         const panelUrl = `${process.env.APP_URL || 'https://daxos.lat'}/conversations.html`;
+        // The owner never sees amounts. Conversations are fine; a spend cap just reads
+        // "llegaste al límite de tu plan" with no "gasto" and no numbers.
         const detail = reason === 'conv_cap'
           ? `alcanzó el tope mensual de ${convCap} conversaciones`
-          : `alcanzó el tope mensual de gasto (US$${spendCap})`;
+          : `llegó al límite de tu plan`;
+        const ownerMsg = reason === 'conv_cap'
+          ? `Alcanzó el tope de ${convCap} conversaciones este mes.`
+          : 'Llegaste al límite de tu plan este mes.';
         if (owner?.email) {
           sendAdminNotificationEmail({ adminEmail: owner.email, event: 'partner-cap', data: {
-            business_id: business.id, business_name: business.name, reason, convs: convCount, conv_cap: convCap,
+            business_name: business.name, mensaje: ownerMsg,
           }}).catch(err => logError('partner-cap-email', { message: err.message, stack: '' }));
         }
         if (owner?.phone) {
           const normPhone = normalizeContactPhone(owner.phone);
           if (normPhone) {
-            sendWhatsAppMessage(normPhone, `⚠️ Tu asistente Daxos (${business.name}) ${detail} este mes. Respondé vos a los clientes que queden esperando. ${panelUrl}`, waCredentials)
+            sendWhatsAppMessage(normPhone, `⚠️ Tu asistente ${ownerBrand(business)} (${business.name}) ${detail} este mes. Respondé vos a los clientes que queden esperando. ${panelUrl}`, waCredentials)
               .catch(err => logError('partner-cap-wa', { message: err.message, stack: '' }));
           }
         }
@@ -3390,13 +3523,13 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
           const owner = getUserByBusinessId(business.id);
           const panelUrl = `${process.env.APP_URL || 'https://daxos.lat'}/conversations.html`;
           if (owner?.email) {
-            sendSpendingCapEmail({ to: owner.email, businessName: business.name, panelUrl, plan: business.plan, dailyCap })
+            sendSpendingCapEmail({ to: owner.email, businessName: business.name, panelUrl, plan: business.plan, dailyCap, brand: ownerBrand(business) })
               .catch(err => logError('spending-cap-email', { message: err.message, stack: '' }));
           }
           if (owner?.phone) {
             const normPhone = normalizeContactPhone(owner.phone);
             if (normPhone) {
-              const waMsg = `⚠️ Tu asistente Daxos (${business.name}) alcanzó el límite de respuestas de hoy. Escribí vos a los clientes que queden esperando. ${panelUrl}`;
+              const waMsg = `⚠️ Tu asistente ${ownerBrand(business)} (${business.name}) alcanzó el límite de respuestas de hoy. Escribí vos a los clientes que queden esperando. ${panelUrl}`;
               sendWhatsAppMessage(normPhone, waMsg, waCredentials)
                 .catch(err => logError('spending-cap-wa', { message: err.message, stack: '' }));
             }
@@ -5701,7 +5834,7 @@ app.post('/auth/whatsapp/callback', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'waba_id, phone_number_id, business_id requeridos' });
   }
 
-  const userBusiness = getBusinessByUserId(req.session.userId);
+  const userBusiness = getBusinessByUserId(reqUserId(req));
   if (!userBusiness || userBusiness.id !== Number(business_id)) {
     return res.status(403).json({ error: 'No autorizado' });
   }
@@ -5855,7 +5988,7 @@ app.post('/auth/whatsapp/callback', requireAuth, async (req, res) => {
 // Kapso onboarding — connect WhatsApp in one click
 // POST /api/whatsapp/connect
 app.post('/api/whatsapp/connect', requireAuth, async (req, res) => {
-  const business = getBusinessByUserId(req.session.userId);
+  const business = getBusinessByUserId(reqUserId(req));
   if (!business) return res.status(400).json({ error: 'Negocio no encontrado' });
 
   if (business.phone_number_id) {
@@ -5936,7 +6069,7 @@ app.post('/api/whatsapp/connect', requireAuth, async (req, res) => {
 // Kapso onboarding — save credentials from Kapso redirect params
 // POST /api/whatsapp/save-kapso-redirect
 app.post('/api/whatsapp/save-kapso-redirect', requireAuth, async (req, res) => {
-  const business = getBusinessByUserId(req.session.userId);
+  const business = getBusinessByUserId(reqUserId(req));
   if (!business) return res.status(400).json({ error: 'Negocio no encontrado' });
 
   // Log full body before processing — lets us verify exact field names Kapso sends
@@ -5982,7 +6115,7 @@ app.post('/api/whatsapp/save-kapso-redirect', requireAuth, async (req, res) => {
 // Kapso onboarding — poll setup link status after redirect
 // GET /api/whatsapp/status
 app.get('/api/whatsapp/status', requireAuth, async (req, res) => {
-  const business = getBusinessByUserId(req.session.userId);
+  const business = getBusinessByUserId(reqUserId(req));
   if (!business) return res.status(400).json({ error: 'Negocio no encontrado' });
 
   // Already connected (any provider)
@@ -6085,7 +6218,7 @@ app.get('/api/whatsapp/status', requireAuth, async (req, res) => {
 // GET /api/whatsapp/ensure-webhook
 // Called from the dashboard on panel load for Kapso-connected businesses.
 app.get('/api/whatsapp/ensure-webhook', requireAuth, async (req, res) => {
-  const business = getBusinessByUserId(req.session.userId);
+  const business = getBusinessByUserId(reqUserId(req));
   if (!business) return res.status(400).json({ error: 'Negocio no encontrado' });
   if (!business.phone_number_id || business.wa_provider !== 'kapso') {
     return res.json({ ok: false, reason: 'not_kapso' });
@@ -6619,7 +6752,7 @@ if (process.env.BAILEYS_ENABLED === '1') {
     rateLimitWith(10, 60_000, req => `baileys-qr:${req.session.userId}`),
     (req, res) => {
       // Authorization: only the owner of the Baileys business can access this
-      const business = getBusinessByUserId(req.session.userId);
+      const business = getBusinessByUserId(reqUserId(req));
       if (!business || business.id !== _baileys.BAILEYS_BUSINESS_ID) {
         return res.status(404).end();
       }
@@ -6752,7 +6885,7 @@ form.addEventListener('submit', event => {
   // HTML page: QR scanner UI — gated to authenticated COLBET owner only.
   // Served from src/views/ (outside public/), not reachable via express.static.
   app.get('/baileys/qr', requireAuth, (req, res) => {
-    const business = getBusinessByUserId(req.session.userId);
+    const business = getBusinessByUserId(reqUserId(req));
     if (!business || business.id !== _baileys.BAILEYS_BUSINESS_ID) {
       return res.status(403).send(
         '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Acceso denegado</title></head>' +

@@ -854,6 +854,30 @@ db.exec(`
     }
   }
 
+  // Migration 032: embedded mode (Daxos shown inside the partner CRM).
+  // partner_login_tokens gains mode ('enter' | 'embed') and theme (JSON from the CRM).
+  // embed_sessions: token-based sessions for the iframe — third-party cookies are blocked
+  // on Safari/iPhone, so the embed authenticates with a bearer token instead.
+  if (!applied('032_embed')) {
+    try {
+      const pltCols = db.prepare('PRAGMA table_info(partner_login_tokens)').all().map(c => c.name);
+      if (!pltCols.includes('mode'))  db.exec("ALTER TABLE partner_login_tokens ADD COLUMN mode TEXT NOT NULL DEFAULT 'enter'");
+      if (!pltCols.includes('theme')) db.exec('ALTER TABLE partner_login_tokens ADD COLUMN theme TEXT');
+      db.exec(`CREATE TABLE IF NOT EXISTS embed_sessions (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id    INTEGER NOT NULL REFERENCES users(id),
+        token_hash TEXT NOT NULL UNIQUE,
+        theme      TEXT,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+      )`);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('032_embed');
+      console.log('[migration 032] partner_login_tokens mode/theme + embed_sessions created');
+    } catch (e) {
+      console.error('[migration 032] failed (non-fatal):', e.message);
+    }
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -1385,11 +1409,11 @@ function createCrmBusiness({ crmUserId, name, email, passwordHash, convCap = nul
   return getBusinessById(businessId);
 }
 
-function createPartnerLoginToken(userId, tokenHash, expiresAtEpoch) {
+function createPartnerLoginToken(userId, tokenHash, expiresAtEpoch, mode = 'enter', theme = null) {
   // One pending link per user at a time — issuing a new one invalidates older unused links.
   db.prepare('DELETE FROM partner_login_tokens WHERE user_id = ? AND used = 0').run(userId);
-  db.prepare('INSERT INTO partner_login_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)')
-    .run(userId, tokenHash, expiresAtEpoch);
+  db.prepare('INSERT INTO partner_login_tokens (user_id, token_hash, expires_at, mode, theme) VALUES (?, ?, ?, ?, ?)')
+    .run(userId, tokenHash, expiresAtEpoch, mode, theme ? JSON.stringify(theme) : null);
 }
 
 function getPartnerLoginToken(tokenHash) {
@@ -1398,6 +1422,21 @@ function getPartnerLoginToken(tokenHash) {
 
 function markPartnerLoginTokenUsed(id) {
   db.prepare('UPDATE partner_login_tokens SET used = 1 WHERE id = ?').run(id);
+}
+
+// --- embed sessions (token-based, no third-party cookies) ---
+
+function createEmbedSession(userId, tokenHash, theme, expiresAtEpoch) {
+  db.prepare('INSERT INTO embed_sessions (user_id, token_hash, theme, expires_at) VALUES (?, ?, ?, ?)')
+    .run(userId, tokenHash, theme ? JSON.stringify(theme) : null, expiresAtEpoch);
+}
+
+function getEmbedSession(tokenHash) {
+  return db.prepare('SELECT * FROM embed_sessions WHERE token_hash = ?').get(tokenHash) || null;
+}
+
+function purgeExpiredEmbedSessions() {
+  return db.prepare('DELETE FROM embed_sessions WHERE expires_at < ?').run(Math.floor(Date.now() / 1000)).changes;
 }
 
 // Distinct conversations that received a customer message since the start of the current
@@ -2476,6 +2515,9 @@ module.exports = {
   createPartnerLoginToken,
   getPartnerLoginToken,
   markPartnerLoginTokenUsed,
+  createEmbedSession,
+  getEmbedSession,
+  purgeExpiredEmbedSessions,
   getMonthlyConvCount,
   getMonthlyUsage,
   setCrmCapOwnerNotified,

@@ -21,15 +21,22 @@
   function me(text) { msgs.appendChild(el('div', { class: 'cfg-bub cfg-bub--me' }, text)); }
   function scroll() { msgs.scrollTop = msgs.scrollHeight; }
 
+  // Inside the partner embed there are no cookies — auth rides on X-Embed-Token.
+  function embedHeaders(extra) {
+    const h = { ...(extra || {}) };
+    if (window.__EMBED_TOKEN__) h['X-Embed-Token'] = window.__EMBED_TOKEN__;
+    return h;
+  }
+
   async function getState() {
-    const r = await fetch('/api/config-chat/state', { credentials: 'same-origin' });
+    const r = await fetch('/api/config-chat/state', { credentials: 'same-origin', headers: embedHeaders() });
     return r.ok ? r.json() : { enabled: false };
   }
 
   async function post(path, body, isForm) {
     const opts = { method: 'POST', credentials: 'same-origin' };
-    if (isForm) opts.body = body;
-    else { opts.headers = { 'Content-Type': 'application/json' }; opts.body = JSON.stringify(body || {}); }
+    if (isForm) { opts.body = body; opts.headers = embedHeaders(); }
+    else { opts.headers = embedHeaders({ 'Content-Type': 'application/json' }); opts.body = JSON.stringify(body || {}); }
     const r = await fetch(path, opts);
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
     return r.json();
@@ -207,12 +214,13 @@
 
   async function onApply() {
     if (state.configured) {
-      const r = await fetch('/api/config-chat/changes', { credentials: 'same-origin' });
+      const r = await fetch('/api/config-chat/changes', { credentials: 'same-origin', headers: embedHeaders() });
       const data = r.ok ? await r.json() : { changes: [] };
       state.changes = data.changes || [];
       stage = 'changes'; render();
     } else {
       await post('/api/config-chat/apply', {});
+      window.dispatchEvent(new Event('config-chat:applied'));
       stage = 'done'; render();
     }
   }
@@ -235,6 +243,7 @@
     btn.onclick = async () => {
       const acceptedFields = checks.filter((c) => c.checked).map((c) => c.dataset.field);
       await post('/api/config-chat/apply', { acceptedFields });
+      window.dispatchEvent(new Event('config-chat:applied'));
       stage = 'done'; render();
     };
     foot.appendChild(btn);
@@ -253,10 +262,13 @@
     } else if (stage === 'changes') {
       renderChanges();
     } else if (stage === 'done') {
-      bot('¡Listo! Tu asistente quedó configurado. Revisá los bloques de abajo cuando quieras.');
-      const b = el('button', { type: 'button', class: 'cfg-send' }, 'Ver mi configuración');
-      b.onclick = () => location.reload();
-      foot.appendChild(b);
+      bot('¡Listo! Tu asistente quedó configurado.');
+      // En el embed no se puede recargar (el token de un solo uso ya fue consumido).
+      if (!window.__EMBED_TOKEN__) {
+        const b = el('button', { type: 'button', class: 'cfg-send' }, 'Ver mi configuración');
+        b.onclick = () => location.reload();
+        foot.appendChild(b);
+      }
     }
     scroll();
   }

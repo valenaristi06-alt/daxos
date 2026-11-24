@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Asistente</title>
+  <meta name="robots" content="noindex" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/embed.css" />
+  <!-- Meta SDK: fbAsyncInit debe estar definido ANTES que el script cargue -->
+  <script>
+    window.fbAsyncInit = function () {
+      if (window.__FB_APP_ID__ && window.FB) {
+        FB.init({ appId: window.__FB_APP_ID__, cookie: true, autoLogAppEvents: true, xfbml: false, version: 'v21.0' });
+        window.__FB_READY__ = true;
+      }
+    };
+  </script>
+  <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
+</head>
+<body>
+  <main id="embed-root" class="embed-root" aria-live="polite">
+    <div id="embed-loading" class="embed-loading">Cargando…</div>
+
+    <div id="embed-steps" class="embed-steps" hidden>
+      <!-- Paso 1 -->
+      <section class="step" id="step-1">
+        <div class="step-head"><span class="step-num">1</span><h2>Conectá tu WhatsApp</h2></div>
+        <div class="step-body">
+          <div id="wa-connected" class="status-ok" hidden>✓ WhatsApp conectado</div>
+          <div id="wa-connect" hidden>
+            <p class="muted">Conectá el número de WhatsApp de tu negocio para que el asistente responda.</p>
+            <button id="btn-wa-connect" class="btn btn-accent" type="button">Conectar WhatsApp</button>
+            <p id="wa-connect-error" class="err" hidden></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Paso 2 -->
+      <section class="step" id="step-2">
+        <div class="step-head"><span class="step-num">2</span><h2>Contá tu negocio</h2></div>
+        <div class="step-body">
+          <!-- Scaffold reutilizado por /js/config-chat.js -->
+          <section id="config-chat" class="cfg-chat" style="display:none" aria-live="polite">
+            <div class="cfg-chat-head">
+              <span class="cfg-chat-dot" aria-hidden="true"></span>
+              <span class="cfg-chat-title" id="cfg-chat-title">Armá tu asistente hablando</span>
+            </div>
+            <p class="cfg-chat-sub">Contame de tu negocio como se lo contarías a un cliente nuevo: qué vendés, precios, horarios y cómo entregás. Yo completo la configuración y te pregunto solo lo que falte. No cambia nada hasta que toques Aplicar.</p>
+            <div class="cfg-chat-msgs" id="cfg-chat-msgs"></div>
+            <div class="cfg-chat-foot" id="cfg-chat-foot"></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- Paso 3 -->
+      <section class="step" id="step-3">
+        <div class="step-head"><span class="step-num">3</span><h2>Tu asistente</h2></div>
+        <div class="step-body">
+          <div class="asst-row">
+            <span>Estado</span>
+            <label class="switch">
+              <input type="checkbox" id="pause-toggle" />
+              <span class="slider"></span>
+              <span class="switch-label" id="status-label">—</span>
+            </label>
+          </div>
+          <div class="usage">
+            <div class="usage-top"><span id="plan-pct-label">Usaste —% de tu plan este mes</span></div>
+            <div class="bar"><div class="bar-fill" id="plan-bar"></div></div>
+            <div class="conv-line" id="conv-line">—</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div id="embed-error" class="embed-error" hidden></div>
+  </main>
+
+  <script src="/js/embed.js"></script>
+</body>
+</html>
