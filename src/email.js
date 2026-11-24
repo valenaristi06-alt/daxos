@@ -525,7 +525,7 @@ async function sendUrgentAlertEmail({ to, businessName, contactId, messageText, 
   }
 }
 
-async function sendSpendingCapEmail({ to, businessName, panelUrl, plan, dailyCap }) {
+async function sendSpendingCapEmail({ to, businessName, panelUrl, plan, dailyCap, brand = 'Daxos' }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     console.warn('[resend] RESEND_API_KEY not set, skipping email');
@@ -539,7 +539,7 @@ async function sendSpendingCapEmail({ to, businessName, panelUrl, plan, dailyCap
     ? `<p style="color:#555;font-size:13px;margin-top:16px">Tu plan incluye ${dailyCap} respuestas por día. Con el plan Crecimiento tenés 150.${panelUrl ? ` <a href="${panelUrl.replace('/conversations.html', '/dashboard.html')}">Ver planes</a>.` : ''}</p>`
     : '';
   const body = {
-    from: 'Daxos <notificaciones@daxos.lat>',
+    from: `${brand} <notificaciones@daxos.lat>`,
     to: [to],
     subject: `⚠️ Límite diario alcanzado — ${businessName}`,
     html: `
