@@ -27,7 +27,7 @@ const INFO_TOOL = {
   input_schema: {
     type: 'object',
     properties: {
-      nombre: { type: ['string', 'null'] },
+      nombre: { type: ['string', 'null'], description: 'nombre PROPIO del negocio (marca). Si solo aparece el rubro genérico (ej "veterinaria", "inmobiliaria"), dejá null.' },
       rubro: { type: ['string', 'null'], description: 'sector/industria en 2-4 palabras' },
       descripcion: { type: ['string', 'null'], description: 'qué hace el negocio, 1-2 oraciones' },
       servicios: { type: 'array', items: { type: 'string' }, description: 'productos o servicios (sin precio)' },
@@ -65,7 +65,7 @@ const PRODUCTS_TOOL = {
           type: 'object',
           properties: {
             nombre: { type: 'string' },
-            precio: { type: ['string', 'null'], description: 'precio actual, ej "$1.750"' },
+            precio: { type: ['string', 'null'], description: 'precio actual LITERAL. Conservá "desde", "a partir de" o rangos tal cual, ej "desde $900", "$500 a $800", "$1.750".' },
             precio_anterior: { type: ['string', 'null'], description: 'precio regular tachado si está en oferta, sino null' },
             conflicto: { type: 'boolean' },
             precios_conflicto: { type: 'array', items: { type: 'string' } },
@@ -215,6 +215,13 @@ const ALLOWED_STYLE_KEYS  = new Set(['tono', 'uso_emojis', 'largo_mensajes', 'fo
 const ALLOWED_SURVEY_KEYS = new Set(['prioridad', 'objeciones_precio', 'sin_respuesta', 'turnos', 'pagos', 'entrega']);
 const STYLE_TONO_VALUES   = new Set(['cercano', 'formal', 'directo', 'persuasivo', 'informativo']);
 const TONO_MAP = { informal: 'cercano', neutro: 'informativo', formal: 'formal' };
+// Palabras de rubro genérico que NO son un nombre propio de negocio.
+const GENERIC_NAMES = new Set([
+  'veterinaria', 'inmobiliaria', 'estetica', 'estética', 'peluqueria', 'peluquería',
+  'ferreteria', 'ferretería', 'farmacia', 'restaurante', 'tienda', 'comercio', 'negocio',
+  'clinica', 'clínica', 'consultorio', 'gimnasio', 'barberia', 'barbería', 'panaderia',
+  'panadería', 'kiosco', 'almacen', 'almacén',
+]);
 
 function _validField(field) {
   const dot = field.indexOf('.');
@@ -239,7 +246,15 @@ function mapToDraft(data, source = 'web') {
     rows.push({ field, value: typeof value === 'string' ? value.trim() : value, source, confidence, needs_confirm });
   };
 
-  add('name', data.nombre, 0.85);
+  // name = nombre PROPIO del negocio. Si es solo el rubro genérico (ej "Veterinaria"),
+  // queda vacío: lo pregunta la Fase 2. Nunca un genérico.
+  let nombre = data.nombre;
+  if (nombre) {
+    const n = String(nombre).trim().toLowerCase();
+    const rub = String(data.rubro || '').trim().toLowerCase();
+    if (n === rub || GENERIC_NAMES.has(n)) nombre = null;
+  }
+  add('name', nombre, 0.85);
 
   // ¿Qué hacés o vendés? + datos de contacto que la web muestra (dirección, teléfono),
   // para que el asistente los tenga a mano. El panel no tiene campo propio de contacto.
