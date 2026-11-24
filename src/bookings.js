@@ -44,7 +44,7 @@ async function notifyOwnerOfBooking({ business, owner, booking, waCredentials })
     }
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        await sendWhatsAppMessage(ownerPhone, msg, waCredentials);
+        await sendWhatsAppMessage(ownerPhone, msg, waCredentials, { bypassPause: true }); // aviso al dueño
         console.log(`[booking-notify] WA ok attempt=${attempt} booking=${booking.id} code=${booking.slot_code} owner=${ownerPhone}`);
         return;
       } catch (err) {
