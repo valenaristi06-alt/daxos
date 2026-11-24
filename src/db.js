@@ -792,6 +792,20 @@ db.exec(`
     }
   }
 
+  // Flag por negocio del chat configurador (Fase 2). Apagado por defecto: sin flag, nada
+  // cambia en el panel. Lo prende un admin.
+  if (!applied('029_config_chat_flag')) {
+    try {
+      const bizCols = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+      if (!bizCols.includes('config_chat_enabled'))
+        db.exec('ALTER TABLE businesses ADD COLUMN config_chat_enabled INTEGER NOT NULL DEFAULT 0');
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('029_config_chat_flag');
+      console.log('[migration 029] config_chat_enabled added');
+    } catch (e) {
+      console.error('[migration 029] failed (non-fatal):', e.message);
+    }
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -2368,6 +2382,7 @@ module.exports = {
   getBookingState,
   setWeeklySummaryEnabled,
   setBotPaused,
+  setConfigChatEnabled,
   saveConfigDraft,
   getConfigDraft,
   clearConfigDraft,
@@ -2476,6 +2491,11 @@ function setWeeklySummaryEnabled(businessId, enabled) {
 function setBotPaused(businessId, paused) {
   db.prepare('UPDATE businesses SET bot_paused = ?, bot_paused_at = ? WHERE id = ?')
     .run(paused ? 1 : 0, paused ? new Date().toISOString() : null, businessId);
+}
+
+// Flag del chat configurador (Fase 2). Lo prende/apaga un admin por negocio.
+function setConfigChatEnabled(businessId, enabled) {
+  db.prepare('UPDATE businesses SET config_chat_enabled = ? WHERE id = ?').run(enabled ? 1 : 0, businessId);
 }
 
 // ─── Borrador del configurador (Fase 1) ───────────────────────────────────────
