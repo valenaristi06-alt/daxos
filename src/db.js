@@ -1418,6 +1418,12 @@ function setCrmCapOwnerNotified(businessId, dayStr) {
   db.prepare('UPDATE businesses SET crm_cap_owner_notified_at = ? WHERE id = ?').run(dayStr, businessId);
 }
 
+// Set the monthly caps for a crm business (CRM pushes these on subscribe / plan change).
+function setCrmQuota(businessId, convCap, spendCapUsd) {
+  db.prepare('UPDATE businesses SET crm_conv_cap = ?, crm_spend_cap_usd = ? WHERE id = ?')
+    .run(convCap, spendCapUsd, businessId);
+}
+
 // --- conversations ---
 
 const stmtGetConversationsByBusiness = db.prepare(`
@@ -2422,6 +2428,7 @@ module.exports = {
   getMonthlyConvCount,
   getMonthlyUsage,
   setCrmCapOwnerNotified,
+  setCrmQuota,
   markConversationPausedByCrmCap,
   upsertBusiness,
   getBusinessById,

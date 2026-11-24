@@ -185,6 +185,50 @@ async function main() {
     assert(conflict2.status === 409, 'create reusing a CRM account email under a new crm_user_id → 409');
   }
 
+  // ── Suite 3b: Quota update (subscribe / plan change) ──
+  console.log('\nSuite 3b: Quota update');
+  {
+    const noKey = await req('POST', '/api/partner/businesses/quota', { crm_user_id: 'crm_1', conv_cap: 350, spend_cap_usd: 7 });
+    assert(noKey.status === 401, 'quota without key → 401');
+    const badKey = await req('POST', '/api/partner/businesses/quota',
+      { crm_user_id: 'crm_1', conv_cap: 350, spend_cap_usd: 7 }, bearer('wrong'));
+    assert(badKey.status === 401, 'quota with wrong key → 401');
+
+    const unknown = await req('POST', '/api/partner/businesses/quota',
+      { crm_user_id: 'nope', conv_cap: 350, spend_cap_usd: 7 }, bearer(PARTNER_KEY));
+    assert(unknown.status === 404, 'quota for unknown crm_user_id → 404');
+
+    const badConv = await req('POST', '/api/partner/businesses/quota',
+      { crm_user_id: 'crm_1', conv_cap: 0, spend_cap_usd: 7 }, bearer(PARTNER_KEY));
+    assert(badConv.status === 400, 'conv_cap <= 0 → 400');
+    const badConv2 = await req('POST', '/api/partner/businesses/quota',
+      { crm_user_id: 'crm_1', conv_cap: 12.5, spend_cap_usd: 7 }, bearer(PARTNER_KEY));
+    assert(badConv2.status === 400, 'non-integer conv_cap → 400');
+    const badSpend = await req('POST', '/api/partner/businesses/quota',
+      { crm_user_id: 'crm_1', conv_cap: 350, spend_cap_usd: -1 }, bearer(PARTNER_KEY));
+    assert(badSpend.status === 400, 'spend_cap_usd < 0 → 400');
+    const zeroSpend = await req('POST', '/api/partner/businesses/quota',
+      { crm_user_id: 'crm_1', conv_cap: 350, spend_cap_usd: 0 }, bearer(PARTNER_KEY));
+    assert(zeroSpend.status === 400, 'spend_cap_usd = 0 → 400');
+    const badSpend2 = await req('POST', '/api/partner/businesses/quota',
+      { crm_user_id: 'crm_1', conv_cap: 350 }, bearer(PARTNER_KEY));
+    assert(badSpend2.status === 400, 'missing spend_cap_usd → 400');
+
+    // Documented per-plan pairs from Pupi: 79→350/7, 149→700/14, 499→2400/48, 999→4800/96.
+    const plans = [[350, 7], [700, 14], [2400, 48], [4800, 96]];
+    const db = new Database(path.join(DB_DIR, 'daxos.db'), { readonly: true });
+    for (const [conv, spend] of plans) {
+      const r = await req('POST', '/api/partner/businesses/quota',
+        { crm_user_id: 'crm_1', conv_cap: conv, spend_cap_usd: spend }, bearer(PARTNER_KEY));
+      assert(r.status === 200 && r.body.business_id === crmBizId && r.body.conv_cap === conv && r.body.spend_cap_usd === spend,
+        `quota ${conv}/${spend} → 200 echoes values`);
+      const row = db.prepare('SELECT crm_conv_cap, crm_spend_cap_usd FROM businesses WHERE id = ?').get(crmBizId);
+      assert(row.crm_conv_cap === conv && row.crm_spend_cap_usd === spend,
+        `quota ${conv}/${spend} persisted in DB`);
+    }
+    db.close();
+  }
+
   // ── Suite 4: login-link only for CRM accounts ──
   console.log('\nSuite 4: login-link scoping');
   {
