@@ -1783,7 +1783,7 @@ app.post('/api/conversations/:id/send', requireAuth, rateLimitWith(30, 15 * 60 *
   };
 
   try {
-    await sendWhatsAppMessage(conv.customer_id, text.trim(), waCredentials);
+    await sendWhatsAppMessage(conv.customer_id, text.trim(), waCredentials, { bypassPause: true }); // envío manual del dueño
   } catch (err) {
     logError('panel-send-error', err);
     if (err.message?.includes('131047')) {
@@ -2270,7 +2270,7 @@ async function notifyOwnerBotStopped(kind, business, owner, conv) {
     if (ownerCreds) {
       const normOwnerPhone = normalizeContactPhone(owner.phone);
       if (normOwnerPhone) {
-        sendWhatsAppMessage(normOwnerPhone, waText, ownerCreds)
+        sendWhatsAppMessage(normOwnerPhone, waText, ownerCreds, { bypassPause: true })
           .catch(err => {
             logError('wa-owner-notify-error', { message: err.message, stack: err.stack || '', kind });
           });
@@ -2310,7 +2310,7 @@ async function notifyOwnerSaleIntent(business, owner, conv, lastMessages, custom
     if (ownerCreds) {
       const normOwnerPhone = normalizeContactPhone(owner.phone);
       if (normOwnerPhone) {
-        sendWhatsAppMessage(normOwnerPhone, waText, ownerCreds)
+        sendWhatsAppMessage(normOwnerPhone, waText, ownerCreds, { bypassPause: true })
           .catch(err => logError('wa-owner-notify-error', { message: err.message, stack: err.stack || '', kind: 'sale_intent' }));
       }
     }
@@ -2396,7 +2396,7 @@ async function notifyAdmin(event, data) {
       incomplete_connection: `Conexión incompleta: ${data.businessName} lleva ${data.minutesElapsed} min sin completar WhatsApp`,
     };
     const text = waTexts[event] || `Admin event=${event}`;
-    sendWhatsAppMessage(adminPhone, text, { phoneNumberId: adminPhoneNumberId, provider: 'kapso' })
+    sendWhatsAppMessage(adminPhone, text, { phoneNumberId: adminPhoneNumberId, provider: 'kapso' }, { bypassPause: true })
       .catch(err => logError('admin-notify', { message: `WA failed event=${event}: ${err.message}`, stack: '' }));
   }
 }
@@ -2548,19 +2548,10 @@ function parseSqliteUtc(s) {
   return new Date(s.endsWith('Z') || s.includes('+') ? s : s + 'Z').getTime();
 }
 
-// Single source of truth for "the bot must stay silent for this business right now".
-// Covers both the owner master switch (bot_paused) and an admin time-based silence
-// (silent_until). Every place that used to check silent_until uses this instead, so the
-// silence logic is not duplicated. When true, callers save the incoming message but send
-// nothing to the customer.
-function isBotMuted(business) {
-  if (business.bot_paused) return true;
-  if (business.silent_until) {
-    const ms = parseSqliteUtc(business.silent_until);
-    if (ms && Date.now() < ms) return true;
-  }
-  return false;
-}
+// Single source of truth for "the bot must stay silent for this business right now"
+// (owner switch bot_paused + admin silence silent_until). Vive en src/pause.js para
+// que la capa de envío (whatsapp.js) aplique el mismo control sin duplicar lógica.
+const { isBotMuted } = require('./pause');
 
 // Uruguay is UTC-3 year-round. Days elapsed are full 24-hour periods from trialStartsAt.
 function trialDaysElapsed(trialStartsAt) {
@@ -2710,7 +2701,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
       sendTrialEndedEmail({ to: owner.email, businessName: business.name })
         .catch(e => logError('trial-ended-email', { message: e.message, stack: '' }));
       if (owner.phone) {
-        sendWhatsAppMessage(owner.phone, `🚫 La prueba de ${business.name} terminó. Activá tu plan: https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan`, waCredentials).catch(() => {});
+        sendWhatsAppMessage(owner.phone, `🚫 La prueba de ${business.name} terminó. Activá tu plan: https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan`, waCredentials, { bypassPause: true }).catch(() => {});
       }
     };
 
@@ -2742,7 +2733,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
           sendTrialGraceEmail({ to: owner.email, businessName: business.name, graceConvsLeft, graceHoursLeft })
             .catch(e => logError('trial-grace-email', { message: e.message, stack: '' }));
           if (owner.phone) {
-            sendWhatsAppMessage(owner.phone, `⏳ La prueba de ${business.name} venció. El bot sigue en modo de gracia: ${Math.ceil(graceHoursLeft)} h o ${graceConvsLeft} conversaciones más. Activá tu plan: https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan`, waCredentials).catch(() => {});
+            sendWhatsAppMessage(owner.phone, `⏳ La prueba de ${business.name} venció. El bot sigue en modo de gracia: ${Math.ceil(graceHoursLeft)} h o ${graceConvsLeft} conversaciones más. Activá tu plan: https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan`, waCredentials, { bypassPause: true }).catch(() => {});
           }
         }
       }
@@ -2778,7 +2769,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
           sendTrialGraceEmail({ to: owner.email, businessName: business.name, graceConvsLeft: TRIAL_GRACE_CONVS, graceHoursLeft: TRIAL_GRACE_HOURS })
             .catch(e => logError('trial-grace-email', { message: e.message, stack: '' }));
           if (owner.phone) {
-            sendWhatsAppMessage(owner.phone, `⏳ La prueba de ${business.name} venció. El bot sigue en modo de gracia: 72 h o 25 conversaciones más. Activá tu plan: https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan`, waCredentials).catch(() => {});
+            sendWhatsAppMessage(owner.phone, `⏳ La prueba de ${business.name} venció. El bot sigue en modo de gracia: 72 h o 25 conversaciones más. Activá tu plan: https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan`, waCredentials, { bypassPause: true }).catch(() => {});
           }
         }
         console.log(`[trial-grace] business ${business.id} grace opened (${convCount} convs, day ${daysElapsed})`);
@@ -2794,7 +2785,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
           sendTrialWarningEmail({ to: owner.email, businessName: business.name, convCount, convLimit: TRIAL_CONV_LIMIT, dayNum: daysElapsed, dayLimit: 14 })
             .catch(e => logError('trial-warning-email', { message: e.message, stack: '' }));
           if (owner.phone) {
-            sendWhatsAppMessage(owner.phone, `⚠️ La prueba de ${business.name} está llegando al final: día ${daysElapsed} de 14, ${convCount} de ${TRIAL_CONV_LIMIT} conversaciones. Activá tu plan: https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan`, waCredentials).catch(() => {});
+            sendWhatsAppMessage(owner.phone, `⚠️ La prueba de ${business.name} está llegando al final: día ${daysElapsed} de 14, ${convCount} de ${TRIAL_CONV_LIMIT} conversaciones. Activá tu plan: https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan`, waCredentials, { bypassPause: true }).catch(() => {});
           }
         }
         console.log(`[trial-warning] business ${business.id} warned (day ${daysElapsed}, ${convCount} convs)`);
@@ -3296,7 +3287,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
             if (_ownerPhone && waCredentials) {
               const _ownerMsg = `📅 Nuevo turno: ${nextAgendaState.clientName || customerPhone}${_svcName ? ', ' + _svcName : ''}, ${_agendaApptSummary(_slot.startsAt)}. Ver: ${_panelUrl}`;
               try {
-                await sendWhatsAppMessage(_ownerPhone, _ownerMsg, waCredentials);
+                await sendWhatsAppMessage(_ownerPhone, _ownerMsg, waCredentials, { bypassPause: true });
                 updateAppointmentNotification(_apt.id, { ownerNotifiedAt: new Date().toISOString(), waNotifyStatus: 'ok' });
               } catch (_nErr) {
                 updateAppointmentNotification(_apt.id, { waNotifyStatus: 'failed', waNotifyReason: _nErr.message.slice(0, 120) });
@@ -6014,7 +6005,7 @@ async function runWaHealthCheck({ dryRun = (process.env.WA_HEALTH_ALERTS !== 'on
             const waMsg = bizFull?.wa_provider === 'kapso'
               ? `⚠️ Tu WhatsApp de ${biz.name} está desconectado. Entrá a Kapso y reconectá el número para que el bot vuelva a funcionar.`
               : `⚠️ Tu WhatsApp de ${biz.name} está desconectado. Entrá al panel de Daxos y reconectá el número para que el bot vuelva a funcionar.`;
-            sendWhatsAppMessage(normOwner, waMsg, waCredentials)
+            sendWhatsAppMessage(normOwner, waMsg, waCredentials, { bypassPause: true })
               .catch(err => logError('wa-health-alert', { message: `wa notify failed biz=${biz.id}: ${err.message}`, stack: '' }));
           }
         }

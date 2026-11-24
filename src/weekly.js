@@ -50,7 +50,7 @@ async function sendWeeklySummaries() {
       const weekLabel = getWeekLabel();
       const text = buildSummaryText(stats, weekLabel);
       let waSent = false;
-      await sendWhatsAppMessage(owner.phone, text, waCredentials)
+      await sendWhatsAppMessage(owner.phone, text, waCredentials, { bypassPause: true })
         .then(() => { waSent = true; })
         .catch(err => console.error(`[weekly-summary] WA failed business=${business.id}: ${err.message}`));
       if (!waSent && owner.email) {

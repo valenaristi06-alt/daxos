@@ -1,6 +1,24 @@
 'use strict';
 
-const { logError } = require('./db');
+const { logError, getBusinessByPhoneNumberId } = require('./db');
+const { isBotMuted } = require('./pause');
+
+// Chokepoint de pausa: último paso antes de Meta/Kapso/Baileys. Si el negocio está
+// pausado (bot_paused) o silenciado por admin (silent_until), NO se envía nada al
+// cliente. Default = bloqueado; los envíos que NO son del bot (avisos al dueño, envío
+// manual del dueño, confirmaciones de agenda) pasan opts.bypassPause = true.
+function _blockedByPause(creds, opts) {
+  if (opts && opts.bypassPause) return false;
+  const pnid = creds && creds.phoneNumberId;
+  if (!pnid) return false;
+  let biz = null;
+  try { biz = getBusinessByPhoneNumberId(pnid); } catch (_) { return false; }
+  if (isBotMuted(biz)) {
+    try { logError('send-blocked-paused', { message: `business_id=${biz && biz.id} — envío a cliente bloqueado (bot_paused/silent)`, stack: '' }); } catch (_) {}
+    return true;
+  }
+  return false;
+}
 
 const GRAPH_BASE = 'https://graph.facebook.com/v21.0';
 const IS_PROD = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT;
@@ -50,7 +68,8 @@ function getApiConfig({ provider, accessToken }) {
   };
 }
 
-async function sendWhatsAppMessage(to, text, creds) {
+async function sendWhatsAppMessage(to, text, creds, opts) {
+  if (_blockedByPause(creds, opts)) return { skipped: 'bot_paused' };
   if (creds.provider === 'baileys') {
     const sock = creds.socket;
     if (!sock) throw new Error('baileys: socket not available');
@@ -99,7 +118,8 @@ async function uploadMedia(buffer, filename, mimeType, creds) {
   return data.id;
 }
 
-async function sendWhatsAppAudio(to, mediaId, creds) {
+async function sendWhatsAppAudio(to, mediaId, creds, opts) {
+  if (_blockedByPause(creds, opts)) return { skipped: 'bot_paused' };
   if (creds.provider === 'baileys') {
     const sock = creds.socket;
     if (!sock) throw new Error('baileys: socket not available');
@@ -128,7 +148,8 @@ async function sendWhatsAppAudio(to, mediaId, creds) {
   return data;
 }
 
-async function sendWhatsAppDocument(to, mediaId, filename, creds) {
+async function sendWhatsAppDocument(to, mediaId, filename, creds, opts) {
+  if (_blockedByPause(creds, opts)) return { skipped: 'bot_paused' };
   if (creds.provider === 'baileys') {
     const sock = creds.socket;
     if (!sock) throw new Error('baileys: socket not available');
@@ -157,7 +178,8 @@ async function sendWhatsAppDocument(to, mediaId, filename, creds) {
   return data;
 }
 
-async function sendWhatsAppImage(to, mediaId, caption, creds) {
+async function sendWhatsAppImage(to, mediaId, caption, creds, opts) {
+  if (_blockedByPause(creds, opts)) return { skipped: 'bot_paused' };
   if (creds.provider === 'baileys') {
     const sock = creds.socket;
     if (!sock) throw new Error('baileys: socket not available');
@@ -489,4 +511,4 @@ function sanitizeForClient(txt, logFn) {
   return cleaned;
 }
 
-module.exports = { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, markReadAndTyping, downloadKapsoMedia, downloadMetaMedia, isAllowedKapsoHost, parseSplitParts, splitAndSend, sanitizeForClient };
+module.exports = { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, markReadAndTyping, downloadKapsoMedia, downloadMetaMedia, isAllowedKapsoHost, parseSplitParts, splitAndSend, sanitizeForClient, isSendBlocked: _blockedByPause };
