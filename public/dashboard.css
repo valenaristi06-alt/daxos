@@ -2890,6 +2890,7 @@ select option { background: #1a1a1a; }
 .cfg-chat-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .cfg-chat-dot { width: 8px; height: 8px; border-radius: 50%; background: #c45c1a; flex-shrink: 0; }
 .cfg-chat-title { font-size: 14px; font-weight: 700; color: var(--text, #eee); }
+.cfg-chat-sub { font-size: 12px; line-height: 1.5; color: var(--muted, #bbb); margin: 0 0 12px; }
 .cfg-chat-msgs { display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow-y: auto; margin-bottom: 12px; }
 .cfg-bub { font-size: 13px; line-height: 1.4; padding: 9px 12px; border-radius: 10px; max-width: 85%; }
 .cfg-bub--bot { background: #1b1b1b; border: 1px solid #2a2a2a; color: var(--muted-2, #ccc); align-self: flex-start; }
@@ -2898,6 +2899,32 @@ select option { background: #1a1a1a; }
   width: 100%; box-sizing: border-box; background: #141414; border: 1px solid #2e2e2e;
   border-radius: 6px; color: #eee; font-size: 13px; padding: 9px 11px; font-family: inherit; resize: vertical;
 }
+.cfg-ta-wrap { position: relative; }
+.cfg-ta--mic { padding-right: 48px; }
+.cfg-mic {
+  position: absolute; right: 8px; bottom: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 50%;
+  background: #c45c1a; color: #fff; border: 0; cursor: pointer; padding: 0;
+}
+.cfg-mic:hover { opacity: 0.9; }
+.cfg-rec {
+  display: flex; align-items: center; gap: 10px;
+  background: #141414; border: 1px solid #2e2e2e; border-radius: 6px; padding: 10px 12px;
+}
+.cfg-rec-dot {
+  width: 10px; height: 10px; border-radius: 50%; background: #e5484d; flex-shrink: 0;
+  animation: cfgRecPulse 1s ease-in-out infinite;
+}
+@keyframes cfgRecPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+.cfg-rec-time { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 13px; color: #eee; }
+.cfg-rec-label { font-size: 12px; color: var(--muted, #bbb); }
+.cfg-rec-stop {
+  margin-left: auto; background: #e5484d; color: #fff; border: 0; border-radius: 6px;
+  padding: 7px 14px; font-size: 12px; font-weight: 700; cursor: pointer; min-height: 32px;
+}
+.cfg-rec-stop:hover { opacity: 0.9; }
+@media (prefers-reduced-motion: reduce) { .cfg-rec-dot { animation: none; } }
 .cfg-btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
 .cfg-chip {
   display: inline-flex; align-items: center; background: transparent; border: 1px solid var(--border-2, #333);

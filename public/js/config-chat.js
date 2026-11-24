@@ -42,44 +42,123 @@
   }
 
   // ── Inputs ──
+  const MIC_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>';
+  const REC_MAX_MS = 3 * 60 * 1000; // 3 minutos
+
+  // MediaRecorder state (sin dependencias nuevas; funciona en iPhone y Android).
+  let mediaRecorder = null, recChunks = [], recStream = null, recTimerInt = null, recMaxTO = null;
+
+  function pickAudioMime() {
+    if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return '';
+    // Android Chrome → webm/opus; iPhone Safari → mp4/aac.
+    for (const c of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/aac', 'audio/ogg']) {
+      if (MediaRecorder.isTypeSupported(c)) return c;
+    }
+    return '';
+  }
+
+  function stopTracks() {
+    if (recStream) { recStream.getTracks().forEach((t) => t.stop()); recStream = null; }
+    if (recTimerInt) { clearInterval(recTimerInt); recTimerInt = null; }
+    if (recMaxTO) { clearTimeout(recMaxTO); recMaxTO = null; }
+  }
+
+  const MIC_DENIED = 'Activá el micrófono en tu navegador para grabar, o escribilo acá.';
+
+  async function startRecording(taWrap, ta, row, mic) {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices ||
+        !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
+      bot(MIC_DENIED); scroll(); return;
+    }
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch (e) { bot(MIC_DENIED); scroll(); return; }
+    recStream = stream; recChunks = [];
+    const mime = pickAudioMime();
+    try { mediaRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream); }
+    catch (e) {
+      try { mediaRecorder = new MediaRecorder(stream); }
+      catch (e2) { stopTracks(); bot(MIC_DENIED); scroll(); return; }
+    }
+    mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      const type = mediaRecorder.mimeType || mime || 'audio/webm';
+      stopTracks();
+      const blob = new Blob(recChunks, { type });
+      recChunks = [];
+      if (!blob.size) { bot('No se grabó audio. Probá de nuevo o escribilo acá.'); stage = 'intro'; ingestInput(); scroll(); return; }
+      const ext = (type.includes('mp4') || type.includes('aac')) ? 'm4a' : type.includes('ogg') ? 'ogg' : 'webm';
+      doIngest('', '', new File([blob], 'grabacion.' + ext, { type }), null, true);
+    };
+    try { mediaRecorder.start(); }
+    catch (e) { stopTracks(); bot(MIC_DENIED); scroll(); return; }
+    showRecordingBar(taWrap, ta, row, mic);
+    recMaxTO = setTimeout(stopRecording, REC_MAX_MS); // tope 3 minutos
+  }
+
+  function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      try { mediaRecorder.stop(); } catch (e) { stopTracks(); }
+    }
+  }
+
+  function showRecordingBar(taWrap, ta, row, mic) {
+    ta.style.display = 'none';
+    mic.style.display = 'none';
+    if (row) row.style.display = 'none';
+    const bar = el('div', { class: 'cfg-rec' });
+    const dot = el('span', { class: 'cfg-rec-dot', 'aria-hidden': 'true' });
+    const time = el('span', { class: 'cfg-rec-time' }, '0:00');
+    const label = el('span', { class: 'cfg-rec-label' }, 'Grabando…');
+    const stop = el('button', { type: 'button', class: 'cfg-rec-stop', 'aria-label': 'Detener grabación' }, 'Detener');
+    bar.append(dot, time, label, stop);
+    taWrap.appendChild(bar);
+    const t0 = Date.now();
+    recTimerInt = setInterval(() => {
+      const s = Math.floor((Date.now() - t0) / 1000);
+      time.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    }, 500);
+    stop.onclick = stopRecording;
+  }
+
   function ingestInput() {
     const wrap = el('div', { class: 'cfg-ingest' });
-    const ta = el('textarea', { class: 'cfg-ta', rows: '2', placeholder: 'Escribí acá, o usá los botones…' });
+    const taWrap = el('div', { class: 'cfg-ta-wrap' });
+    const ta = el('textarea', { class: 'cfg-ta cfg-ta--mic', rows: '2', placeholder: 'Escribí acá o tocá el micrófono para contármelo en un audio' });
+    const mic = el('button', { type: 'button', class: 'cfg-mic', 'aria-label': 'Grabar audio' }, MIC_SVG);
+    taWrap.append(ta, mic);
     const urlRow = el('div', { style: 'display:none;margin-top:8px;' });
     const urlInput = el('input', { class: 'cfg-input', type: 'url', placeholder: 'https://tunegocio.com' });
     urlRow.appendChild(urlInput);
-    const audioInput = el('input', { type: 'file', accept: 'audio/*', style: 'display:none' });
     const imgInput = el('input', { type: 'file', accept: 'image/*', multiple: '', style: 'display:none' });
     const row = el('div', { class: 'cfg-btn-row' });
     const bWeb = el('button', { type: 'button', class: 'cfg-chip' }, 'Pegar mi web');
     bWeb.onclick = () => { urlRow.style.display = urlRow.style.display === 'none' ? 'block' : 'none'; };
     row.appendChild(bWeb);
-    // Audio del dueño para explicar su negocio: disponible en TODOS los planes.
-    // (El límite por plan es para las respuestas con VOZ del bot, no para esto.)
-    const bAud = el('button', { type: 'button', class: 'cfg-chip' }, 'Mandar audio');
-    bAud.onclick = () => audioInput.click();
-    row.appendChild(bAud);
     const bImg = el('button', { type: 'button', class: 'cfg-chip' }, 'Subir capturas');
     bImg.onclick = () => imgInput.click();
     row.appendChild(bImg);
     const send = el('button', { type: 'button', class: 'cfg-send' }, 'Enviar');
-    send.onclick = () => doIngest(ta.value, urlInput.value, audioInput.files[0], imgInput.files);
-    audioInput.onchange = () => { if (audioInput.files[0]) doIngest('', '', audioInput.files[0], null); };
+    send.onclick = () => doIngest(ta.value, urlInput.value, null, imgInput.files);
     imgInput.onchange = () => { if (imgInput.files.length) doIngest('', '', null, imgInput.files); };
     row.appendChild(send);
-    wrap.append(ta, urlRow, row, audioInput, imgInput);
+    mic.onclick = () => startRecording(taWrap, ta, row, mic);
+    wrap.append(taWrap, urlRow, row, imgInput);
     foot.appendChild(wrap);
   }
 
-  async function doIngest(text, url, audio, images) {
+  async function doIngest(text, url, audio, images, isAudio) {
     const fd = new FormData();
     if (text && text.trim()) { fd.append('text', text.trim()); me(text.trim()); }
     if (url && url.trim()) { fd.append('url', url.trim()); me(url.trim()); }
-    if (audio) { fd.append('audio', audio); me('🎤 (audio enviado)'); }
+    if (audio) { fd.append('audio', audio); me('🎤 (audio)'); }
     if (images && images.length) { for (const f of images) fd.append('images', f); me(`🖼️ (${images.length} captura/s)`); }
-    foot.innerHTML = ''; bot('Dame un segundo, estoy leyendo…'); scroll();
+    foot.innerHTML = ''; bot(isAudio ? 'Escuchando tu audio…' : 'Dame un segundo, estoy leyendo…'); scroll();
     try { applyStateFromResponse(await post('/api/config-chat/ingest', fd, true)); }
-    catch (e) { bot('No pude leer eso. Probá escribirlo.'); stage = 'intro'; render(); }
+    catch (e) {
+      bot(isAudio ? 'No pude escuchar el audio. Probá de nuevo o escribilo acá.' : 'No pude leer eso. Probá escribirlo.');
+      stage = 'intro'; ingestInput(); scroll();
+    }
   }
 
   function questionInput(q) {
@@ -164,9 +243,7 @@
   // ── Render principal ──
   function render() {
     msgs.innerHTML = ''; foot.innerHTML = '';
-    titleEl.textContent = state.configured ? 'Revisá tu asistente' : 'Configurá tu asistente';
     if (stage === 'intro') {
-      bot('Contame de tu negocio como se lo contarías a un cliente nuevo. Podés escribir, mandarme un audio, pegar tu web o subir capturas de tu Instagram.');
       ingestInput();
     } else if (stage === 'questions' && state.next_question) {
       bot(state.next_question.text);
