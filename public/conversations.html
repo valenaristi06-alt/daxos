@@ -356,15 +356,17 @@
       <aside class="conv-list-panel">
         <div class="conv-list-header">
           <p class="page-terminal">&gt; conversaciones</p>
-          <div style="display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:8px;">
             <h1 class="conv-list-title" style="margin:0;">Conversaciones</h1>
-            <button type="button" id="bot-pause-toggle" class="bot-pause-chip" style="margin-left:auto;display:none;" aria-pressed="false">
+          </div>
+          <div style="display:flex;justify-content:center;margin-top:10px;">
+            <button type="button" id="bot-pause-toggle" class="bot-pause-chip" style="display:none;" aria-pressed="false">
               <span class="bot-pause-chip-dot" aria-hidden="true"></span>
               <span>Asistente</span><span aria-hidden="true">·</span><span id="bot-pause-state">Activo</span>
             </button>
           </div>
         </div>
-        <div id="bot-pause-strip" class="trial-banner trial-banner--active" style="display:none;margin:10px 12px 0;">
+        <div id="bot-pause-strip" class="trial-banner trial-banner--active" style="display:none;margin:10px auto 0;max-width:calc(100% - 24px);">
           <span class="trial-msg" id="bot-pause-strip-msg"></span>
           <button type="button" class="bot-pause-resume" id="bot-pause-strip-resume">Reanudar</button>
         </div>
