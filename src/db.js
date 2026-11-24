@@ -1418,6 +1418,38 @@ function setCrmCapOwnerNotified(businessId, dayStr) {
   db.prepare('UPDATE businesses SET crm_cap_owner_notified_at = ? WHERE id = ?').run(dayStr, businessId);
 }
 
+// Per-CRM-account usage for a calendar month ('YYYY-MM', UTC). One row per business that
+// has a crm_user_id. Cost is computed by the caller from these raw sums. conversations =
+// distinct conversations that got a customer message that month (same count as the cap gate).
+function getPartnerUsageByMonth(monthStr) {
+  const businesses = db.prepare('SELECT id, crm_user_id FROM businesses WHERE crm_user_id IS NOT NULL ORDER BY id').all();
+  const usageStmt = db.prepare(`
+    SELECT
+      COUNT(*)                                            AS replies,
+      COALESCE(SUM(input_tokens), 0)                      AS input_tokens,
+      COALESCE(SUM(output_tokens), 0)                     AS output_tokens,
+      COALESCE(SUM(cache_read_tokens), 0)                 AS cache_read_tokens,
+      COALESCE(SUM(cache_write_tokens), 0)                AS cache_write_tokens,
+      COALESCE(SUM(cache_write_5m_tokens), 0)             AS cache_write_5m_tokens,
+      COALESCE(SUM(cache_write_1h_tokens), 0)             AS cache_write_1h_tokens,
+      COALESCE(SUM(tts_chars), 0)                         AS tts_chars,
+      SUM(CASE WHEN tts_chars IS NOT NULL THEN 1 ELSE 0 END) AS audio_replies
+    FROM claude_usage
+    WHERE business_id = ? AND strftime('%Y-%m', created_at) = ?
+  `);
+  const convStmt = db.prepare(`
+    SELECT COUNT(DISTINCT m.conversation_id) AS n FROM messages m
+    JOIN conversations c ON c.id = m.conversation_id
+    WHERE c.business_id = ? AND m.role = 'user'
+      AND strftime('%Y-%m', m.created_at) = ? AND c.silent = 0
+  `);
+  return businesses.map((b) => {
+    const u = usageStmt.get(b.id, monthStr);
+    const conv = convStmt.get(b.id, monthStr);
+    return { crm_user_id: b.crm_user_id, conversations: conv.n, ...u };
+  });
+}
+
 // Set the monthly caps for a crm business (CRM pushes these on subscribe / plan change).
 function setCrmQuota(businessId, convCap, spendCapUsd) {
   db.prepare('UPDATE businesses SET crm_conv_cap = ?, crm_spend_cap_usd = ? WHERE id = ?')
@@ -2429,6 +2461,7 @@ module.exports = {
   getMonthlyUsage,
   setCrmCapOwnerNotified,
   setCrmQuota,
+  getPartnerUsageByMonth,
   markConversationPausedByCrmCap,
   upsertBusiness,
   getBusinessById,

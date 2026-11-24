@@ -92,7 +92,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, getBusinessByCrmUserId, createCrmBusiness, createPartnerLoginToken, getPartnerLoginToken, markPartnerLoginTokenUsed, getMonthlyConvCount, getMonthlyUsage, setCrmCapOwnerNotified, setCrmQuota, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, markConversationPausedByCrmCap, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setConfigChatEnabled, saveConfigDraft, getConfigDraft, clearConfigDraft, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, getBusinessByCrmUserId, createCrmBusiness, createPartnerLoginToken, getPartnerLoginToken, markPartnerLoginTokenUsed, getMonthlyConvCount, getMonthlyUsage, setCrmCapOwnerNotified, setCrmQuota, getPartnerUsageByMonth, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, markConversationPausedByCrmCap, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setConfigChatEnabled, saveConfigDraft, getConfigDraft, clearConfigDraft, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
   incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
   incrementPreviewCall, getPreviewSpendingToday, setSpendingCapOwnerNotified, setSpendingCapNeedsAttention,
   getConvAssistantCountLastHour, setSpendingCapNotified,
@@ -779,8 +779,8 @@ function requirePartnerKey(req, res, next) {
   next();
 }
 
-// Monthly spend estimate (USD) from token/char usage, same prices as /admin/api/costos.
-function _estimateCostUsd(u) {
+// Cost estimate (USD) from token/char usage, split IA vs audio, same prices as /admin/api/costos.
+function _estimateCostBreakdown(u) {
   const priceIn           = parseFloat(process.env.ANTHROPIC_PRICE_IN             || '3');
   const priceOut          = parseFloat(process.env.ANTHROPIC_PRICE_OUT            || '15');
   const priceCacheRead    = parseFloat(process.env.ANTHROPIC_PRICE_CACHE_READ     || '0.30');
@@ -793,13 +793,14 @@ function _estimateCostUsd(u) {
   const writeCost = hasSplit
     ? (w5m / 1e6) * priceCacheWrite + (w1h / 1e6) * priceCacheWrite1h
     : ((u.cache_write_tokens || 0) / 1e6) * priceCacheWrite1h;
-  const iaCost = (u.input_tokens || 0) / 1e6 * priceIn
+  const ia = (u.input_tokens || 0) / 1e6 * priceIn
     + (u.output_tokens || 0) / 1e6 * priceOut
     + (u.cache_read_tokens || 0) / 1e6 * priceCacheRead
     + writeCost;
-  const audioCost = (u.tts_chars || 0) / 1000 * elevenPer1k;
-  return iaCost + audioCost;
+  const audio = (u.tts_chars || 0) / 1000 * elevenPer1k;
+  return { ia, audio, total: ia + audio };
 }
+function _estimateCostUsd(u) { return _estimateCostBreakdown(u).total; }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -884,6 +885,32 @@ app.post('/api/partner/businesses/quota', requirePartnerKey, (req, res) => {
   setCrmQuota(business.id, conv_cap, spend_cap_usd);
   _partnerAudit(req, { action: 'quota', crm_user_id: crmUserId, result: 'updated', biz: business.id, conv_cap, spend_cap_usd });
   return res.json({ business_id: business.id, conv_cap, spend_cap_usd });
+});
+
+// Per-account usage for a calendar month. For reconciliation/billing on the CRM side.
+// ?month=YYYY-MM (defaults to the current UTC month). Returns one entry per CRM account
+// with its conversations, replies, and cost split (IA / audio / total) in USD.
+app.get('/api/partner/usage', requirePartnerKey, (req, res) => {
+  const month = (typeof req.query.month === 'string' && req.query.month)
+    ? req.query.month : new Date().toISOString().slice(0, 7);
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    _partnerAudit(req, { action: 'usage', result: 'bad_month', month });
+    return res.status(400).json({ error: 'month debe tener formato AAAA-MM' });
+  }
+  const round4 = (n) => parseFloat(n.toFixed(4));
+  const accounts = getPartnerUsageByMonth(month).map((r) => {
+    const c = _estimateCostBreakdown(r);
+    return {
+      crm_user_id:    r.crm_user_id,
+      conversations:  r.conversations,
+      replies:        r.replies,
+      ia_cost_usd:    round4(c.ia),
+      audio_cost_usd: round4(c.audio),
+      total_cost_usd: round4(c.total),
+    };
+  });
+  _partnerAudit(req, { action: 'usage', result: 'ok', month, accounts: accounts.length });
+  res.json({ month, accounts });
 });
 
 // Issue a single-use login link (60s) for a CRM-created account only.

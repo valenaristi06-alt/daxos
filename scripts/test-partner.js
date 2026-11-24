@@ -229,6 +229,54 @@ async function main() {
     db.close();
   }
 
+  // ── Suite 3c: Monthly usage report ──
+  console.log('\nSuite 3c: Usage report');
+  {
+    const noKey = await req('GET', '/api/partner/usage?month=2026-01');
+    assert(noKey.status === 401, 'usage without key → 401');
+
+    const badMonth = await req('GET', '/api/partner/usage?month=2026-13', null, bearer(PARTNER_KEY));
+    assert(badMonth.status === 400, 'usage with bad month → 400');
+
+    // Seed test data for crm_1's business in 2026-01: 2 conversations + 3 claude_usage rows
+    // (2 IA-only, 1 with tts_chars for audio).
+    const wdb = new Database(path.join(DB_DIR, 'daxos.db'));
+    const convIns = wdb.prepare('INSERT INTO conversations (business_id, customer_id) VALUES (?, ?)');
+    const c1 = convIns.run(crmBizId, '59891000001').lastInsertRowid;
+    const c2 = convIns.run(crmBizId, '59891000002').lastInsertRowid;
+    const msgIns = wdb.prepare("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, 'user', 'hola', '2026-01-15 10:00:00')");
+    msgIns.run(c1); msgIns.run(c1); msgIns.run(c2); // 2 distinct conversations
+    const uIns = wdb.prepare('INSERT INTO claude_usage (business_id, conversation_id, model, input_tokens, output_tokens, cache_write_5m_tokens, tts_chars, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    uIns.run(crmBizId, c1, 'test', 1000, 500, 0, null, '2026-01-15 10:00:01');
+    uIns.run(crmBizId, c1, 'test', 2000, 800, 0, null, '2026-01-15 10:05:00');
+    uIns.run(crmBizId, c2, 'test', 500, 300, 0, 400, '2026-01-16 09:00:00'); // audio reply
+    wdb.close();
+
+    const rep = await req('GET', '/api/partner/usage?month=2026-01', null, bearer(PARTNER_KEY));
+    assert(rep.status === 200 && rep.body.month === '2026-01' && Array.isArray(rep.body.accounts), 'usage → 200 with month + accounts[]');
+    const acct = (rep.body.accounts || []).find((a) => a.crm_user_id === 'crm_1');
+    assert(!!acct, 'crm_1 present in usage report');
+    if (acct) {
+      assert(acct.conversations === 2, `conversations = 2 (got ${acct.conversations})`);
+      assert(acct.replies === 3, `replies = 3 (got ${acct.replies})`);
+      assert(acct.ia_cost_usd > 0, `ia_cost_usd > 0 (got ${acct.ia_cost_usd})`);
+      assert(acct.audio_cost_usd > 0, `audio_cost_usd > 0 (got ${acct.audio_cost_usd})`);
+      assert(Math.abs(acct.total_cost_usd - (acct.ia_cost_usd + acct.audio_cost_usd)) < 1e-6,
+        'total = ia + audio');
+    }
+
+    // A month with no data → account present with zeros.
+    const empty = await req('GET', '/api/partner/usage?month=2025-01', null, bearer(PARTNER_KEY));
+    const emptyAcct = (empty.body.accounts || []).find((a) => a.crm_user_id === 'crm_1');
+    assert(empty.status === 200 && emptyAcct && emptyAcct.conversations === 0 && emptyAcct.replies === 0 && emptyAcct.total_cost_usd === 0,
+      'month with no data → zeros for the account');
+
+    // Default month (no param) → 200 with current month echoed.
+    const nowMonth = new Date().toISOString().slice(0, 7);
+    const def = await req('GET', '/api/partner/usage', null, bearer(PARTNER_KEY));
+    assert(def.status === 200 && def.body.month === nowMonth, 'usage without month → defaults to current month');
+  }
+
   // ── Suite 4: login-link only for CRM accounts ──
   console.log('\nSuite 4: login-link scoping');
   {
