@@ -1,0 +1,264 @@
+{
+  "nombre": "Artesanías MYV",
+  "rubro": "Fabricación y venta de artículos de jardín",
+  "descripcion": "Empresa dedicada a la fabricación y venta de artículos de jardín de alta calidad, incluyendo hamacas, sillones, bancos, fuentes, macetas, estatuas y muebles de madera que combinan diseño, durabilidad y funcionalidad.",
+  "ubicacion": "Ruta 48 Km 13,200, Las Piedras, Uruguay 21900",
+  "telefono": "095176560 / 23677880",
+  "diferencial": "Más de 30 años de experiencia en fabricación artesanal. Compromiso con honestidad, calidad y servicio al cliente. Productos que combinan belleza, durabilidad y accesibilidad de precio. Tienda física donde ver los productos.",
+  "servicios": [
+    "Hamacas",
+    "Sillones",
+    "Bancos",
+    "Mesas de barbacoa",
+    "Fuentes",
+    "Macetas",
+    "Estatuas",
+    "Budas",
+    "Jardineras",
+    "Productos de madera (camastros, bancos de plaza, pedestales)",
+    "Platos decorativos",
+    "Ánforas"
+  ],
+  "personalizados": "Productos de madera: se pueden fabricar productos personalizados o de diferentes medidas bajo presupuesto. Productos de hormigón (fuentes, estatuas, macetas): no se ofrecen personalizados.",
+  "envios": "Muebles de madera: envíos a todo el país mediante reparto propio o agencia de transporte según ubicación. Artículos de hormigón: reparto propio en Montevideo y Costa de Oro; algunos productos pueden enviarse por agencia en otros destinos pero con limitaciones por fragilidad. Tiempo: 1 a 7 días hábiles según ubicación. Costo: se calcula según dirección de entrega y tamaño del pedido (no incluido en precio). Seguimiento de pedidos disponible para envíos por agencia.",
+  "cambios_devoluciones": "Cambios: dentro de 7 días posteriores a la recepción, producto en estado original sin signos de uso. Productos dañados: comunicar dentro de 24 horas de recepción. Modificación o cancelación de pedidos: no garantizable después de confirmación, pero contactar lo antes posible.",
+  "preguntas_frecuentes": [
+    "¿A qué zonas realizan envíos?: Envíos a todo el país. Muebles de madera por reparto propio o agencia según ubicación. Hormigón por reparto propio en Montevideo y Costa de Oro.",
+    "¿Cómo sé el costo del envío?: Depende de ubicación y tamaño del pedido. Se calcula durante el proceso de compra.",
+    "¿Cuánto tarda en llegar?: 1 a 7 días hábiles según ubicación y tipo de producto.",
+    "¿Puedo cambiar el producto?: Sí, dentro de 7 días de recepción, en estado original sin uso.",
+    "¿Qué si llega dañado?: Comunicar dentro de 24 horas. Contactar para solución.",
+    "¿Puedo cancelar/modificar después de confirmar?: No garantizado. Contactar lo antes posible.",
+    "¿Cómo sigo mi pedido?: Reciben número de seguimiento si es por agencia de transporte.",
+    "¿Ofrecen productos personalizados?: Sí, solo para madera bajo presupuesto.",
+    "¿Tienen tienda física?: Sí, ubicada en Ruta 48 Km 13, El Colorado, Las Piedras."
+  ],
+  "promos": [
+    "Descuentos de hasta 25% en productos seleccionados",
+    "Ofertas mensuales en Budas con descuentos de 5% a 35%",
+    "Ofertas mensuales en Fuentes y Macetas"
+  ],
+  "publico": "Personas que buscan embellecer espacios exteriores y jardines con productos de calidad",
+  "tono": "Formal",
+  "sedes": [
+    {
+      "nombre": "Show Room",
+      "direccion": "Ruta 48 Km 13,200, Las Piedras, Uruguay 21900",
+      "telefono": "095176560 / 23677880",
+      "horario": null
+    }
+  ],
+  "productos": [
+    {
+      "nombre": "Hamaca con Techo Clásica",
+      "precio": "$40.890",
+      "precio_anterior": null,
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Sillón JAVA",
+      "precio": "$13.490",
+      "precio_anterior": null,
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Mesa de Barbacoa con Bancos",
+      "precio": "$38.632",
+      "precio_anterior": null,
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Buda Panzón",
+      "precio": "$1.750",
+      "precio_anterior": "$1.900",
+      "conflicto": true,
+      "precios_conflicto": [
+        "$1.750",
+        "$2.050"
+      ]
+    },
+    {
+      "nombre": "Flor de Loto Grande",
+      "precio": "$3.250",
+      "precio_anterior": "$4.990",
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Loto Gigante",
+      "precio": "$11.995",
+      "precio_anterior": "$15.990",
+      "conflicto": true,
+      "precios_conflicto": [
+        "$11.995",
+        "$11.900"
+      ]
+    },
+    {
+      "nombre": "Namasté",
+      "precio": "$2.880",
+      "precio_anterior": "$3.600",
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Parado XL",
+      "precio": "$9.340",
+      "precio_anterior": "$10.990",
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "BHUMISPARSHA",
+      "precio": "$4.800",
+      "precio_anterior": "$5.700",
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Tibetano Chico con Vasija",
+      "precio": "$1.790",
+      "precio_anterior": "$1.990",
+      "conflicto": true,
+      "precios_conflicto": [
+        "$1.790",
+        "$1.900"
+      ]
+    },
+    {
+      "nombre": "Tibetano Mediano",
+      "precio": "$2.600",
+      "precio_anterior": "$3.250",
+      "conflicto": true,
+      "precios_conflicto": [
+        "$2.600",
+        "$3.000"
+      ]
+    },
+    {
+      "nombre": "Fuente Loto Gigante",
+      "precio": "$17.900",
+      "precio_anterior": "$22.990",
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Fuente Buda Tibetano",
+      "precio": "$5.600",
+      "precio_anterior": "$6.590",
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Fuente Loto Grande",
+      "precio": "$6.800",
+      "precio_anterior": "$8.500",
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Prisma 70",
+      "precio": "$1.500",
+      "precio_anterior": "$1.875",
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Taca 40",
+      "precio": "$1.100",
+      "precio_anterior": "$1.220",
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Taca 50",
+      "precio": "$1.400",
+      "precio_anterior": "$1.550",
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Taca 60",
+      "precio": "$1.500",
+      "precio_anterior": "$1.650",
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Taca 75",
+      "precio": "$1.900",
+      "precio_anterior": null,
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Taca 80",
+      "precio": "$2.000",
+      "precio_anterior": null,
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Plato Camalotes",
+      "precio": "$2.650",
+      "precio_anterior": "$2.950",
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Virgen Milagrosa",
+      "precio": "$3.800",
+      "precio_anterior": "$4.470",
+      "conflicto": true,
+      "precios_conflicto": [
+        "$3.800",
+        "$4.220"
+      ]
+    },
+    {
+      "nombre": "Maceta Plato 50",
+      "precio": "$1.300",
+      "precio_anterior": null,
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Ánfora Grande",
+      "precio": "$1.390",
+      "precio_anterior": null,
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Maceta Jardinera 100 Largo",
+      "precio": "$1.600",
+      "precio_anterior": null,
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Buda Namasté",
+      "precio": "$3.600",
+      "precio_anterior": null,
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Buda Buzios",
+      "precio": "$2.600",
+      "precio_anterior": null,
+      "conflicto": false,
+      "precios_conflicto": []
+    },
+    {
+      "nombre": "Buda Felicidad",
+      "precio": "$2.800",
+      "precio_anterior": null,
+      "conflicto": false,
+      "precios_conflicto": []
+    }
+  ]
+}
