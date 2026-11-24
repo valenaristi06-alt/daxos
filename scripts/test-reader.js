@@ -202,6 +202,20 @@ const mockArtesanias = async () => ({
   assert(!!gr('reference_docs') && !!gr('survey_answers.objeciones_precio'), 'reference_docs y objeciones_precio presentes');
   assert(!gr('business_hours') && !gr('urgent_phone'), 'horarios y urgencias vacíos (no están en la web) — correcto');
 
+  // ── (k) Nombre genérico vacío + precios con "desde"/rangos ──
+  console.log('Suite (k): nombre genérico y precios literales');
+  assert(!reader.mapToDraft({ nombre: 'Veterinaria', rubro: 'Veterinaria' }).find((r) => r.field === 'name'), 'nombre = rubro → name vacío (no genérico)');
+  assert(!reader.mapToDraft({ nombre: 'Inmobiliaria' }).find((r) => r.field === 'name'), 'nombre genérico (lista) → name vacío');
+  assert(reader.mapToDraft({ nombre: 'Veterinaria Patitas', rubro: 'Veterinaria' }).find((r) => r.field === 'name')?.value === 'Veterinaria Patitas', 'nombre propio → se conserva');
+  const pk = reader.mapToDraft({ productos: [
+    { nombre: 'Vacunas', precio: 'desde $900' },
+    { nombre: 'Baño', precio: '$500 a $800' },
+    { nombre: 'Corte', precio: 'a partir de $700' },
+  ] }).find((r) => r.field === 'pricing_info');
+  assert(/Vacunas — desde \$900/.test(pk.value), 'conserva "desde"');
+  assert(/Baño — \$500 a \$800/.test(pk.value), 'conserva el rango tal cual');
+  assert(/Corte — a partir de \$700/.test(pk.value), 'conserva "a partir de"');
+
   console.log(`\n── Resultados ── passed=${passed} failed=${failed}`);
   db.closeDb && db.closeDb();
   process.exit(failed > 0 ? 1 : 0);
