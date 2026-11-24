@@ -312,6 +312,22 @@
       const waOk = !!b?.phone_number_id;
       row.innerHTML = '';
       if (waOk) {
+        const adminSilenced = !!b?.admin_silenced;
+        const paused = !!b?.bot_paused;
+        if (adminSilenced || paused) {
+          const ownerPaused = paused && !adminSilenced;
+          const wrap = document.createElement(ownerPaused ? 'a' : 'div');
+          wrap.className = 'inicio-status-ok';
+          if (ownerPaused) { wrap.href = '/conversations.html'; wrap.style.textDecoration = 'none'; wrap.style.color = 'inherit'; }
+          const pdot = document.createElement('span');
+          pdot.className = 'inicio-status-dot inicio-status-dot--paused';
+          pdot.setAttribute('aria-hidden', 'true');
+          const plabel = document.createElement('span');
+          plabel.textContent = adminSilenced ? 'Pausado por Daxos' : 'Pausado';
+          wrap.append(pdot, plabel);
+          row.appendChild(wrap);
+          return;
+        }
         const wrap = document.createElement('div');
         wrap.className = 'inicio-status-ok';
         const dot  = document.createElement('span');
@@ -550,7 +566,5 @@
 
   })();
   </script>
-
-  <script src="/js/bot-pause-banner.js" defer></script>
 </body>
 </html>

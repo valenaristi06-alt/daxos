@@ -356,9 +356,17 @@
       <aside class="conv-list-panel">
         <div class="conv-list-header">
           <p class="page-terminal">&gt; conversaciones</p>
-          <div style="display:flex;align-items:center;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;">
             <h1 class="conv-list-title" style="margin:0;">Conversaciones</h1>
+            <button type="button" id="bot-pause-toggle" class="bot-pause-chip" style="margin-left:auto;display:none;" aria-pressed="false">
+              <span class="bot-pause-chip-dot" aria-hidden="true"></span>
+              <span>Asistente</span><span aria-hidden="true">·</span><span id="bot-pause-state">Activo</span>
+            </button>
           </div>
+        </div>
+        <div id="bot-pause-strip" class="trial-banner trial-banner--active" style="display:none;margin:10px 12px 0;">
+          <span class="trial-msg" id="bot-pause-strip-msg"></span>
+          <button type="button" class="bot-pause-resume" id="bot-pause-strip-resume">Reanudar</button>
         </div>
         <div class="conv-list-instruction">Tildá los chats que querés atender vos y el bot no les responde.</div>
         <div id="tag-filter-bar" style="padding:8px 12px 4px; border-bottom:1px solid #1e1e1e; overflow-x:auto; white-space:nowrap;">
@@ -447,8 +455,77 @@
           if (s) s.style.display = '';
           if (m) m.style.display = '';
         }
+        renderBotPause(b);
       }).catch(() => {});
     })();
+
+    // ── Interruptor "Asistente" (pausa general del bot) ───────────────────────
+    function renderBotPause(b) {
+      const toggle  = document.getElementById('bot-pause-toggle');
+      const stateEl = document.getElementById('bot-pause-state');
+      const strip   = document.getElementById('bot-pause-strip');
+      const stripMsg = document.getElementById('bot-pause-strip-msg');
+      const stripBtn = document.getElementById('bot-pause-strip-resume');
+      if (!toggle) return;
+      if (!b) { toggle.style.display = 'none'; strip.style.display = 'none'; return; }
+
+      toggle.style.display = 'inline-flex';
+      const adminSilenced = !!b.admin_silenced;
+      const paused = !!b.bot_paused;
+
+      if (adminSilenced) {
+        toggle.classList.add('is-paused');
+        toggle.disabled = true;
+        stateEl.textContent = 'Pausado por Daxos';
+        strip.style.display = 'flex';
+        stripMsg.textContent = 'Tu asistente está pausado por Daxos. No responde a ningún cliente.';
+        stripBtn.style.display = 'none';
+        return;
+      }
+
+      toggle.disabled = false;
+      stripBtn.style.display = '';
+      if (paused) {
+        toggle.classList.add('is-paused');
+        toggle.setAttribute('aria-pressed', 'true');
+        stateEl.textContent = 'Pausado';
+        strip.style.display = 'flex';
+        stripMsg.textContent = 'Tu asistente está pausado: no responde a ningún cliente.';
+      } else {
+        toggle.classList.remove('is-paused');
+        toggle.setAttribute('aria-pressed', 'false');
+        stateEl.textContent = 'Activo';
+        strip.style.display = 'none';
+      }
+    }
+
+    async function refreshBotPause() {
+      try { const b = await (await fetch('/api/business')).json(); renderBotPause(b); }
+      catch (_) {}
+    }
+
+    async function setBotPaused(paused) {
+      const r = await fetch('/api/business/bot-paused', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paused }),
+      });
+      if (!r.ok) throw new Error('No se pudo cambiar el estado del asistente.');
+      return r.json();
+    }
+
+    async function onBotPauseToggle() {
+      const toggle = document.getElementById('bot-pause-toggle');
+      const willPause = !toggle.classList.contains('is-paused');
+      if (willPause && !window.confirm('¿Pausar el asistente? Dejará de responder a TODOS los clientes (de este y de nuevos chats) hasta que lo reanudes. Los mensajes que lleguen se guardan, pero el bot no envía nada.')) return;
+      toggle.disabled = true;
+      try { await setBotPaused(willPause); await refreshBotPause(); }
+      catch (e) { alert(e.message); toggle.disabled = false; }
+    }
+
+    document.getElementById('bot-pause-toggle').addEventListener('click', onBotPauseToggle);
+    document.getElementById('bot-pause-strip-resume').addEventListener('click', async () => {
+      try { await setBotPaused(false); await refreshBotPause(); } catch (e) { alert(e.message); }
+    });
 
     async function doLogout() {
       await fetch('/auth/logout', { method: 'POST' });
@@ -1298,7 +1375,5 @@
   </nav>
 
   <button class="mobile-corner-logout" id="btn-logout-mobile" type="button">Salir</button>
-
-  <script src="/js/bot-pause-banner.js" defer></script>
 </body>
 </html>
