@@ -30,10 +30,17 @@ const MP_AMOUNT_TO_PLAN = { 2990: 'arranque', 5990: 'crecimiento', 12990: 'a_med
 const MP_REF_TO_PLAN    = { arranque: 'arranque', crecimiento: 'crecimiento', negocio: 'a_medida' };
 
 // Spending cap defaults per plan (overridable via runtime_config)
-const _CAP_ANTHROPIC = { arranque: 70,  crecimiento: 150, a_medida: 300  };
-const _CAP_TTS_CHARS = { arranque: 20000, crecimiento: 100000, a_medida: 500000 };
+// crm mirrors arranque for the daily backstop — crm's real limit is the monthly cap below.
+const _CAP_ANTHROPIC = { arranque: 70,  crecimiento: 150, a_medida: 300, crm: 70 };
+const _CAP_TTS_CHARS = { arranque: 20000, crecimiento: 100000, a_medida: 500000, crm: 20000 };
 const _CAP_CONV_HOURLY = 20;
 const _CAP_PREVIEW = 100;
+
+// Partner CRM: monthly conversation cap default (per-business override via crm_conv_cap).
+const PARTNER_DEFAULT_CONV_CAP = parseInt(process.env.PARTNER_DEFAULT_CONV_CAP || '300', 10);
+function _getCrmConvCap(business) {
+  return business.crm_conv_cap != null ? business.crm_conv_cap : PARTNER_DEFAULT_CONV_CAP;
+}
 
 function _getAnthropicDailyCap(plan) {
   const override = getRuntimeConfig ? (() => { try { return getRuntimeConfig(`cap_daily_anthropic_${plan}`); } catch { return null; } })() : null;
@@ -85,7 +92,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setConfigChatEnabled, saveConfigDraft, getConfigDraft, clearConfigDraft, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, getBusinessByCrmUserId, createCrmBusiness, createPartnerLoginToken, getPartnerLoginToken, markPartnerLoginTokenUsed, getMonthlyConvCount, getMonthlyUsage, setCrmCapOwnerNotified, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, markConversationPausedByCrmCap, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setConfigChatEnabled, saveConfigDraft, getConfigDraft, clearConfigDraft, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
   incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
   incrementPreviewCall, getPreviewSpendingToday, setSpendingCapOwnerNotified, setSpendingCapNeedsAttention,
   getConvAssistantCountLastHour, setSpendingCapNotified,
@@ -660,6 +667,7 @@ const OWNER_BUSINESS_FIELDS = new Set([
   'agenda_enabled', 'agenda_slot_min', 'agenda_cancel_min_before',
   'billing_requires_invoice', 'billing_legal_name', 'billing_rut', 'billing_address', 'billing_email', 'billing_updated_at',
   'spending_cap_hit_today',
+  'crm_conv_cap', 'crm_spend_cap_usd', 'audio_enabled',
 ]);
 
 function ownerView(biz) {
@@ -737,6 +745,169 @@ app.post('/auth/logout', (req, res) => {
     res.json({ ok: true });
   });
 });
+
+// ─── Partner CRM API ──────────────────────────────────────────────────────────
+// A partner CRM includes Daxos for its own users. It creates/links accounts and
+// issues one-time login links using a shared secret (PARTNER_CRM_KEY). The secret
+// is never logged; every call is audited via logError('partner-audit', …).
+
+const PARTNER_LOGIN_TTL_SEC = 60; // one-time login links expire in 60 seconds
+
+function _partnerAudit(req, fields) {
+  // Deliberately omits the Authorization header / key. ip helps trace abuse.
+  const parts = Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(' ');
+  logError('partner-audit', { message: `${parts} ip=${req.ip}`, stack: '' });
+}
+
+function requirePartnerKey(req, res, next) {
+  const secret = process.env.PARTNER_CRM_KEY;
+  if (!secret) {
+    _partnerAudit(req, { action: 'auth', result: 'no_key_configured' });
+    return res.status(503).json({ error: 'PARTNER_CRM_KEY no configurado' });
+  }
+  const header = req.headers.authorization || '';
+  const prefix = 'Bearer ';
+  const presented = header.startsWith(prefix) ? header.slice(prefix.length) : '';
+  const a = Buffer.from(presented);
+  const b = Buffer.from(secret);
+  // timingSafeEqual throws on length mismatch — length-guard first (still constant-time per branch).
+  const ok = a.length === b.length && crypto.timingSafeEqual(a, b);
+  if (!ok) {
+    _partnerAudit(req, { action: 'auth', result: 'unauthorized' });
+    return res.status(401).json({ error: 'No autorizado' });
+  }
+  next();
+}
+
+// Monthly spend estimate (USD) from token/char usage, same prices as /admin/api/costos.
+function _estimateCostUsd(u) {
+  const priceIn           = parseFloat(process.env.ANTHROPIC_PRICE_IN             || '3');
+  const priceOut          = parseFloat(process.env.ANTHROPIC_PRICE_OUT            || '15');
+  const priceCacheRead    = parseFloat(process.env.ANTHROPIC_PRICE_CACHE_READ     || '0.30');
+  const priceCacheWrite   = parseFloat(process.env.ANTHROPIC_PRICE_CACHE_WRITE    || '3.75');
+  const priceCacheWrite1h = parseFloat(process.env.ANTHROPIC_PRICE_CACHE_WRITE_1H || '6');
+  const elevenPer1k       = parseFloat(process.env.ELEVENLABS_PRICE_PER_1K        || '0.18');
+  const w5m = u.cache_write_5m_tokens || 0;
+  const w1h = u.cache_write_1h_tokens || 0;
+  const hasSplit = w5m > 0 || w1h > 0 || (u.cache_write_tokens || 0) === 0;
+  const writeCost = hasSplit
+    ? (w5m / 1e6) * priceCacheWrite + (w1h / 1e6) * priceCacheWrite1h
+    : ((u.cache_write_tokens || 0) / 1e6) * priceCacheWrite1h;
+  const iaCost = (u.input_tokens || 0) / 1e6 * priceIn
+    + (u.output_tokens || 0) / 1e6 * priceOut
+    + (u.cache_read_tokens || 0) / 1e6 * priceCacheRead
+    + writeCost;
+  const audioCost = (u.tts_chars || 0) / 1000 * elevenPer1k;
+  return iaCost + audioCost;
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Create (or idempotently return) a Daxos business for a CRM user.
+// SECURITY: never links to or logs in a pre-existing account. If the email already
+// belongs to a non-CRM (or different-CRM) account → 409 with no data about it.
+app.post('/api/partner/businesses', requirePartnerKey, async (req, res) => {
+  const { crm_user_id, name, email, conv_cap, spend_cap_usd, audio_enabled } = req.body || {};
+  const crmUserId = crm_user_id != null ? String(crm_user_id).trim() : '';
+  const bizName   = typeof name === 'string' ? name.trim() : '';
+  const mail      = typeof email === 'string' ? email.trim().toLowerCase() : '';
+
+  if (!crmUserId || !bizName || !mail) {
+    _partnerAudit(req, { action: 'create', crm_user_id: crmUserId || 'missing', result: 'bad_request' });
+    return res.status(400).json({ error: 'crm_user_id, name y email son requeridos' });
+  }
+  if (!EMAIL_RE.test(mail)) {
+    _partnerAudit(req, { action: 'create', crm_user_id: crmUserId, result: 'bad_email' });
+    return res.status(400).json({ error: 'email inválido' });
+  }
+
+  // Idempotent: same crm_user_id → same business, no duplicate.
+  const existing = getBusinessByCrmUserId(crmUserId);
+  if (existing) {
+    _partnerAudit(req, { action: 'create', crm_user_id: crmUserId, result: 'idempotent', biz: existing.id });
+    return res.json({ business_id: existing.id, created: false });
+  }
+
+  // Never adopt a pre-existing account. If the email is taken by any account that this
+  // crm_user_id did not create, refuse — without leaking that account's data.
+  if (getUserByEmail(mail)) {
+    _partnerAudit(req, { action: 'create', crm_user_id: crmUserId, result: 'email_conflict' });
+    return res.status(409).json({ error: 'Ese email ya tiene una cuenta en Daxos' });
+  }
+
+  try {
+    const randomPass = crypto.randomBytes(32).toString('hex'); // no usable password — owner enters via login-link
+    const passwordHash = await bcrypt.hash(randomPass, 12);
+    const business = createCrmBusiness({
+      crmUserId, name: bizName, email: mail, passwordHash,
+      convCap: Number.isInteger(conv_cap) ? conv_cap : null,
+      spendCap: typeof spend_cap_usd === 'number' ? spend_cap_usd : null,
+      audioEnabled: audio_enabled === true,
+    });
+    _partnerAudit(req, { action: 'create', crm_user_id: crmUserId, result: 'created', biz: business.id });
+    return res.json({ business_id: business.id, created: true });
+  } catch (err) {
+    // Unique-index race (concurrent duplicate create) → return the now-existing business.
+    const dup = getBusinessByCrmUserId(crmUserId);
+    if (dup) {
+      _partnerAudit(req, { action: 'create', crm_user_id: crmUserId, result: 'idempotent_race', biz: dup.id });
+      return res.json({ business_id: dup.id, created: false });
+    }
+    logError('partner-create-error', { message: err.message, stack: err.stack || '' });
+    _partnerAudit(req, { action: 'create', crm_user_id: crmUserId, result: 'error' });
+    return res.status(500).json({ error: 'No se pudo crear la cuenta' });
+  }
+});
+
+// Issue a single-use login link (60s) for a CRM-created account only.
+app.post('/api/partner/login-link', requirePartnerKey, (req, res) => {
+  const { crm_user_id } = req.body || {};
+  const crmUserId = crm_user_id != null ? String(crm_user_id).trim() : '';
+  if (!crmUserId) {
+    _partnerAudit(req, { action: 'login_link', crm_user_id: 'missing', result: 'bad_request' });
+    return res.status(400).json({ error: 'crm_user_id es requerido' });
+  }
+  // Only CRM-created businesses have a crm_user_id → login-link works for them only.
+  const business = getBusinessByCrmUserId(crmUserId);
+  if (!business) {
+    _partnerAudit(req, { action: 'login_link', crm_user_id: crmUserId, result: 'not_found' });
+    return res.status(404).json({ error: 'Cuenta no encontrada' });
+  }
+  const owner = getUserByBusinessId(business.id);
+  if (!owner) {
+    _partnerAudit(req, { action: 'login_link', crm_user_id: crmUserId, result: 'no_owner', biz: business.id });
+    return res.status(404).json({ error: 'Cuenta no encontrada' });
+  }
+  const rawToken  = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const expiresAt = Math.floor(Date.now() / 1000) + PARTNER_LOGIN_TTL_SEC;
+  createPartnerLoginToken(owner.id, tokenHash, expiresAt);
+  const appUrl = process.env.APP_URL || 'https://daxos.lat';
+  _partnerAudit(req, { action: 'login_link', crm_user_id: crmUserId, result: 'issued', biz: business.id });
+  res.json({
+    url: `${appUrl}/api/partner/enter?token=${rawToken}`,
+    expires_at: new Date(expiresAt * 1000).toISOString(),
+  });
+});
+
+// Consume a login link: validate, mark used, start the owner session, land on the panel.
+app.get('/api/partner/enter', (req, res) => {
+  const raw = typeof req.query.token === 'string' ? req.query.token : '';
+  if (!raw) return res.status(401).send('Enlace inválido o vencido.');
+  const tokenHash = crypto.createHash('sha256').update(raw).digest('hex');
+  const row = getPartnerLoginToken(tokenHash);
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (!row || row.used || row.expires_at < nowSec) {
+    const reason = !row ? 'not_found' : row.used ? 'already_used' : 'expired';
+    _partnerAudit(req, { action: 'enter', result: reason });
+    return res.status(401).send('Enlace inválido o vencido.');
+  }
+  markPartnerLoginTokenUsed(row.id);
+  req.session.userId = row.user_id;
+  _partnerAudit(req, { action: 'enter', result: 'ok', user: row.user_id });
+  res.redirect(303, '/inicio.html');
+});
+// ──────────────────────────────────────────────────────────────────────────────
 
 const FORGOT_GENERIC = { ok: true, message: 'Si ese email está registrado, vas a recibir un enlace para restablecer tu contraseña.' };
 
@@ -2922,6 +3093,60 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     return;
   }
 
+  // ── Partner CRM monthly cap: conversations and/or spend for the calendar month ──
+  // Hard cap. When hit, hand off to a human instead of replying, and alert the owner once/day.
+  if (business.plan === 'crm') {
+    const convCap   = _getCrmConvCap(business);
+    const convCount = getMonthlyConvCount(business.id);
+    const spendCap  = business.crm_spend_cap_usd;  // null = no spend cap
+    const monthCost = spendCap != null ? _estimateCostUsd(getMonthlyUsage(business.id)) : 0;
+    const hitConv   = convCount >= convCap;
+    const hitSpend  = spendCap != null && monthCost >= spendCap;
+    if (hitConv || hitSpend) {
+      const reason = hitConv ? 'conv_cap' : 'spend_cap';
+      const conv = getOrCreateConversation(business.id, customerPhone);
+      addMessage(conv.id, 'user', text);
+      const nowSec = Math.floor(Date.now() / 1000);
+      const lastNotified = conv.spending_cap_notified_at || 0;
+      if (nowSec - lastNotified > 12 * 3600) {
+        const capMsg = 'En este momento no puedo responder, alguien del negocio te va a contestar a la brevedad.';
+        await sendWhatsAppMessage(customerPhone, capMsg, waCredentials).catch(() => {});
+        addMessage(conv.id, 'assistant', capMsg);
+        setSpendingCapNotified(conv.id);
+      }
+      markConversationPausedByCrmCap(conv.id); // needs_attention; auto-resumes next month
+      logError('partner-cap', {
+        message: `biz=${business.id} reason=${reason} convs=${convCount}/${convCap} cost=${monthCost.toFixed(4)}/${spendCap ?? '∞'}`,
+        stack: '',
+      });
+      // Notify the owner once per UY day (email + WA best-effort).
+      const todayMvd = toUYDateStr(Date.now());
+      const bizFresh = getBusinessById(business.id);
+      if (bizFresh.crm_cap_owner_notified_at !== todayMvd) {
+        setCrmCapOwnerNotified(business.id, todayMvd);
+        const owner = getUserByBusinessId(business.id);
+        const panelUrl = `${process.env.APP_URL || 'https://daxos.lat'}/conversations.html`;
+        const detail = reason === 'conv_cap'
+          ? `alcanzó el tope mensual de ${convCap} conversaciones`
+          : `alcanzó el tope mensual de gasto (US$${spendCap})`;
+        if (owner?.email) {
+          sendAdminNotificationEmail({ adminEmail: owner.email, event: 'partner-cap', data: {
+            business_id: business.id, business_name: business.name, reason, convs: convCount, conv_cap: convCap,
+          }}).catch(err => logError('partner-cap-email', { message: err.message, stack: '' }));
+        }
+        if (owner?.phone) {
+          const normPhone = normalizeContactPhone(owner.phone);
+          if (normPhone) {
+            sendWhatsAppMessage(normPhone, `⚠️ Tu asistente Daxos (${business.name}) ${detail} este mes. Respondé vos a los clientes que queden esperando. ${panelUrl}`, waCredentials)
+              .catch(err => logError('partner-cap-wa', { message: err.message, stack: '' }));
+          }
+        }
+      }
+      markAsRead(msgId, waCredentials).catch(() => {});
+      return;
+    }
+  }
+
   const conversation = getOrCreateConversation(business.id, customerPhone);
   const history = getConversationHistory(conversation.id, 60);
 
@@ -2983,6 +3208,11 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
         logError('kapso-event', { message: `silenced:paused reason=spending_cap calls=${_sp.anthropic_calls}/${_dc}`, stack: '' });
         return;
       }
+    } else if (conversation.paused_reason === 'crm_cap') {
+      // Reaching here means the crm monthly gate above already passed (cap reset/raised) → resume.
+      markConversationResumed(conversation.id);
+      logError('partner-cap', { message: `crm_cap auto-resumed conv=${conversation.id}`, stack: '' });
+      // fall through — process this message normally
     } else {
       addMessage(conversation.id, 'user', text);
       if (conversation.paused_reason === 'keyword' && conversation.pause_reply_count < 3) {

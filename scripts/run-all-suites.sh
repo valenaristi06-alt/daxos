@@ -23,7 +23,7 @@ cleanup_dbs() {
          /tmp/test-mailtest-a /tmp/test-mailtest-b /tmp/test-mailtest-c /tmp/test-mark-read \
          /tmp/test-owner-view /tmp/test-panel-send /tmp/test-pause-keyword /tmp/test-reset-conv \
          /tmp/test-runtime-config /tmp/test-sale-intent-booking /tmp/test-sale-intent-db \
-         /tmp/test-security /tmp/test-security-prod /tmp/test-silent-window /tmp/test-spending-cap \
+         /tmp/test-partner /tmp/test-security /tmp/test-security-prod /tmp/test-silent-window /tmp/test-spending-cap \
          /tmp/test-trial-grace /tmp/test-wa-disconnect /tmp/test-wa-health-check \
          /tmp/test-perf-static /tmp/test-agenda-form /tmp/test-elevenlabs \
          2>/dev/null || true
@@ -66,6 +66,7 @@ run_suite "test-kapso-image"     "scripts/test-kapso-image.js"
 run_suite "test-wa-health"       "scripts/test-wa-health-check.js"
 run_suite "test-owner-view"      "scripts/test-owner-view.js"
 run_suite "test-security"        "scripts/test-security.js"
+run_suite "test-partner"         "scripts/test-partner.js"
 run_suite "test-lote3"           "scripts/test-lote3.js"
 run_suite "test-baileys"         "scripts/test-baileys.js"
 run_suite "test-bh-real"         "scripts/test-bh-real.js"

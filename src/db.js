@@ -806,6 +806,40 @@ db.exec(`
     }
   }
 
+  // Migration 030: partner CRM plan. Businesses created & billed by an external CRM.
+  // crm_user_id: opaque id of the user in the partner CRM (unique → idempotent creation).
+  // crm_conv_cap / crm_spend_cap_usd: per-business monthly caps (NULL = fall back to env default / no cap).
+  // audio_enabled: audio is OFF by default for crm; this per-business flag turns it on.
+  // partner_login_tokens: single-use, 60s links that log the owner into their panel.
+  if (!applied('030_partner_crm')) {
+    try {
+      const bizCols030 = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+      if (!bizCols030.includes('crm_user_id'))
+        db.exec('ALTER TABLE businesses ADD COLUMN crm_user_id TEXT');
+      if (!bizCols030.includes('crm_conv_cap'))
+        db.exec('ALTER TABLE businesses ADD COLUMN crm_conv_cap INTEGER');
+      if (!bizCols030.includes('crm_spend_cap_usd'))
+        db.exec('ALTER TABLE businesses ADD COLUMN crm_spend_cap_usd REAL');
+      if (!bizCols030.includes('audio_enabled'))
+        db.exec('ALTER TABLE businesses ADD COLUMN audio_enabled INTEGER NOT NULL DEFAULT 0');
+      if (!bizCols030.includes('crm_cap_owner_notified_at'))
+        db.exec('ALTER TABLE businesses ADD COLUMN crm_cap_owner_notified_at TEXT');
+      db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_biz_crm_user_id ON businesses(crm_user_id) WHERE crm_user_id IS NOT NULL');
+      db.exec(`CREATE TABLE IF NOT EXISTS partner_login_tokens (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id    INTEGER NOT NULL REFERENCES users(id),
+        token_hash TEXT NOT NULL UNIQUE,
+        expires_at INTEGER NOT NULL,
+        used       INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+      )`);
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('030_partner_crm');
+      console.log('[migration 030] partner_crm columns + partner_login_tokens created');
+    } catch (e) {
+      console.error('[migration 030] failed (non-fatal):', e.message);
+    }
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -1303,6 +1337,87 @@ function getUserByBusinessId(businessId) {
   return db.prepare('SELECT * FROM users WHERE business_id = ?').get(businessId) || null;
 }
 
+// --- partner CRM ---
+
+function getBusinessByCrmUserId(crmUserId) {
+  const row = db.prepare('SELECT * FROM businesses WHERE crm_user_id = ?').get(String(crmUserId));
+  if (!row) return null;
+  return deserializeBusiness(row);
+}
+
+// Creates a brand-new crm-plan business + its owner user, atomically, and links them.
+// Only ever called when neither crm_user_id nor the email already exist (caller enforces that).
+// plan='crm', subscription_status='active' → never caught by the trial gate or MP billing.
+const _createCrmBusinessTxn = db.transaction(({ crmUserId, name, email, passwordHash, convCap, spendCap, audioEnabled }) => {
+  const bizInfo = db.prepare(`
+    INSERT INTO businesses (name, plan, subscription_status, crm_user_id, crm_conv_cap, crm_spend_cap_usd, audio_enabled)
+    VALUES (?, 'crm', 'active', ?, ?, ?, ?)
+  `).run(
+    name,
+    String(crmUserId),
+    convCap != null ? convCap : null,
+    spendCap != null ? spendCap : null,
+    audioEnabled ? 1 : 0,
+  );
+  const businessId = bizInfo.lastInsertRowid;
+  ensureDefaultTags(businessId);
+  const userInfo = db.prepare('INSERT INTO users (email, password_hash, business_id) VALUES (?, ?, ?)')
+    .run(email, passwordHash, businessId);
+  return { businessId, userId: userInfo.lastInsertRowid };
+});
+
+function createCrmBusiness({ crmUserId, name, email, passwordHash, convCap = null, spendCap = null, audioEnabled = false }) {
+  const { businessId } = _createCrmBusinessTxn({ crmUserId, name, email, passwordHash, convCap, spendCap, audioEnabled });
+  return getBusinessById(businessId);
+}
+
+function createPartnerLoginToken(userId, tokenHash, expiresAtEpoch) {
+  // One pending link per user at a time — issuing a new one invalidates older unused links.
+  db.prepare('DELETE FROM partner_login_tokens WHERE user_id = ? AND used = 0').run(userId);
+  db.prepare('INSERT INTO partner_login_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)')
+    .run(userId, tokenHash, expiresAtEpoch);
+}
+
+function getPartnerLoginToken(tokenHash) {
+  return db.prepare('SELECT * FROM partner_login_tokens WHERE token_hash = ?').get(tokenHash) || null;
+}
+
+function markPartnerLoginTokenUsed(id) {
+  db.prepare('UPDATE partner_login_tokens SET used = 1 WHERE id = ?').run(id);
+}
+
+// Distinct conversations that received a customer message since the start of the current
+// calendar month (UTC). Mirrors getTrialConversationCount but anchored to the month.
+function getMonthlyConvCount(businessId) {
+  return db.prepare(`
+    SELECT COUNT(DISTINCT m.conversation_id) as n FROM messages m
+    JOIN conversations c ON c.id = m.conversation_id
+    WHERE c.business_id = ? AND m.role = 'user'
+      AND m.created_at >= strftime('%Y-%m-01 00:00:00', 'now') AND c.silent = 0
+  `).get(businessId).n;
+}
+
+// Raw token/char sums for the current calendar month (UTC). Cost is computed by the
+// caller using the same Anthropic/ElevenLabs prices as /admin/api/costos.
+function getMonthlyUsage(businessId) {
+  return db.prepare(`
+    SELECT
+      COALESCE(SUM(input_tokens), 0)          AS input_tokens,
+      COALESCE(SUM(output_tokens), 0)         AS output_tokens,
+      COALESCE(SUM(cache_read_tokens), 0)     AS cache_read_tokens,
+      COALESCE(SUM(cache_write_tokens), 0)    AS cache_write_tokens,
+      COALESCE(SUM(cache_write_5m_tokens), 0) AS cache_write_5m_tokens,
+      COALESCE(SUM(cache_write_1h_tokens), 0) AS cache_write_1h_tokens,
+      COALESCE(SUM(tts_chars), 0)             AS tts_chars
+    FROM claude_usage
+    WHERE business_id = ? AND created_at >= strftime('%Y-%m-01 00:00:00', 'now')
+  `).get(businessId);
+}
+
+function setCrmCapOwnerNotified(businessId, dayStr) {
+  db.prepare('UPDATE businesses SET crm_cap_owner_notified_at = ? WHERE id = ?').run(dayStr, businessId);
+}
+
 // --- conversations ---
 
 const stmtGetConversationsByBusiness = db.prepare(`
@@ -1668,6 +1783,11 @@ function setTrialEndedNotifiedAt(convId, isoUtc) {
 
 function markConversationPausedByTrial(convId) {
   db.prepare("UPDATE conversations SET needs_attention = 1, paused_at = unixepoch(), paused_reason = 'trial' WHERE id = ?").run(convId);
+}
+
+// Partner CRM monthly cap pause — auto-resumes next month once the cap check passes again.
+function markConversationPausedByCrmCap(convId) {
+  db.prepare("UPDATE conversations SET needs_attention = 1, paused_at = unixepoch(), paused_reason = 'crm_cap' WHERE id = ?").run(convId);
 }
 
 function resumeTrialPausedConversations(businessId) {
@@ -2294,6 +2414,15 @@ module.exports = {
   setPlanCortesia,
   getUserById,
   getUserByBusinessId,
+  getBusinessByCrmUserId,
+  createCrmBusiness,
+  createPartnerLoginToken,
+  getPartnerLoginToken,
+  markPartnerLoginTokenUsed,
+  getMonthlyConvCount,
+  getMonthlyUsage,
+  setCrmCapOwnerNotified,
+  markConversationPausedByCrmCap,
   upsertBusiness,
   getBusinessById,
   getBusinessByWhatsappNumber,
