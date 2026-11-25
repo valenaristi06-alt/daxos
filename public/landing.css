@@ -291,6 +291,69 @@ body {
   letter-spacing: -0.01em;
 }
 
+/* ── Agenda turnos por vos ── */
+
+.agenda-section {
+  border-top: 1px solid #1a1a1a;
+  padding: 96px 40px 112px;
+  background: radial-gradient(ellipse at 85% 40%, rgba(196,92,26,0.07) 0%, transparent 50%);
+}
+
+.agenda-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.agenda-title {
+  font-family: var(--serif);
+  font-size: clamp(32px, 5vw, 52px);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: #F5F0E8;
+  margin-bottom: 20px;
+}
+
+.agenda-lead {
+  font-size: 17px;
+  color: rgba(245, 240, 232, 0.8);
+  line-height: 1.6;
+  max-width: 620px;
+  margin-bottom: 32px;
+}
+
+.agenda-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 620px;
+  margin-bottom: 28px;
+}
+
+.agenda-list li {
+  position: relative;
+  padding-left: 28px;
+  font-size: 16px;
+  color: rgba(245, 240, 232, 0.82);
+  line-height: 1.5;
+}
+
+.agenda-list li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.agenda-fine {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: rgba(245, 240, 232, 0.5);
+  letter-spacing: 0.04em;
+}
+
 /* ── Chat demo ── */
 
 .chat-demo-phone {
