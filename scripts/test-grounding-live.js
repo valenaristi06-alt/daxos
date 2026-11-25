@@ -1,0 +1,73 @@
+'use strict';
+/**
+ * LIVE grounding test — real model, 3 test businesses × 15 trap questions (things the
+ * business has NOT loaded) + control questions that ARE answerable from the config.
+ *
+ * Not part of run-all-suites (needs ANTHROPIC_API_KEY, costs ~60 model calls).
+ * Run from a directory that has the key available (env or .env.local):
+ *   node scripts/test-grounding-live.js
+ *
+ * Passes when no reply that would be sent to a client contains ungrounded data.
+ * Also reports how often the raw model invented (before the check) and how many
+ * control answers were wrongly blocked (false positives).
+ */
+
+process.env.DB_DIR = process.env.DB_DIR || `/tmp/test-grounding-live-${Date.now()}`;
+try { require('dotenv').config({ path: '.env.local', quiet: true }); } catch (_) {}
+
+const { generateReply } = require('../src/claude');
+const { buildSources, findUngrounded, groundReply, FALLBACK_REPLY } = require('../src/grounding');
+const { BUSINESSES } = require('./fixtures/grounding-businesses');
+
+const CONTROLS = {
+  peluqueria: ['¿Cuánto sale el corte de dama?', '¿Qué horario tienen los sábados?', '¿Cuánto cuesta el color y el brushing?'],
+  tienda: ['¿Cuánto sale el jean recto?', '¿Cuánto cuesta el envío en Montevideo y cuánto demora?', '¿Cómo puedo pagar?'],
+  veterinaria: ['¿Cuánto sale la consulta?', '¿Dónde están ubicados?', '¿A qué número llamo por una urgencia de noche?'],
+};
+
+const _log = console.log;
+console.log = (...a) => { if (!String(a[0]).startsWith('[claude:') && !String(a[0]).startsWith('[migration')) _log(...a); };
+
+function nowUY() { return new Date(Date.now() - 3 * 3_600_000); }
+
+async function ask(b, q) {
+  const ctx = { now: nowUY(), hoursText: b.hoursText, needsHuman: false };
+  const sources = buildSources({ business: b.business, runtimeCtx: ctx, history: [], userTexts: [q] });
+  const raw = await generateReply(b.business, [], q, null, null, ctx);
+  const res = await groundReply({
+    reply: raw, sources,
+    regenerate: note => generateReply(b.business, [], q, null, null, { ...ctx, groundingNote: note }),
+  });
+  const final = res.reply.replace(/\[[A-Z_]+\]\n?/g, '').trim();
+  return { q, raw, res, final, leak: findUngrounded(res.reply, sources) };
+}
+
+(async () => {
+  let traps = 0, rawInvented = 0, regenerated = 0, replaced = 0, leaks = 0, controls = 0, falsePos = 0;
+  for (const b of BUSINESSES) {
+    _log(`\n══ ${b.business.name} ══`);
+    for (const trap of b.traps) {
+      const r = await ask(b, trap.q);
+      traps++;
+      if (r.res.first.length) rawInvented++;
+      if (r.res.action === 'regenerated') regenerated++;
+      if (r.res.action === 'replaced') replaced++;
+      if (r.leak.length) leaks++;
+      _log(`\n[trampa] ${trap.q}\n  acción=${r.res.action}${r.res.first.length ? ' inventó=' + JSON.stringify(r.res.first) : ''}${r.leak.length ? ' ✗ FUGA=' + JSON.stringify(r.leak) : ''}\n  → ${r.final.replace(/\n+/g, ' / ')}`);
+    }
+    for (const q of CONTROLS[b.key]) {
+      const r = await ask(b, q);
+      controls++;
+      const blocked = r.res.action !== 'ok';
+      if (blocked) falsePos++;
+      if (r.leak.length) leaks++;
+      _log(`\n[control] ${q}\n  acción=${r.res.action}${blocked ? ' marcado=' + JSON.stringify(r.res.first) : ''}\n  → ${r.final.replace(/\n+/g, ' / ')}`);
+    }
+  }
+  _log('\n================================================================');
+  _log(`Preguntas trampa: ${traps} — el modelo inventó (antes del control) en ${rawInvented}; corregidas al regenerar ${regenerated}; reemplazadas por "${FALLBACK_REPLY}" ${replaced}`);
+  _log(`Controles (dato cargado): ${controls} — marcadas de más ${falsePos}`);
+  _log(`Datos inventados que llegarían al cliente: ${leaks}`);
+  _log(`${traps + controls} tests — ${traps + controls - leaks} passed, ${leaks} failed`);
+  process.exit(leaks > 0 ? 1 : 0);
+})().catch(err => { console.error('LIVE TEST ERROR:', err.message); process.exit(2); });

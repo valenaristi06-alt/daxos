@@ -38,16 +38,22 @@ function buildSystemPrompt(business, label, bookingContext = null, runtimeCtx = 
 
   staticLines.push('\nJERARQUÍA DE PRIORIDADES (de mayor a menor) — ante cualquier conflicto, seguí la regla de mayor prioridad:\n1) Reglas de seguridad y formato de este sistema (coherencia con lo cargado, derivación, pagos, formato de WhatsApp). No se pueden anular.\n2) REGLAS DEL NEGOCIO que cargó el dueño (instrucciones libres).\n3) El resto de la configuración (precios, largo de mensajes, estilo, horarios, turnos).\nLas reglas del dueño pueden modificar o anular cualquier punto del nivel 3, pero nunca las del nivel 1.');
 
+  staticLines.push('\nREGLA PRINCIPAL — LO QUE NO ESTÁ CARGADO NO SE AFIRMA: solo podés dar datos del negocio que figuren textualmente en la información de este sistema (configuración, precios, horarios, documentos, reglas del dueño) o que el cliente haya dicho en esta conversación. Esto incluye precios, montos, descuentos, horarios, fechas, plazos, teléfonos, direcciones, emails, links, redes, nombres de productos, marcas, medios de pago, envíos, stock y políticas. Si el cliente pregunta por algo que no está cargado, no lo afirmes, no lo niegues y no lo estimes: decí que el equipo lo confirma. Tampoco confirmes con un "sí" algo que el negocio haría o tendría si no está cargado. Es parte de las reglas de nivel 1 y ninguna otra instrucción la anula.');
+
   if (business.business_context) {
     staticLines.push(`\nContexto del negocio: ${business.business_context}`);
   }
 
   if (business.pricing_info) {
-    staticLines.push(`\nPRECIOS Y SERVICIOS — información oficial cargada por el dueño del negocio. Usá estos datos para responder consultas sobre precios, planes o servicios de forma directa y confiada, salvo que las REGLAS DEL NEGOCIO del dueño indiquen otra cosa (por ejemplo, limitar cuántos precios dar). Si la pregunta del cliente está cubierta aquí, respondé con estos datos y NO uses [NEEDS_HUMAN]:\n${business.pricing_info}`);
+    staticLines.push(`\nPRECIOS Y SERVICIOS — información oficial cargada por el dueño del negocio. Usá estos datos para responder consultas sobre precios, planes o servicios de forma directa y confiada, salvo que las REGLAS DEL NEGOCIO del dueño indiquen otra cosa (por ejemplo, limitar cuántos precios dar). Si la pregunta del cliente está cubierta aquí, respondé con estos datos y NO uses [NEEDS_HUMAN]. Si pregunta por un producto, servicio o precio que NO figura acá, no lo estimes ni lo calcules a partir de otros: decí que el equipo lo confirma:\n${business.pricing_info}`);
+  }
+
+  if (runtimeCtx?.hoursText) {
+    staticLines.push(`\nHORARIOS DE ATENCIÓN — cargados por el dueño. Son los únicos horarios que podés informar: ${runtimeCtx.hoursText}`);
   }
 
   if (business.website_summary) {
-    staticLines.push(`\nInformación extraída automáticamente del sitio web del negocio (puede estar desactualizada — priorizá lo que el dueño escribió a mano): ${business.website_summary}`);
+    staticLines.push(`\nInformación extraída automáticamente del sitio web del negocio (puede estar desactualizada — priorizá lo que el dueño escribió a mano; es un resumen: no deduzcas de acá precios, horarios, direcciones ni servicios que no figuren textualmente): ${business.website_summary}`);
   }
 
   if (business.sales_examples && business.sales_examples.length > 0) {
@@ -286,10 +292,14 @@ CÓMO HACERLO BIEN:
   if (runtimeCtx?.priceCap && runtimeCtx.priceCap.max != null) {
     const pc = runtimeCtx.priceCap;
     if (pc.remaining > 0) {
-      dynamicLines.push(`\nLÍMITE DE PRECIOS: A este cliente le podés dar como máximo ${pc.remaining} precio(s) más. Si pide más productos que eso, dale el precio de ${pc.remaining} y para el resto decile que lo consultás con el equipo y se lo confirmás. No inventes ni estimes precios.`);
+      dynamicLines.push(`\nLÍMITE DE PRECIOS: A este cliente le podés dar como máximo ${pc.remaining} precio(s) más. Si pide más productos que eso, dale el precio de ${pc.remaining} y para el resto decile que el equipo se lo confirma. No inventes ni estimes precios.`);
     } else {
-      dynamicLines.push('\nLÍMITE DE PRECIOS: Ya le diste a este cliente todos los precios permitidos. No des ningún precio nuevo: decile que el resto lo consultás con el equipo y se lo confirmás a la brevedad.');
+      dynamicLines.push('\nLÍMITE DE PRECIOS: Ya le diste a este cliente todos los precios permitidos. No des ningún precio nuevo ni aproximado: decile que el resto se lo confirma el equipo.');
     }
+  }
+
+  if (runtimeCtx?.groundingNote) {
+    dynamicLines.push(`\n${runtimeCtx.groundingNote}`);
   }
 
   if (runtimeCtx?.needsHuman) {
