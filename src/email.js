@@ -251,79 +251,79 @@ async function sendAdminNotificationEmail({ adminEmail, event, data }) {
 }
 
 const PLAN_LINK = 'https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan';
+const PLAN_PHONE_TEXT = '+598 92 052 508';
 
-async function sendTrialWarningEmail({ to, businessName, convCount, convLimit, dayNum, dayLimit }) {
+// RESEND_BASE_URL lets tests point email sending at a local mock. Never honoured in production.
+const _IS_PROD_MAIL = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT;
+const RESEND_EMAILS_URL = ((!_IS_PROD_MAIL && process.env.RESEND_BASE_URL) || 'https://api.resend.com') + '/emails';
+
+// Trial emails (3 stages). Each returns { skipped: true } when email is not configured,
+// so the caller can tell "sent" from "nothing went out".
+const TRIAL_CLIENT_MSG = 'En este momento no puedo responder, alguien del negocio te va a contestar a la brevedad.';
+const _trialButton = `
+      <p><a href="${PLAN_LINK}" style="background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:8px">Activar mi plan</a></p>
+      <p style="color:#666;font-size:13px">El botón abre un chat de WhatsApp con el equipo de Daxos. Si no se abre, escribinos al ${PLAN_PHONE_TEXT}.</p>`;
+
+async function _sendTrialEmail({ to, subject, html, what }) {
   const key = process.env.RESEND_API_KEY;
-  if (!key) { console.warn('[resend] RESEND_API_KEY not set, skipping trial warning email'); return; }
-  const body = {
-    from: 'Daxos <notificaciones@daxos.lat>',
-    to: [to],
-    subject: `Tu prueba de Daxos está llegando al final — ${businessName}`,
+  if (!key) { console.warn(`[resend] RESEND_API_KEY not set, skipping ${what}`); return { skipped: true }; }
+  const res = await fetch(RESEND_EMAILS_URL, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: 'Daxos <notificaciones@daxos.lat>', to: [to], subject, html }),
+  });
+  if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
+  return { sent: true };
+}
+
+// Stage 1 — the trial is about to end.
+async function sendTrialWarningEmail({ to, businessName, convCount, convLimit, dayNum, dayLimit, graceHours = 72, graceConvs = 25, subjectPrefix = '' }) {
+  return _sendTrialEmail({
+    to, what: 'trial warning email',
+    subject: subjectPrefix + `Tu prueba de Daxos está por terminar — ${businessName}`,
     html: `
       <p>Hola,</p>
-      <p>Tu período de prueba de <strong>${escapeHtml(businessName)}</strong> está llegando al final.</p>
+      <p>La prueba gratis de <strong>${escapeHtml(businessName)}</strong> está por terminar.</p>
       <table style="border-collapse:collapse;margin:16px 0">
         <tr><td style="padding:4px 12px 4px 0;color:#666">Días de prueba</td><td>${dayNum} de ${dayLimit}</td></tr>
         <tr><td style="padding:4px 12px 4px 0;color:#666">Conversaciones</td><td>${convCount} de ${convLimit}</td></tr>
       </table>
-      <p>Cuando llegues al día ${dayLimit} o a las ${convLimit} conversaciones, la prueba termina. Tus clientes recibirán un período de gracia de 72 horas antes de que el bot deje de responder.</p>
-      <p><a href="${PLAN_LINK}" style="background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:8px">Activar mi plan</a></p>
+      <p>La prueba termina cuando llegues al día ${dayLimit} o a las ${convLimit} conversaciones, lo que pase primero. Después tu asistente sigue respondiendo ${graceHours} horas más (o ${graceConvs} conversaciones) y luego deja de responder.</p>
+      <p>Para que siga atendiendo a tus clientes sin cortes, activá tu plan:</p>${_trialButton}
     `,
-  };
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
   });
-  if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
 }
 
-async function sendTrialGraceEmail({ to, businessName, graceConvsLeft, graceHoursLeft }) {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) { console.warn('[resend] RESEND_API_KEY not set, skipping trial grace email'); return; }
-  const body = {
-    from: 'Daxos <notificaciones@daxos.lat>',
-    to: [to],
-    subject: `Tu prueba de Daxos venció — el bot sigue respondiendo por ahora — ${businessName}`,
+// Stage 2 — the trial is over; the assistant keeps answering for a short extra period.
+async function sendTrialGraceEmail({ to, businessName, graceConvsLeft, graceHoursLeft, subjectPrefix = '' }) {
+  return _sendTrialEmail({
+    to, what: 'trial grace email',
+    subject: subjectPrefix + `Tu prueba de Daxos terminó: tu asistente sigue respondiendo unos días más — ${businessName}`,
     html: `
       <p>Hola,</p>
-      <p>La prueba de <strong>${escapeHtml(businessName)}</strong> llegó a su límite, pero el bot sigue respondiendo en modo de gracia.</p>
+      <p>La prueba gratis de <strong>${escapeHtml(businessName)}</strong> terminó. Para que no pierdas clientes, tu asistente sigue respondiendo un tiempo extra:</p>
       <table style="border-collapse:collapse;margin:16px 0">
         <tr><td style="padding:4px 12px 4px 0;color:#666">Tiempo restante</td><td>≈${Math.ceil(graceHoursLeft)} horas</td></tr>
         <tr><td style="padding:4px 12px 4px 0;color:#666">Conversaciones restantes</td><td>${graceConvsLeft}</td></tr>
       </table>
-      <p>Cuando alguno de esos dos límites se agote, el bot dejará de responder y tus clientes verán un mensaje indicando que alguien del negocio los va a contactar.</p>
-      <p><a href="${PLAN_LINK}" style="background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:8px">Activar mi plan</a></p>
+      <p>Cuando se termine cualquiera de los dos, el asistente deja de responder y tus clientes reciben este mensaje: <em>"${TRIAL_CLIENT_MSG}"</em></p>
+      <p>Para que siga atendiendo, activá tu plan:</p>${_trialButton}
     `,
-  };
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
   });
-  if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
 }
 
-async function sendTrialEndedEmail({ to, businessName }) {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) { console.warn('[resend] RESEND_API_KEY not set, skipping trial ended email'); return; }
-  const body = {
-    from: 'Daxos <notificaciones@daxos.lat>',
-    to: [to],
-    subject: `El período de prueba de Daxos terminó — ${businessName}`,
+// Stage 3 — the assistant stopped answering.
+async function sendTrialEndedEmail({ to, businessName, subjectPrefix = '' }) {
+  return _sendTrialEmail({
+    to, what: 'trial ended email',
+    subject: subjectPrefix + `Tu asistente de Daxos dejó de responder — ${businessName}`,
     html: `
       <p>Hola,</p>
-      <p>El período de prueba de <strong>${escapeHtml(businessName)}</strong> terminó. El bot dejó de responder automáticamente.</p>
-      <p>Tus clientes reciben el siguiente mensaje: <em>"En este momento no puedo responder, alguien del negocio te va a contestar a la brevedad."</em></p>
-      <p><a href="${PLAN_LINK}" style="background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:8px">Activar mi plan</a></p>
+      <p>La prueba gratis de <strong>${escapeHtml(businessName)}</strong> terminó y tu asistente ya no responde a tus clientes.</p>
+      <p>Quien te escriba recibe este mensaje: <em>"${TRIAL_CLIENT_MSG}"</em></p>
+      <p>Tu configuración y tus conversaciones siguen guardadas. Al activar tu plan, el asistente vuelve a responder:</p>${_trialButton}
     `,
-  };
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
   });
-  if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
 }
 
 async function sendBillingDataEmail({ adminEmail, businessName, businessId }) {

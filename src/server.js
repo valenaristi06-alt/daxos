@@ -111,7 +111,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, getBusinessByCrmUserId, createCrmBusiness, createPartnerLoginToken, getPartnerLoginToken, markPartnerLoginTokenUsed, getMonthlyConvCount, getMonthlyUsage, setCrmCapOwnerNotified, setAudioCapNotifiedMonth, setCrmQuota, getPartnerUsageByMonth, createEmbedSession, getEmbedSession, purgeExpiredEmbedSessions, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, markConversationPausedByCrmCap, getTrialBusinesses, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setConfigChatEnabled, saveConfigDraft, getConfigDraft, clearConfigDraft, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, getBusinessByCrmUserId, createCrmBusiness, createPartnerLoginToken, getPartnerLoginToken, markPartnerLoginTokenUsed, getMonthlyConvCount, getMonthlyUsage, setCrmCapOwnerNotified, setAudioCapNotifiedMonth, setCrmQuota, getPartnerUsageByMonth, createEmbedSession, getEmbedSession, purgeExpiredEmbedSessions, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, markConversationPausedByCrmCap, getTrialBusinesses, trialEmailAlreadySent, claimTrialEmail, releaseTrialEmail, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setConfigChatEnabled, saveConfigDraft, getConfigDraft, clearConfigDraft, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
   incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
   incrementPreviewCall, getPreviewSpendingToday, setSpendingCapOwnerNotified, setSpendingCapNeedsAttention,
   getConvAssistantCountLastHour, setSpendingCapNotified,
@@ -3271,8 +3271,6 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     const todayUY     = toUYDateStr(now);
     const convCount   = getTrialConversationCount(business.id, business.trial_starts_at);
     const daysElapsed = trialDaysElapsed(business.trial_starts_at);
-    const lastNotMs   = parseSqliteUtc(business.trial_grace_notified_at);
-    const canMail     = !lastNotMs || toUYDateStr(lastNotMs) !== todayUY;
 
     const sendTrialEndMsg = async (conv) => {
       const lastEndMs = parseSqliteUtc(conv.trial_ended_notified_at);
@@ -3290,15 +3288,8 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
       return true;
     };
 
-    const notifyOwnerTrialEnded = (owner) => {
-      if (!canMail || !owner) return;
-      setTrialGraceNotifiedAt(business.id, nowIso);
-      sendTrialEndedEmail({ to: owner.email, businessName: business.name })
-        .catch(e => logError('trial-ended-email', { message: e.message, stack: '' }));
-      if (owner.phone) {
-        sendWhatsAppMessage(owner.phone, `🚫 La prueba de ${business.name} terminó. Activá tu plan: https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan`, waCredentials, { bypassPause: true }).catch(() => {});
-      }
-    };
+    // Each trial notice (email + WhatsApp to the owner) goes out once per stage.
+    const notifyOwnerTrialEnded = (owner) => notifyTrialStage(business, owner, 'ended', {}, waCredentials);
 
     if (business.trial_grace_started_at) {
       // ── Grace period active ──
@@ -3320,18 +3311,9 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
         return;
       }
 
-      // Grace still valid — bot replies; daily reminder to owner
-      if (canMail) {
-        const owner = getUserByBusinessId(business.id);
-        if (owner) {
-          setTrialGraceNotifiedAt(business.id, nowIso);
-          sendTrialGraceEmail({ to: owner.email, businessName: business.name, graceConvsLeft, graceHoursLeft })
-            .catch(e => logError('trial-grace-email', { message: e.message, stack: '' }));
-          if (owner.phone) {
-            sendWhatsAppMessage(owner.phone, `⏳ La prueba de ${business.name} venció. El bot sigue en modo de gracia: ${Math.ceil(graceHoursLeft)} h o ${graceConvsLeft} conversaciones más. Activá tu plan: https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan`, waCredentials, { bypassPause: true }).catch(() => {});
-          }
-        }
-      }
+      // Grace still valid — bot replies. The grace notice is sent once (normally when grace
+      // opened; here only if it never went out).
+      notifyTrialStage(business, getUserByBusinessId(business.id), 'grace', { graceConvsLeft, graceHoursLeft }, waCredentials);
       // fall through to normal bot processing
 
     } else {
@@ -3358,31 +3340,17 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
         // Open grace
         setTrialGraceStartedAt(business.id, nowIso);
         business.trial_grace_started_at = nowIso; // update in-memory for this request
-        const owner = getUserByBusinessId(business.id);
-        if (canMail && owner) {
-          setTrialGraceNotifiedAt(business.id, nowIso);
-          sendTrialGraceEmail({ to: owner.email, businessName: business.name, graceConvsLeft: TRIAL_GRACE_CONVS, graceHoursLeft: TRIAL_GRACE_HOURS })
-            .catch(e => logError('trial-grace-email', { message: e.message, stack: '' }));
-          if (owner.phone) {
-            sendWhatsAppMessage(owner.phone, `⏳ La prueba de ${business.name} venció. El bot sigue en modo de gracia: 72 h o 25 conversaciones más. Activá tu plan: https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan`, waCredentials, { bypassPause: true }).catch(() => {});
-          }
-        }
+        notifyTrialStage(business, getUserByBusinessId(business.id), 'grace',
+          { graceConvsLeft: TRIAL_GRACE_CONVS, graceHoursLeft: TRIAL_GRACE_HOURS }, waCredentials);
         console.log(`[trial-grace] business ${business.id} grace opened (${convCount} convs, day ${daysElapsed})`);
         // fall through — this first grace message still gets a bot reply
       }
 
-      // Warning zone (once only)
-      if (!business.trial_warned_at && (convCount >= TRIAL_WARN_CONVS || daysElapsed >= TRIAL_WARN_DAYS)) {
+      // Warning zone (once only). Skipped when grace just opened above: the trial already
+      // ended, so "your trial is about to end" would arrive after "your trial ended".
+      if (!business.trial_grace_started_at && !business.trial_warned_at && (convCount >= TRIAL_WARN_CONVS || daysElapsed >= TRIAL_WARN_DAYS)) {
         setTrialWarnedAt(business.id, nowIso);
-        const owner = getUserByBusinessId(business.id);
-        if (canMail && owner) {
-          setTrialGraceNotifiedAt(business.id, nowIso);
-          sendTrialWarningEmail({ to: owner.email, businessName: business.name, convCount, convLimit: TRIAL_CONV_LIMIT, dayNum: daysElapsed, dayLimit: 14 })
-            .catch(e => logError('trial-warning-email', { message: e.message, stack: '' }));
-          if (owner.phone) {
-            sendWhatsAppMessage(owner.phone, `⚠️ La prueba de ${business.name} está llegando al final: día ${daysElapsed} de 14, ${convCount} de ${TRIAL_CONV_LIMIT} conversaciones. Activá tu plan: https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan`, waCredentials, { bypassPause: true }).catch(() => {});
-          }
-        }
+        notifyTrialStage(business, getUserByBusinessId(business.id), 'warning', { convCount, daysElapsed }, waCredentials);
         console.log(`[trial-warning] business ${business.id} warned (day ${daysElapsed}, ${convCount} convs)`);
       }
     }
@@ -6441,102 +6409,106 @@ async function checkElevenLabsUsage() {
   return { pct: parseFloat(pct.toFixed(4)), character_count, character_limit, alerted };
 }
 
-// dryRun=true (default via TRIAL_CHECK_DRY_RUN env): only logs what it would do, no DB writes or sends.
-// Set TRIAL_CHECK_DRY_RUN=0 in env to enable real sends.
+const TRIAL_ACTIVATE_LINK = 'https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan';
+
+// Sends the trial notice for a stage ('warning' | 'grace' | 'ended') at most ONCE per
+// business and per trial: email to the owner, plus a WhatsApp notice when credentials are
+// given. Shared by the live message path and the daily job, so they can never both send.
+// Returns true when this call is the one that sent it.
+function notifyTrialStage(business, owner, stage, params = {}, waCredentials = null) {
+  if (!owner?.email) return false;
+  if (!claimTrialEmail(business.id, stage, business.trial_starts_at)) return false;
+  setTrialGraceNotifiedAt(business.id, new Date().toISOString());
+
+  const to = owner.email, businessName = business.name;
+  let send, waText;
+  if (stage === 'warning') {
+    send = sendTrialWarningEmail({ to, businessName, convCount: params.convCount, convLimit: TRIAL_CONV_LIMIT, dayNum: params.daysElapsed, dayLimit: 14, graceHours: TRIAL_GRACE_HOURS, graceConvs: TRIAL_GRACE_CONVS });
+    waText = `⚠️ La prueba de ${businessName} está por terminar: día ${params.daysElapsed} de 14, ${params.convCount} de ${TRIAL_CONV_LIMIT} conversaciones. Activá tu plan: ${TRIAL_ACTIVATE_LINK}`;
+  } else if (stage === 'grace') {
+    send = sendTrialGraceEmail({ to, businessName, graceConvsLeft: params.graceConvsLeft, graceHoursLeft: params.graceHoursLeft });
+    waText = `⏳ La prueba de ${businessName} terminó. Tu asistente sigue respondiendo ${Math.ceil(params.graceHoursLeft)} h o ${params.graceConvsLeft} conversaciones más. Activá tu plan: ${TRIAL_ACTIVATE_LINK}`;
+  } else {
+    send = sendTrialEndedEmail({ to, businessName });
+    waText = `🚫 La prueba de ${businessName} terminó y tu asistente dejó de responder. Activá tu plan: ${TRIAL_ACTIVATE_LINK}`;
+  }
+  // If nothing went out (provider error, email not configured) free the stage so the next run retries.
+  Promise.resolve(send)
+    .then(r => { if (r?.skipped) releaseTrialEmail(business.id, stage, business.trial_starts_at); })
+    .catch(e => {
+      releaseTrialEmail(business.id, stage, business.trial_starts_at);
+      logError(`trial-${stage}-email`, { message: `biz ${business.id}: ${e.message}`, stack: '' });
+    });
+  if (waCredentials && owner.phone) {
+    sendWhatsAppMessage(owner.phone, waText, waCredentials, { bypassPause: true }).catch(() => {});
+  }
+  console.log(`[trial-notice] business ${business.id} stage=${stage} — owner notified`);
+  return true;
+}
+
+// Which trial stage a business is in right now. Read-only: no writes, no sends.
+//   state: ok | warning | grace-open | grace-active | grace-ended | trial-ended-direct
+//   stage: the email that state calls for ('warning' | 'grace' | 'ended') or null
+function planTrialEmail(biz, now = Date.now()) {
+  const convCount   = getTrialConversationCount(biz.id, biz.trial_starts_at);
+  const daysElapsed = trialDaysElapsed(biz.trial_starts_at);
+
+  if (biz.trial_grace_started_at) {
+    const graceHours     = (now - parseSqliteUtc(biz.trial_grace_started_at)) / 3_600_000;
+    const graceConvs     = getTrialConversationCount(biz.id, biz.trial_grace_started_at);
+    const graceConvsLeft = Math.max(0, TRIAL_GRACE_CONVS - graceConvs);
+    const graceHoursLeft = Math.max(0, TRIAL_GRACE_HOURS - graceHours);
+    if (graceHours > TRIAL_GRACE_HOURS || graceConvs >= TRIAL_GRACE_CONVS) return { state: 'grace-ended', stage: 'ended', params: {} };
+    return { state: 'grace-active', stage: 'grace', params: { graceConvsLeft, graceHoursLeft } };
+  }
+
+  const trialEndsMs  = parseSqliteUtc(biz.trial_ends_at);
+  const hitConvLimit = convCount >= TRIAL_CONV_LIMIT;
+  const hitDayLimit  = trialEndsMs && trialEndsMs < now;
+  if (hitConvLimit || hitDayLimit) {
+    const expiredHoursAgo = trialEndsMs ? (now - trialEndsMs) / 3_600_000 : 0;
+    if (expiredHoursAgo > TRIAL_GRACE_HOURS) return { state: 'trial-ended-direct', stage: 'ended', params: {} };
+    return { state: 'grace-open', stage: 'grace', openGrace: true, params: { graceConvsLeft: TRIAL_GRACE_CONVS, graceHoursLeft: TRIAL_GRACE_HOURS } };
+  }
+  if (!biz.trial_warned_at && (convCount >= TRIAL_WARN_CONVS || daysElapsed >= TRIAL_WARN_DAYS)) {
+    return { state: 'warning', stage: 'warning', params: { convCount, daysElapsed } };
+  }
+  return { state: 'ok', stage: null, params: {} };
+}
+
+// Daily trial check. Only businesses on the free trial are looked at (plan 'arranque',
+// not paid, no cortesía) — partner CRM accounts (plan 'crm') and cortesía never get these.
+// dryRun=true (default; TRIAL_CHECK_DRY_RUN env): only logs what it would do, no writes, no sends.
+// Set TRIAL_CHECK_DRY_RUN=0 to send for real. Each stage email goes once per business.
+// Returns one row per trial business: { id, name, state, stage, will_send }.
 async function runDailyTrialCheck(overrideDryRun) {
   const dryRun = overrideDryRun !== undefined ? overrideDryRun : process.env.TRIAL_CHECK_DRY_RUN !== '0';
-  const businesses = getTrialBusinesses();
-  for (const biz of businesses) {
+  const report = [];
+  for (const biz of getTrialBusinesses()) {
     if (!biz.owner_email) continue; // no owner contact — nothing to notify
     try {
-      const now      = Date.now();
-      const nowIso   = new Date(now).toISOString();
-      const todayUY  = toUYDateStr(now);
-      const lastNotMs  = parseSqliteUtc(biz.trial_grace_notified_at);
-      const canMail    = !lastNotMs || toUYDateStr(lastNotMs) !== todayUY;
-      const convCount  = getTrialConversationCount(biz.id, biz.trial_starts_at);
-      const daysElapsed = trialDaysElapsed(biz.trial_starts_at);
-
-      let state  = 'ok';
-      let action = 'none';
-
-      if (biz.trial_grace_started_at) {
-        const graceStartMs   = parseSqliteUtc(biz.trial_grace_started_at);
-        const graceHours     = (now - graceStartMs) / 3_600_000;
-        const graceConvs     = getTrialConversationCount(biz.id, biz.trial_grace_started_at);
-        const graceConvsLeft = Math.max(0, TRIAL_GRACE_CONVS - graceConvs);
-        const graceHoursLeft = Math.max(0, TRIAL_GRACE_HOURS - graceHours);
-
-        if (graceHours > TRIAL_GRACE_HOURS || graceConvs >= TRIAL_GRACE_CONVS) {
-          state  = 'grace-ended';
-          action = 'sendTrialEndedEmail';
-          if (!dryRun && canMail) {
-            setTrialGraceNotifiedAt(biz.id, nowIso);
-            sendTrialEndedEmail({ to: biz.owner_email, businessName: biz.name })
-              .catch(e => logError('trial-ended-daily', { message: e.message, stack: '' }));
-            console.log(`[trial-daily] business ${biz.id} grace ended — owner notified`);
-          }
-        } else {
-          state  = 'grace-active';
-          action = `sendTrialGraceEmail(${graceHoursLeft.toFixed(0)}h/${graceConvsLeft}convs)`;
-          if (!dryRun && canMail) {
-            setTrialGraceNotifiedAt(biz.id, nowIso);
-            sendTrialGraceEmail({ to: biz.owner_email, businessName: biz.name, graceConvsLeft, graceHoursLeft })
-              .catch(e => logError('trial-grace-daily', { message: e.message, stack: '' }));
-            console.log(`[trial-daily] business ${biz.id} in grace, ${graceHoursLeft.toFixed(0)}h / ${graceConvsLeft} convs left — owner reminded`);
-          }
-        }
-      } else {
-        const trialEndsMs  = parseSqliteUtc(biz.trial_ends_at);
-        const hitConvLimit = convCount >= TRIAL_CONV_LIMIT;
-        const hitDayLimit  = trialEndsMs && trialEndsMs < now;
-
-        if (hitConvLimit || hitDayLimit) {
-          const expiredHoursAgo = trialEndsMs ? (now - trialEndsMs) / 3_600_000 : 0;
-          if (expiredHoursAgo > TRIAL_GRACE_HOURS) {
-            state  = 'trial-ended-direct';
-            action = 'sendTrialEndedEmail';
-            if (!dryRun && canMail) {
-              setTrialGraceNotifiedAt(biz.id, nowIso);
-              sendTrialEndedEmail({ to: biz.owner_email, businessName: biz.name })
-                .catch(e => logError('trial-ended-daily', { message: e.message, stack: '' }));
-              console.log(`[trial-daily] business ${biz.id} trial ended, no grace (${expiredHoursAgo.toFixed(0)}h) — owner notified`);
-            }
-          } else {
-            state  = 'grace-open';
-            action = 'setTrialGrace+sendTrialGraceEmail';
-            if (!dryRun) {
-              setTrialGraceStartedAt(biz.id, nowIso);
-              if (canMail) {
-                setTrialGraceNotifiedAt(biz.id, nowIso);
-                sendTrialGraceEmail({ to: biz.owner_email, businessName: biz.name, graceConvsLeft: TRIAL_GRACE_CONVS, graceHoursLeft: TRIAL_GRACE_HOURS })
-                  .catch(e => logError('trial-grace-daily', { message: e.message, stack: '' }));
-                console.log(`[trial-daily] business ${biz.id} grace opened — owner notified`);
-              }
-            }
-          }
-        } else if (!biz.trial_warned_at && (convCount >= TRIAL_WARN_CONVS || daysElapsed >= TRIAL_WARN_DAYS)) {
-          state  = 'warning';
-          action = `sendTrialWarningEmail(day=${daysElapsed},convs=${convCount})`;
-          if (!dryRun) {
-            setTrialWarnedAt(biz.id, nowIso);
-            if (canMail) {
-              setTrialGraceNotifiedAt(biz.id, nowIso);
-              sendTrialWarningEmail({ to: biz.owner_email, businessName: biz.name, convCount, convLimit: TRIAL_CONV_LIMIT, dayNum: daysElapsed, dayLimit: 14 })
-                .catch(e => logError('trial-warning-daily', { message: e.message, stack: '' }));
-              console.log(`[trial-daily] business ${biz.id} trial warning (day ${daysElapsed}, ${convCount} convs) — owner notified`);
-            }
-          }
-        }
-      }
+      const plan     = planTrialEmail(biz);
+      const already  = plan.stage ? trialEmailAlreadySent(biz.id, plan.stage, biz.trial_starts_at) : false;
+      const willSend = !!plan.stage && !already;
+      report.push({ id: biz.id, name: biz.name, state: plan.state, stage: plan.stage, will_send: willSend });
 
       if (dryRun) {
-        console.log(`[trial-daily-dry] biz=${biz.id} email=${biz.owner_email} state=${state} would-send=${action}`);
+        // No owner email in the log: business id and stage are enough to review.
+        console.log(`[trial-daily-dry] biz=${biz.id} state=${plan.state} would-send=${willSend ? plan.stage : 'none'}${already ? ' (already sent)' : ''}`);
+        continue;
+      }
+      const nowIso = new Date().toISOString();
+      if (plan.openGrace) setTrialGraceStartedAt(biz.id, nowIso);
+      if (plan.state === 'warning') setTrialWarnedAt(biz.id, nowIso);
+      if (willSend) {
+        notifyTrialStage(biz, { email: biz.owner_email }, plan.stage, plan.params);
+        console.log(`[trial-daily] business ${biz.id} state=${plan.state} — ${plan.stage} email sent`);
       }
     } catch (err) {
       logError('trial-daily-biz', { message: `biz ${biz.id}: ${err.message}`, stack: err.stack || '' });
     }
   }
+  return report;
 }
 
 async function runKeywordPauseFollowupJobs() {
@@ -7073,6 +7045,23 @@ app.post('/admin/api/run-trial-check', requireBearerToken, async (req, res) => {
   }
 });
 
+// GET /admin/api/trial-emails/preview — which businesses would get a trial email on the
+// next real run. Read-only: sends nothing, writes nothing. Only id, name and stage.
+app.get('/admin/api/trial-emails/preview', requireBearerToken, async (_req, res) => {
+  try {
+    const rows = await runDailyTrialCheck(true);
+    const businesses = rows.filter(r => r.will_send).map(r => ({ id: r.id, name: r.name, stage: r.stage }));
+    res.json({
+      ok: true,
+      sending_enabled: process.env.TRIAL_CHECK_DRY_RUN === '0',
+      count: businesses.length,
+      businesses,
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.post('/admin/api/run-pause-jobs', requireBearerToken, async (req, res) => {
   try { await runKeywordPauseFollowupJobs(); res.json({ ok: true }); }
   catch (err) { res.status(500).json({ error: err.message }); }
@@ -7223,8 +7212,9 @@ app.get('/admin/backups', requireBearerToken, async (req, res) => {
 });
 
 // POST /admin/api/test-mails — sends one copy of every email template to ADMIN_EMAIL
+// POST /admin/api/test-mails?only=trial — only the three trial emails (aviso, gracia, prueba terminada)
 // Rate limit: once per 10 minutes. Audit log in mail_test_log (excluded from error listing).
-app.post('/admin/api/test-mails', requireBearerToken, async (_req, res) => {
+app.post('/admin/api/test-mails', requireBearerToken, async (req, res) => {
   const adminEmail = process.env.ADMIN_EMAIL;
   const resendKey  = process.env.RESEND_API_KEY;
 
@@ -7262,7 +7252,10 @@ app.post('/admin/api/test-mails', requireBearerToken, async (_req, res) => {
     { name: 'urgente',             fn: () => sendUrgentAlertEmail({ to: adminEmail, businessName: bizName, contactId: clientPh, messageText: 'es una emergencia', conversationId: 999, convUrl, now: new Date(), subjectPrefix: PREFIX }) },
     { name: 'claude_sin_creditos', fn: () => sendClaudeErrorAdminEmail({ errorType: 'no_credits',   businessId: 0, businessName: bizName, errorMessage: 'Insufficient credits', subjectPrefix: PREFIX }) },
     { name: 'claude_5xx',          fn: () => sendClaudeErrorAdminEmail({ errorType: 'server_error', businessId: 0, businessName: bizName, errorMessage: 'Internal server error 500', subjectPrefix: PREFIX }) },
-  ];
+    { name: 'trial_aviso',         trial: true, fn: () => sendTrialWarningEmail({ to: adminEmail, businessName: bizName, convCount: TRIAL_WARN_CONVS, convLimit: TRIAL_CONV_LIMIT, dayNum: TRIAL_WARN_DAYS, dayLimit: 14, graceHours: TRIAL_GRACE_HOURS, graceConvs: TRIAL_GRACE_CONVS, subjectPrefix: PREFIX }) },
+    { name: 'trial_gracia',        trial: true, fn: () => sendTrialGraceEmail({ to: adminEmail, businessName: bizName, graceConvsLeft: TRIAL_GRACE_CONVS, graceHoursLeft: TRIAL_GRACE_HOURS, subjectPrefix: PREFIX }) },
+    { name: 'trial_terminada',     trial: true, fn: () => sendTrialEndedEmail({ to: adminEmail, businessName: bizName, subjectPrefix: PREFIX }) },
+  ].filter(t => req.query.only !== 'trial' || t.trial);
 
   const results = {};
   for (const { name, fn } of templates) {
