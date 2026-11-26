@@ -147,6 +147,9 @@ const { getDiskUsage, diskUsageCached, mb: _mb } = require('./disk');
 // Above this, client media is not saved: the volume also holds the database.
 const MEDIA_DISK_STOP_PCT = 0.9;
 const _mediaCtx = new AsyncLocalStorage();
+// Everything new for the partner (Pupi) lives behind this: plan crm / embedded mode.
+// Every other business keeps exactly the behaviour of main.
+const isPartnerPlan = (biz) => biz?.plan === 'crm';
 function addMessage(conversationId, role, content, silent = 0) {
   const id = _dbAddMessage(conversationId, role, content, silent);
   if (role === 'user') {
@@ -1845,6 +1848,8 @@ const AGENDA_WINDOW_MS = 23.5 * 3600 * 1000;
 function _agendaWaCreds(biz) {
   if (!biz.phone_number_id) return null;
   if (biz.wa_provider === 'kapso') return { phoneNumberId: biz.phone_number_id, provider: 'kapso' };
+  // Business token, like the assistant's own replies (main sent these with no token, so
+  // they only worked if META_SYSTEM_TOKEN was set). metaFetch still falls back to it.
   return { phoneNumberId: biz.phone_number_id, wabaId: biz.waba_id, accessToken: biz.wa_access_token || undefined, provider: biz.wa_provider || 'meta' };
 }
 async function notifyClientOfAgendaChange(biz, aptId, phone, text, kind) {
@@ -2068,9 +2073,11 @@ app.get('/api/conversations', requireAuth, (req, res) => {
   if (!user.business_id) return res.json([]);
   const convs = getConversationsByBusinessId(user.business_id);
   const excludedPhones = new Set(getExcludedContacts(user.business_id).map(c => c.phone));
+  const partner = isPartnerPlan(getBusinessById(user.business_id));
   res.json(convs.map(c => {
     const norm = normalizeContactPhone(c.customer_id);
-    return { ...c, is_excluded: norm ? excludedPhones.has(norm) : false };
+    const { contact_name, ...rest } = c; // contact_name: embed (plan crm) only
+    return { ...(partner ? c : rest), is_excluded: norm ? excludedPhones.has(norm) : false };
   }));
 });
 
@@ -2080,20 +2087,23 @@ app.get('/api/conversations/:id/messages', requireAuth, (req, res) => {
   if (!conv || !user.business_id || conv.business_id !== user.business_id) {
     return res.status(404).json({ error: 'No encontramos esa conversación' });
   }
-  // Latest 500, oldest first. The file path never leaves the server: media is served by
-  // /api/conversations/:id/media/:messageId after the same ownership check.
-  const messages = getConversationMessagesForPanel(conv.id, 500).map(m => {
+  // The LATEST messages, oldest first (main returned the first 200, hiding the newest
+  // ones in long chats). Same 200 and same fields as before for every business; plan crm
+  // (embed) gets 500 and the media reference. The file path never leaves the server.
+  const business = getBusinessById(user.business_id);
+  const partner = isPartnerPlan(business);
+  const messages = getConversationMessagesForPanel(conv.id, partner ? 500 : 200).map(m => {
     const { media_kind, media_mime, media_name, media_path, ...rest } = m;
-    return media_kind && media_path
+    return partner && media_kind && media_path
       ? { ...rest, media: { kind: media_kind, mime: media_mime, name: media_name, url: `/api/conversations/${conv.id}/media/${m.id}` } }
       : rest;
   });
-  const business = getBusinessById(user.business_id);
 
   const normCustomer = normalizeContactPhone(conv.customer_id);
   const is_excluded = normCustomer ? isPhoneExcluded(user.business_id, normCustomer) : false;
   const last_user_message_at = getLastUserMessageAt(conv.id);
-  res.json({ conversation: conv, messages, wa_connected: !!business?.phone_number_id, owner_phone: user?.phone || null, is_excluded, last_user_message_at });
+  const { contact_name: _cn, ...convOut } = conv;
+  res.json({ conversation: partner ? conv : convOut, messages, wa_connected: !!business?.phone_number_id, owner_phone: user?.phone || null, is_excluded, last_user_message_at });
 
 });
 
@@ -2104,6 +2114,7 @@ app.get('/api/conversations/:id/media/:messageId', requireAuth, (req, res) => {
   const user = getUserById(reqUserId(req));
   const conv = getConversationById(Number(req.params.id));
   if (!conv || !user?.business_id || conv.business_id !== user.business_id) return res.status(404).json({ error: 'No encontrado' });
+  if (!isPartnerPlan(getBusinessById(user.business_id))) return res.status(404).json({ error: 'No encontrado' });
   const m = getMessageMedia(Number(req.params.messageId));
   if (!m || m.conversation_id !== conv.id || !m.media_path || !isInsideMediaRoot(m.media_path) || !fs.existsSync(m.media_path)) {
     return res.status(404).json({ error: 'No encontrado' });
@@ -3226,7 +3237,8 @@ function shouldSkipIncomingMedia(business, customerPhone, msgTimestamp) {
 const _mediaReplyAt = new Map(); // `${convId}:${kind}` → ms of last reply
 const MEDIA_REPLY_THROTTLE_MS = 10 * 60_000;
 async function replyUnprocessableMedia(business, waCredentials, opts) {
-  return withIncomingMedia(business?.id, opts?.media || null, () => _replyUnprocessableMedia(business, waCredentials, opts));
+  const media = isPartnerPlan(business) ? (opts?.media || null) : null;
+  return withIncomingMedia(business?.id, media, () => _replyUnprocessableMedia(business, waCredentials, opts));
 }
 async function _replyUnprocessableMedia(business, waCredentials, { customerPhone, kind, storedText = null, msgTimestamp = null }) {
   const tag = `type=${kind} business_id=${business.id}`;
@@ -3277,6 +3289,8 @@ async function _replyUnprocessableMedia(business, waCredentials, { customerPhone
 }
 
 async function processIncomingMessage(business, waCredentials, args) {
+  // Plan crm only: keep the client's file and profile name for the embed.
+  if (!isPartnerPlan(business)) return _processIncomingMessage(business, waCredentials, args);
   let media = args?.media || null;
   if (!media && args?.imageData?.base64) {
     media = { kind: 'image', buffer: Buffer.from(args.imageData.base64, 'base64'), mime: args.imageData.mimeType };
@@ -3284,7 +3298,7 @@ async function processIncomingMessage(business, waCredentials, args) {
   try {
     return await withIncomingMedia(business?.id, media, () => _processIncomingMessage(business, waCredentials, args));
   } finally {
-    // WhatsApp profile name → shown in the chat list instead of only the number.
+    // WhatsApp profile name → shown in the embed chat list instead of only the number.
     if (args?.waProfileName && business?.id && args.customerPhone) {
       try { setConversationContactName(business.id, args.customerPhone, args.waProfileName); } catch (_) {}
     }

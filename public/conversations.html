@@ -862,7 +862,6 @@
           parts.push(`
             <div class="bubble-row ${m.role === 'user' ? 'row-user' : 'row-ai'}">
               <div class="bubble ${m.role === 'user' ? 'bubble-user' : 'bubble-ai'}">
-                ${panelMediaHtml(m)}
                 <p>${escapeHtml(m.content)}</p>
                 <span class="bubble-time">${formatTime(m.created_at)}</span>
               </div>
@@ -875,16 +874,6 @@
       // Scroll to bottom
       const el2 = document.getElementById('thread-messages');
       el2.scrollTop = el2.scrollHeight;
-    }
-
-    // Photo / audio / document the client sent (served only to this business).
-    function panelMediaHtml(m) {
-      const md = m.media;
-      if (!md || !/^\/api\/conversations\/\d+\/media\/\d+$/.test(md.url || '')) return '';
-      const name = String(md.name || 'Documento').replace(/[<>"'&]/g, '');
-      if (md.kind === 'image') return `<a href="${md.url}" target="_blank" rel="noopener"><img src="${md.url}" alt="Foto del cliente" loading="lazy" style="display:block;max-width:240px;max-height:300px;border-radius:6px;margin-bottom:6px;"></a>`;
-      if (md.kind === 'audio') return `<audio controls preload="metadata" src="${md.url}" style="display:block;width:240px;max-width:100%;margin-bottom:6px;"></audio>`;
-      return `<a href="${md.url}" download="${name}" style="display:inline-block;margin-bottom:6px;color:inherit;font-weight:600;">📄 ${name} — Descargar</a>`;
     }
 
     // ── Resume conversation ──

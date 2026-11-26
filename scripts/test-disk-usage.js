@@ -94,7 +94,7 @@ function req(method, p, body, cookie) {
     const bizId = (await req('GET', '/api/business', null, cookie)).body.id;
     const Database = require('better-sqlite3');
     const db = new Database(path.join(DB_DIR, 'daxos.db'));
-    db.prepare("UPDATE businesses SET phone_number_id='pn-disk', wa_provider='meta', wa_access_token='f', wa_connected_at=datetime('now'), bot_paused=1 WHERE id=?").run(bizId);
+    db.prepare("UPDATE businesses SET phone_number_id='pn-disk', wa_provider='meta', wa_access_token='f', wa_connected_at=datetime('now'), bot_paused=1, plan='crm' WHERE id=?").run(bizId);
     db.pragma('wal_checkpoint(FULL)');
     await req('POST', '/webhook', { object: 'whatsapp_business_account', entry: [{ changes: [{ field: 'messages', value: {
       metadata: { phone_number_id: 'pn-disk' },

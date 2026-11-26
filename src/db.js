@@ -1713,8 +1713,7 @@ const stmtGetHistoryExcludeSilent = db.prepare(`
 // returns the first N, which hides the newest messages of a long chat).
 function getConversationMessagesForPanel(conversationId, limit = 500) {
   return db.prepare(
-    `SELECT * FROM (SELECT id, role, content, created_at, media_kind, media_mime, media_name, media_path
-       FROM messages WHERE conversation_id = ? ORDER BY created_at DESC, id DESC LIMIT ?)
+    `SELECT * FROM (SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC, id DESC LIMIT ?)
      ORDER BY created_at ASC, id ASC`
   ).all(conversationId, limit);
 }

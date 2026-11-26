@@ -117,6 +117,14 @@ function req(method, p, body, headers = {}) {
   const list = await req('GET', `/api/agenda/appointments?from=${day}&to=${day}`, null, A);
   ok('pending notices come back in the appointments list', list.body.filter(a => a.wa_notify_status === 'failed' && a.client_notice_text).length === 2);
 
+  console.log('Non-crm business (plan crecimiento): the fix applies to everyone');
+  db.prepare("UPDATE businesses SET plan='crecimiento', plan_paid_at=datetime('now') WHERE id=?").run(biz);
+  r = await create('59899000111', '16:00');
+  ok('crecimiento, inside the window → sent', r.status === 200 && r.body.client_notice?.sent === true);
+  r = await create('59899000222', '16:30');
+  ok('crecimiento, outside the window → owner told with the text', r.status === 200 && r.body.client_notice?.sent === false && /agendado/.test(r.body.client_notice.text));
+  db.prepare("UPDATE businesses SET plan='crm' WHERE id=?").run(biz);
+
   console.log('Baileys connection');
   db.prepare("UPDATE businesses SET wa_provider='baileys' WHERE id=?").run(biz);
   r = await create('59899000111', '15:00');
