@@ -2521,6 +2521,9 @@ select option { background: #1a1a1a; }
     transition: color 0.15s, border-color 0.15s;
   }
   .mobile-corner-logout:hover { color: var(--text); border-color: #444; }
+  /* Configuración is a long scrolling page: the button stays at the top of the page instead
+     of floating over the cards. */
+  .mobile-corner-logout--scroll { position: absolute; }
 }
 
 /* ── Mobile bottom nav ── */
@@ -3002,6 +3005,12 @@ select option { background: #1a1a1a; }
 .voice-style-actions + .voice-previews-left { margin-top: 8px; }
 .voice-style #voice-audio { width: 100%; margin-top: 10px; }
 .voice-btn-listen, .btn-voice-listen { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
+.voice-advanced-link {
+  display: inline-block; margin: -6px 0 14px; padding: 4px 0; background: none; border: none;
+  color: var(--muted); font-family: var(--mono); font-size: 11px; text-decoration: underline; cursor: pointer;
+}
+.voice-advanced-link:hover, .voice-advanced-link.active { color: var(--accent); }
+.voice-plan-lock { margin-top: 20px; }
 .voice-custom-row { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
 .voice-custom-row .voice-test-text { flex: 1 1 220px; margin-bottom: 0; }
 .voice-instr-actions { display: flex; align-items: center; gap: 10px; margin: -6px 0 12px; flex-wrap: wrap; }

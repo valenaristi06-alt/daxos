@@ -706,11 +706,6 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
           <p class="voice-section-desc">Clonamos tu voz para que las respuestas por audio suenen como vos, no como un asistente genérico. Es opcional — si preferís, podés dejar todo en texto.</p>
           <p class="voice-autosave-note">Tu voz se guarda automáticamente cuando confirmás la grabación. No necesitás apretar "Guardar todo".</p>
 
-          <div id="voice-plan-lock" style="display:none" class="voice-plan-lock">
-            <p class="voice-lock-msg" id="voice-lock-msg"></p>
-            <a href="#" target="_blank" rel="noopener" class="voice-lock-link" id="voice-lock-cta"></a>
-          </div>
-
           <div id="voice-status-saved" style="display:none" class="voice-cloned-badge">
             <span class="voice-cloned-dot"></span>
             Voz activa
@@ -731,8 +726,8 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
               <button type="button" class="voice-tab active" data-mode="record">Grabar ahora</button>
               <button type="button" class="voice-tab" data-mode="upload">Subir archivo</button>
               <button type="button" class="voice-tab" data-mode="catalog">Elegir una voz lista</button>
-              <button type="button" class="voice-tab" data-mode="custom">Pegar código de voz</button>
             </div>
+            <button type="button" class="voice-advanced-link" id="voice-advanced-link" aria-expanded="false">Opciones avanzadas</button>
 
             <div class="voice-panel" id="panel-record">
               <div class="record-idle" id="record-idle">
@@ -756,9 +751,9 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
             </div>
 
             <div class="voice-panel" id="panel-custom" style="display:none">
-              <p class="voice-tip">Si encontraste una voz en la biblioteca de ElevenLabs, pegá acá su código (voice_id). No se pueden usar voces clonadas de otras personas.</p>
+              <p class="voice-tip">¿Encontraste una voz en la biblioteca de ElevenLabs? Pegá acá su código de voz de ElevenLabs. No se pueden usar voces clonadas de otras personas.</p>
               <div class="voice-custom-row">
-                <input type="text" id="voice-custom-id" class="voice-test-text" maxlength="40" placeholder="Pegá el voice_id acá" autocomplete="off" spellcheck="false" />
+                <input type="text" id="voice-custom-id" class="voice-test-text" maxlength="40" placeholder="Código de voz de ElevenLabs" autocomplete="off" spellcheck="false" />
                 <button type="button" class="btn-voice-preview" id="btn-voice-custom">Usar esta voz</button>
               </div>
               <span class="voice-preview-status" id="voice-custom-status"></span>
@@ -839,6 +834,11 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
             <audio id="voice-audio" controls style="display:none"></audio>
             <span class="voice-preview-status" id="voice-preview-status"></span>
             <span class="voice-preview-status" id="voice-style-status"></span>
+          </div>
+
+          <div id="voice-plan-lock" style="display:none" class="voice-plan-lock">
+            <p class="voice-lock-msg" id="voice-lock-msg"></p>
+            <a href="#" target="_blank" rel="noopener" class="voice-lock-link" id="voice-lock-cta"></a>
           </div>
         </div>
       </div>
@@ -973,7 +973,7 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
     </a>
   </nav>
 
-  <button class="mobile-corner-logout" id="btn-logout-mobile" type="button">Salir</button>
+  <button class="mobile-corner-logout mobile-corner-logout--scroll" id="btn-logout-mobile" type="button">Salir</button>
 
   <!-- Diálogo: ¿qué hacemos con la voz anterior? -->
   <div id="voice-recreate-dialog" class="voice-dialog-overlay" style="display:none">
@@ -1763,11 +1763,12 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
     let hasExistingVoice = false;
 
     // ── Mode tabs ──
-    document.querySelectorAll('.voice-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        document.querySelectorAll('.voice-tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        currentMode = tab.dataset.mode;
+    function setVoiceMode(mode) {
+        document.querySelectorAll('.voice-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
+        const adv = document.getElementById('voice-advanced-link');
+        adv.classList.toggle('active', mode === 'custom');
+        adv.setAttribute('aria-expanded', mode === 'custom' ? 'true' : 'false');
+        currentMode = mode;
         document.getElementById('panel-record').style.display = currentMode === 'record' ? 'block' : 'none';
         document.getElementById('panel-upload').style.display = currentMode === 'upload' ? 'block' : 'none';
         document.getElementById('panel-catalog').style.display = currentMode === 'catalog' ? 'block' : 'none';
@@ -1777,7 +1778,13 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
         document.getElementById('voice-consent-field').style.display = ownVoice ? '' : 'none';
         document.getElementById('voice-record-tip').style.display = ownVoice ? '' : 'none';
         if (currentMode === 'catalog') renderVoiceCatalog();
-      });
+    }
+    document.querySelectorAll('.voice-tab').forEach(tab => {
+      tab.addEventListener('click', () => setVoiceMode(tab.dataset.mode));
+    });
+    // "Opciones avanzadas": paste an ElevenLabs voice code (toggles back to recording).
+    document.getElementById('voice-advanced-link').addEventListener('click', () => {
+      setVoiceMode(currentMode === 'custom' ? 'record' : 'custom');
     });
 
     // ── State transitions ──
