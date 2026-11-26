@@ -139,13 +139,13 @@ function req(method, p, body) {
   db.prepare('UPDATE businesses SET business_hours=? WHERE id=?')
     .run(JSON.stringify(Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map(d => [d, [['08:00', '22:00']]]))), biz);
   await page.click('#btn-open-settings');
-  await page.waitForSelector('#agenda-card:not([hidden]) #ag-enabled');
+  await page.waitForSelector('#agenda-card:not([hidden]) #ag-enabled', { state: 'attached' });
   await page.click('#agenda-body details[data-sec="ag-services"] summary');
   await page.fill('#ag-svc-name', 'Corte');
   await page.click('[data-ag="add-svc"]');
   await page.waitForSelector('#agenda-body .ex-row:has-text("Corte")');
   ok('agenda: service created from the embed (crm plan)', db.prepare('SELECT COUNT(*) n FROM agenda_services WHERE business_id=? AND active=1').get(biz).n === 1);
-  await page.check('#ag-enabled');
+  await page.click('#agenda-body .set-switch .slider');
   await page.waitForSelector('[data-ag="open-new"]', { timeout: 6000 });
   ok('agenda: turned on', db.prepare('SELECT agenda_enabled FROM businesses WHERE id=?').get(biz).agenda_enabled === 1);
   await page.click('[data-ag="open-new"]');
