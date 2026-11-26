@@ -315,19 +315,40 @@ function wordSimilarity(a, b) {
   return Math.max(0, 1 - prev[y.length] / x.length);
 }
 
-// Best take: highest similarity; ties → duration closest to the median take. If every
-// transcription fails, the first take is used (the audio still goes out).
-function pickBestTake(sentence, takes, transcripts) {
-  if (transcripts.every(t => t == null)) return 0;
-  const durs = takes.map(b => b.length);
-  const med = [...durs].sort((a, b) => a - b)[Math.floor(durs.length / 2)];
-  let best = 0, bestScore = -Infinity, bestDd = Infinity;
-  takes.forEach((_, k) => {
-    const score = transcripts[k] == null ? -1 : wordSimilarity(sentence, transcripts[k]);
-    const dd = Math.abs(durs[k] - med);
-    if (score > bestScore || (score === bestScore && dd < bestDd)) { best = k; bestScore = score; bestDd = dd; }
-  });
-  return best;
+// Expected length of a sentence at a given speed. Fitted on the brisk takes of the
+// Valentin-IVC2 recipe calibration (26/11, 36 takes): ~0.17 s + 0.048 s per character at
+// speed 1.1. The mean of all takes (0.057 s/char) is pulled up by the dragged takes, so the
+// fast side is the target.
+const EXPECTED_BASE_SEC = 0.17;
+const EXPECTED_SEC_PER_CHAR_AT_1_1 = 0.048;
+// A take this much longer than expected is "dragged" and dropped when another one fits.
+const SLOW_TAKE_RATIO = 1.15;
+// Takes whose transcription is this close to the best one count as equally clean.
+const SIMILARITY_MARGIN = 0.1;
+
+function expectedSeconds(text, speed = 1.1) {
+  return EXPECTED_BASE_SEC + String(text).length * EXPECTED_SEC_PER_CHAR_AT_1_1 * (1.1 / (speed || 1.1));
+}
+
+// Best take:
+//   1) transcription: keep the takes that read the text as well as the best one (± margin);
+//   2) drop dragged takes (longer than expected × 1.15) when another one is left;
+//   3) the one closest to the expected duration wins; ties → better transcription.
+// If every transcription fails, steps 2–3 still choose by duration.
+function pickBestTake(sentence, takes, transcripts, speed = 1.1) {
+  const secs = takes.map(b => b.length / TAKE_BYTES_PER_SEC);
+  const sims = transcripts.map(t => (t == null ? null : wordSimilarity(sentence, t)));
+  const expected = expectedSeconds(sentence, speed);
+  let idx = takes.map((_, k) => k);
+  const known = idx.filter(k => sims[k] != null);
+  if (known.length) {
+    const top = Math.max(...known.map(k => sims[k]));
+    idx = known.filter(k => sims[k] >= top - SIMILARITY_MARGIN);
+  }
+  const notSlow = idx.filter(k => secs[k] <= expected * SLOW_TAKE_RATIO);
+  if (notSlow.length) idx = notSlow;
+  idx.sort((a, b) => Math.abs(secs[a] - expected) - Math.abs(secs[b] - expected) || (sims[b] ?? -1) - (sims[a] ?? -1));
+  return idx[0];
 }
 
 // Runs async jobs with at most `limit` in flight. Keeps result order.
@@ -415,7 +436,7 @@ async function generateNaturalAudio(voiceId, text, opts = {}, { takes = RECIPE_T
     sttSeconds += bufs.reduce((a, b) => a + b.length / TAKE_BYTES_PER_SEC, 0);
     const transcripts = await Promise.all(bufs.map(b =>
       transcribeAudio(b, 'audio/mpeg', RECIPE_STT_MODEL).catch(e => { _noteSttFailure(e); return null; })));
-    return bufs[pickBestTake(bodies[i].text, bufs, transcripts)];
+    return bufs[pickBestTake(bodies[i].text, bufs, transcripts, bodies[i].voice_settings?.speed)];
   }));
 
   const mp3 = await concatWithGaps(picked, SENTENCE_GAP_MS);
@@ -582,6 +603,7 @@ module.exports = {
   _splitSentences: splitSentences,
   _wordSimilarity: wordSimilarity,
   _pickBestTake: pickBestTake,
+  _expectedSeconds: expectedSeconds,
   _resetCreditStateForTests,
   _normalizeTtsText: normalizeTtsText,
   _applyPronunciations: applyPronunciations,
