@@ -124,8 +124,8 @@ function runUnitTests() {
   const originMainExpected = {
     text: TEST_TEXT + '.', // normalizeTtsText adds terminal period (no markdown, no terminal punct)
     model_id: 'eleven_multilingual_v2',
-    speed: 1.1,
-    voice_settings: { stability: 0.5, similarity_boost: 0.85, style: 0.2, use_speaker_boost: true },
+    // speed lives inside voice_settings: ElevenLabs ignores a top-level "speed" (fixed 26/11)
+    voice_settings: { stability: 0.5, similarity_boost: 0.85, style: 0.2, use_speaker_boost: true, speed: 1.1 },
   };
   // NULL model (from DB column = NULL after migration)
   const nullModelFromDB = JSON.parse(_ttsBody(TEST_TEXT, { model: null, stability: null }));
@@ -137,10 +137,27 @@ function runUnitTests() {
   assert(JSON.stringify(undefOpts) === JSON.stringify(originMainExpected),
     'undefined opts: body identical to origin/main');
 
+  // ── Owner presets: speed, tone, pronunciations ──────────────
+  const videos = JSON.parse(_ttsBody('Hola.', { tone: 'expresiva', speed: 'rapida' }));
+  assert(videos.voice_settings.stability === 0.45 && videos.voice_settings.style === 0.3, 'tone expresiva: stability 0.45 / style 0.3 (videos)');
+  assert(videos.voice_settings.speed === 1.18, 'speed rapida: 1.18');
+  const calm = JSON.parse(_ttsBody('Hola.', { tone: 'tranquila', speed: 'lenta' }));
+  assert(calm.voice_settings.stability === 0.6 && calm.voice_settings.style === 0.1 && calm.voice_settings.speed === 1.0, 'tranquila + lenta');
+  const junk = JSON.parse(_ttsBody('Hola.', { tone: 'gritona', speed: 'x' }));
+  assert(JSON.stringify(junk.voice_settings) === JSON.stringify(originMainExpected.voice_settings), 'unknown presets: default settings');
+  const adminWins = JSON.parse(_ttsBody('Hola.', { tone: 'expresiva', stability: 0.7 }));
+  assert(adminWins.voice_settings.stability === 0.7, 'admin stability overrides tone preset');
+  const pron = JSON.parse(_ttsBody('El HIFU y el hifu-x, hifux.', { pronunciations: JSON.stringify([{ de: 'hifu', a: 'jifu' }]) }));
+  assert(pron.text === 'El jifu y el jifu-x, hifux.', 'pronunciations: whole word, case-insensitive');
+  const { _applyPronunciations } = require('../src/elevenlabs');
+  assert(_applyPronunciations('Ácido hialurónico', [{ de: 'ácido', a: 'asido' }]) === 'asido hialurónico', 'pronunciations: accents');
+  assert(_applyPronunciations('a.b axb', [{ de: 'a.b', a: 'ok' }]) === 'ok axb', 'pronunciations: regex chars escaped');
+  assert(_applyPronunciations('hola', 'not json') === 'hola', 'pronunciations: bad JSON ignored');
+
   // ── Standard legacy assertions ───────────────────────────────
   const legacyBody = JSON.parse(_ttsBody('Hola cómo andás.'));
   assert(legacyBody.model_id === 'eleven_multilingual_v2', 'legacy: model_id=eleven_multilingual_v2');
-  assert(legacyBody.speed === 1.1, 'legacy: speed=1.1');
+  assert(legacyBody.voice_settings.speed === 1.1 && !('speed' in legacyBody), 'legacy: voice_settings.speed=1.1 (not top-level)');
   assert(legacyBody.voice_settings.style === 0.2, 'legacy: voice_settings.style=0.2');
   assert(legacyBody.voice_settings.stability === 0.5, 'legacy: voice_settings.stability=0.5');
   assert(legacyBody.voice_settings.similarity_boost === 0.85, 'legacy: similarity_boost=0.85');
@@ -150,7 +167,7 @@ function runUnitTests() {
   const nullModelBody = JSON.parse(_ttsBody('Hola.', { model: null, stability: null }));
   assert(nullModelBody.model_id === 'eleven_multilingual_v2', 'null model: same legacy model_id');
   assert(nullModelBody.voice_settings.style === 0.2, 'null model: has style (legacy)');
-  assert(nullModelBody.speed === 1.1, 'null model: has speed (legacy)');
+  assert(nullModelBody.voice_settings.speed === 1.1, 'null model: has speed (legacy)');
 
   // Undefined model from business (column not yet set) → same as legacy
   const undefModelBody = JSON.parse(_ttsBody('Hola.', {}));
@@ -449,6 +466,39 @@ async function runIntegrationTests() {
     }
   }
 
+  // ── Test C1b: owner voice settings + catalog ─────────────────
+  {
+    console.log('\n  C1b: owner saves speed/tone/pronunciations; catalog voice');
+    const cookie = await seedUser('c1b@el-test.com');
+    const biz = getBusinessByEmail('c1b@el-test.com');
+    configBusiness(biz.id, {
+      phone_number_id: 'pnid-c1b', wa_provider: 'meta', wa_access_token: 'fake-wa-token',
+      wa_connected_at: new Date().toISOString(), plan: 'crecimiento', plan_paid_at: new Date().toISOString(),
+      response_mode: 'audio', voice_id: 'voice-id-c1b', response_delay: 0,
+    });
+
+    const bad = await req('PUT', '/api/business/voice/settings', { voice_tone: 'gritona' }, { cookie });
+    assert(bad.status === 400, 'C1b: unknown tone rejected');
+    const ok = await req('PUT', '/api/business/voice/settings', {
+      voice_speed: 'rapida', voice_tone: 'expresiva', voice_pronunciations: [{ de: 'HIFU', a: 'jifu' }],
+    }, { cookie });
+    assert(ok.status === 200, 'C1b: settings saved');
+    const row = db.prepare('SELECT voice_speed, voice_tone, voice_pronunciations FROM businesses WHERE id = ?').get(biz.id);
+    assert(row.voice_speed === 'rapida' && row.voice_tone === 'expresiva', 'C1b: speed/tone stored');
+    assert(JSON.parse(row.voice_pronunciations)[0].a === 'jifu', 'C1b: pronunciations stored');
+
+    const cat = await req('GET', '/api/voice-catalog', null, { cookie });
+    assert(cat.status === 200 && cat.body.voices.length >= 2, 'C1b: catalog listed');
+    assert(!cat.body.voices.some(v => v.id === 'qRJbiqbavxXPG4xzVAYS' || v.id === 'JtLxORajLGYcUUERfNcK'),
+      'C1b: Vale\'s clone is not in the catalog');
+    const notCat = await req('POST', '/api/business/voice/catalog', { voice_id: 'qRJbiqbavxXPG4xzVAYS' }, { cookie });
+    assert(notCat.status === 400, 'C1b: non-catalog voice rejected');
+    const pick = await req('POST', '/api/business/voice/catalog', { voice_id: cat.body.voices[0].id }, { cookie });
+    assert(pick.status === 200, 'C1b: catalog voice picked');
+    const after = db.prepare('SELECT voice_id FROM businesses WHERE id = ?').get(biz.id);
+    assert(after.voice_id === cat.body.voices[0].id, 'C1b: business now uses the catalog voice');
+  }
+
   // ── Test C2: NULL voice_tts_model → legacy body ───────────────
   {
     console.log('\n  C2: voice_tts_model=NULL → legacy body (identical to before Fase 1)');
@@ -474,7 +524,7 @@ async function runIntegrationTests() {
     assert(lastElRequest !== null, 'C2: EL mock was called');
     if (lastElRequest) {
       assert(lastElRequest.body?.voice_settings?.style === 0.2, 'C2: NULL model → style=0.2 (legacy)');
-      assert(lastElRequest.body?.speed === 1.1, 'C2: NULL model → speed=1.1 (legacy)');
+      assert(lastElRequest.body?.voice_settings?.speed === 1.1, 'C2: NULL model → voice_settings.speed=1.1 (legacy)');
       assert(lastElRequest.body?.voice_settings?.stability === 0.5, 'C2: NULL model → stability=0.5 (legacy)');
       assert(lastElRequest.body?.voice_settings?.use_speaker_boost === true, 'C2: NULL model → use_speaker_boost (legacy)');
     }

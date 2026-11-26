@@ -68,8 +68,66 @@ function normalizeTtsText(text, { stripUrls = false } = {}) {
 // Allowed explicit model values stored in DB; anything else falls back to legacy path with a warning.
 const ALLOWED_V4_MODELS = ['eleven_v4_turbo', 'eleven_v4'];
 
-// opts = { model?: string, stability?: number }
-// Legacy path (model null/undefined): identical body to before this change
+// Simple presets the owner picks in the panel. Defaults ('normal' + 'natural') are exactly
+// the settings Daxos always used, so a business that never touches them sounds the same.
+// 'expresiva' + 'rapida' is the configuration used for the Daxos content videos.
+const VOICE_SPEEDS = { lenta: 1.0, normal: 1.1, rapida: 1.18 };
+const VOICE_TONES = {
+  tranquila: { stability: 0.6,  style: 0.1 },
+  natural:   { stability: 0.5,  style: 0.2 },
+  expresiva: { stability: 0.45, style: 0.3 },
+};
+const MAX_PRONUNCIATIONS = 30;
+
+// Ready-made voices a business can pick instead of recording its own. They are ElevenLabs
+// library voices saved in the Daxos account, never a person's clone (Vale's voice is only
+// for Daxos's own content). Same engine and settings as the cloned voices.
+const VOICE_CATALOG = [
+  { id: '9oPKasc15pfAbMr7N6Gs', nombre: 'Valeria', descripcion: 'Mujer joven, acento rioplatense' },
+  { id: 'QK4xDwo9ESPHA4JNUpX3', nombre: 'Tomás',   descripcion: 'Hombre, acento rioplatense' },
+  { id: 'akOBlaKhFd59YlK6xz9u', nombre: 'Lucía',   descripcion: 'Mujer, cálida, español neutro' },
+  { id: 'pMoFWkOXRI86X7PmTzlS', nombre: 'María',   descripcion: 'Mujer, tranquila, español neutro' },
+];
+const CATALOG_SAMPLE_TEXT = 'Hola, gracias por escribirnos. Sí, lo tenemos disponible esta semana. ¿Querés que te pase precios y horarios?';
+function isCatalogVoice(voiceId) { return VOICE_CATALOG.some(v => v.id === voiceId); }
+
+// Parses the stored JSON (or an array) into a clean [{de, a}] list. Bad input → [].
+function parsePronunciations(raw) {
+  let list = raw;
+  if (typeof raw === 'string') { try { list = JSON.parse(raw); } catch { return []; } }
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter(p => p && typeof p.de === 'string' && typeof p.a === 'string')
+    .map(p => ({ de: p.de.trim().slice(0, 60), a: p.a.trim().slice(0, 80) }))
+    .filter(p => p.de && p.a)
+    .slice(0, MAX_PRONUNCIATIONS);
+}
+
+function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+// Replaces whole words only, ignoring case ("whatsapp", "WhatsApp" → "guatsap"; "WhatsAppX" untouched).
+function applyPronunciations(text, raw) {
+  let t = text;
+  for (const { de, a } of parsePronunciations(raw)) {
+    const re = new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(de)}(?=$|[^\\p{L}\\p{N}])`, 'giu');
+    t = t.replace(re, (_, pre) => pre + a);
+  }
+  return t;
+}
+
+// Business row → opts for generateAudioBuffer. One place so every call site sounds the same.
+function voiceOptsFor(business) {
+  return {
+    model: business.voice_tts_model,
+    stability: business.voice_stability,
+    speed: business.voice_speed,
+    tone: business.voice_tone,
+    pronunciations: business.voice_pronunciations,
+  };
+}
+
+// opts = { model?, stability?, speed?, tone?, pronunciations? }
+// stability (admin override) wins over the tone preset's stability.
 function ttsBody(text, opts = {}) {
   let { model, stability } = opts;
 
@@ -87,35 +145,60 @@ function ttsBody(text, opts = {}) {
     }
   }
 
+  const tone  = VOICE_TONES[opts.tone] || null;
+  const speed = VOICE_SPEEDS[opts.speed] ?? VOICE_SPEEDS.normal;
+  const spoken = applyPronunciations(text, opts.pronunciations);
   const resolvedModel = model || TTS_MODEL;
 
   if (resolvedModel.startsWith('eleven_v4')) {
     return JSON.stringify({
-      text: normalizeTtsText(text, { stripUrls: true }),
+      text: normalizeTtsText(spoken, { stripUrls: true }),
       model_id: resolvedModel,
       voice_settings: {
-        stability: stability ?? 0.35,
+        stability: stability ?? tone?.stability ?? 0.35,
         similarity_boost: 0.75,
+        ...(opts.speed && VOICE_SPEEDS[opts.speed] ? { speed } : {}),
       },
     });
   }
 
-  // Legacy path: exact same body as before this change
+  // Legacy path. speed goes inside voice_settings: ElevenLabs ignores a top-level "speed"
+  // (measured 26/11: top-level 0.7 sounded the same as none), so the 1.1 never applied.
   return JSON.stringify({
-    text: normalizeTtsText(text),
+    text: normalizeTtsText(spoken),
     model_id: resolvedModel,
-    speed: 1.1,
-    voice_settings: { stability: 0.5, similarity_boost: 0.85, style: 0.2, use_speaker_boost: true },
+    voice_settings: {
+      stability: stability ?? (tone || VOICE_TONES.natural).stability,
+      similarity_boost: 0.85,
+      style: (tone || VOICE_TONES.natural).style,
+      use_speaker_boost: true,
+      speed,
+    },
   });
 }
 
-async function generatePreview(voiceId) {
+// Checks that a voice exists in this ElevenLabs account. Returns { voice_id, name } or throws.
+async function getVoice(voiceId) {
+  requireKey();
+  const res = await fetchWithTimeout(`${BASE}/voices/${encodeURIComponent(voiceId)}`, {
+    method: 'GET',
+    headers: { 'xi-api-key': API_KEY },
+  });
+  if (!res.ok) throw new Error(`ElevenLabs voice ${res.status}`);
+  const d = await res.json();
+  return { voice_id: d.voice_id, name: d.name };
+}
+
+const DEFAULT_PREVIEW_TEXT = 'Hola, así sonará tu asistente de ventas. ¿En qué te puedo ayudar hoy?';
+
+// opts: same as ttsBody (lets the owner hear settings before saving them).
+async function generatePreview(voiceId, opts = {}, text = DEFAULT_PREVIEW_TEXT) {
   requireKey();
 
   const res = await fetchWithTimeout(`${BASE}/text-to-speech/${voiceId}`, {
     method: 'POST',
     headers: { 'xi-api-key': API_KEY, 'Accept': 'audio/mpeg', 'Content-Type': 'application/json' },
-    body: ttsBody('Hola, así sonará tu asistente de ventas. ¿En qué te puedo ayudar hoy?'),
+    body: ttsBody(text || DEFAULT_PREVIEW_TEXT, opts),
   });
 
   if (!res.ok) {
@@ -129,14 +212,12 @@ async function generatePreview(voiceId) {
 const _audioCache = new Map();
 const _AUDIO_CACHE_MAX = 200;
 
-// opts = { model?: string, stability?: number } — forwarded from business.voice_tts_model / voice_stability
-// Null opts → identical behavior to before this change (legacy path, legacy cache key)
+// opts: see voiceOptsFor(business). The cache key is the full request body, so changing a
+// setting never serves an audio made with the old one.
 async function generateAudioBuffer(voiceId, text, opts = {}) {
   requireKey();
-  // Preserve old cache key format for legacy path so existing hits are not invalidated
-  const cacheKey = opts.model
-    ? `${voiceId}|${opts.model}|${text}`
-    : `${voiceId}|${text}`;
+  const body = ttsBody(text, opts);
+  const cacheKey = `${voiceId}|${body}`;
   if (_audioCache.has(cacheKey)) {
     console.log(`[elevenlabs:cache-hit] voiceId=${voiceId} chars=${text.length}`);
     return _audioCache.get(cacheKey);
@@ -145,7 +226,7 @@ async function generateAudioBuffer(voiceId, text, opts = {}) {
   const res = await fetchWithTimeout(`${BASE}/text-to-speech/${voiceId}`, {
     method: 'POST',
     headers: { 'xi-api-key': API_KEY, 'Accept': 'audio/mpeg', 'Content-Type': 'application/json' },
-    body: ttsBody(text, opts),
+    body,
   });
 
   if (!res.ok) {
@@ -215,7 +296,9 @@ async function getSubscriptionUsage() {
 
 module.exports = {
   cloneVoice, generatePreview, generateAudioBuffer, deleteVoice, transcribeAudio, getSubscriptionUsage,
+  getVoice, voiceOptsFor, VOICE_CATALOG, CATALOG_SAMPLE_TEXT, isCatalogVoice, parsePronunciations, VOICE_SPEEDS, VOICE_TONES, MAX_PRONUNCIATIONS,
   // Exported for unit tests only — not part of the public API
   _ttsBody: ttsBody,
   _normalizeTtsText: normalizeTtsText,
+  _applyPronunciations: applyPronunciations,
 };

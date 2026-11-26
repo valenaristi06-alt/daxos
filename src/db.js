@@ -933,6 +933,22 @@ db.exec(`
     }
   }
 
+  // Migration 035: owner-tunable voice. Speed and tone are simple presets the clinic picks
+  // in the panel; pronunciations is a JSON list of {de, a} replacements applied before TTS
+  // ("HIFU" → "jifu"). NULL everywhere = the voice keeps sounding as before.
+  if (!applied('035_voice_style')) {
+    try {
+      const bizCols035 = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+      if (!bizCols035.includes('voice_speed'))          db.exec('ALTER TABLE businesses ADD COLUMN voice_speed TEXT');
+      if (!bizCols035.includes('voice_tone'))           db.exec('ALTER TABLE businesses ADD COLUMN voice_tone TEXT');
+      if (!bizCols035.includes('voice_pronunciations')) db.exec('ALTER TABLE businesses ADD COLUMN voice_pronunciations TEXT');
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('035_voice_style');
+      console.log('[migration 035] voice_speed + voice_tone + voice_pronunciations added');
+    } catch (e) {
+      console.error('[migration 035] failed (non-fatal):', e.message);
+    }
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -1144,6 +1160,22 @@ function saveVoiceConsent(businessId, { voiceId, consentText, consentBy }) {
     SET voice_id = ?, voice_consent_at = datetime('now'), consent_text = ?, consent_by = ?
     WHERE id = ?
   `).run(voiceId, consentText, consentBy, businessId);
+}
+
+function setVoiceStyle(businessId, { voice_speed, voice_tone, voice_pronunciations }) {
+  db.prepare(`
+    UPDATE businesses SET voice_speed = ?, voice_tone = ?, voice_pronunciations = ? WHERE id = ?
+  `).run(voice_speed ?? null, voice_tone ?? null, voice_pronunciations ?? null, businessId);
+}
+
+// Admin only: point a business at a voice that already exists in the ElevenLabs account
+// (e.g. Daxos's own number using the same clone as the videos). The consent record says so.
+function setVoiceIdByAdmin(businessId, voiceId) {
+  db.prepare(`
+    UPDATE businesses
+    SET voice_id = ?, voice_consent_at = datetime('now'), consent_text = ?, consent_by = 'admin'
+    WHERE id = ?
+  `).run(voiceId, 'Voz existente asignada por admin', businessId);
 }
 
 function setVoiceConfig(businessId, { voice_tts_model, voice_stability }) {
@@ -2653,6 +2685,8 @@ module.exports = {
   setWebsiteSummary,
   saveVoiceConsent,
   setVoiceConfig,
+  setVoiceStyle,
+  setVoiceIdByAdmin,
   createUser,
   getUserByEmail,
   changeUserEmail,
