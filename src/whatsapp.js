@@ -97,6 +97,12 @@ async function sendWhatsAppMessage(to, text, creds, opts) {
   return data;
 }
 
+// Voice note = OGG container, Opus codec, mono. Each API has its own marker:
+//   Meta    → upload type "audio/ogg" + audio.voice = true
+//   Baileys → mimetype "audio/ogg; codecs=opus" + ptt = true (+ seconds and waveform)
+const VOICE_UPLOAD_MIME  = 'audio/ogg';
+const VOICE_BAILEYS_MIME = 'audio/ogg; codecs=opus';
+
 async function uploadMedia(buffer, filename, mimeType, creds) {
   if (creds.provider === 'baileys') {
     // Baileys sends directly from buffer — no separate upload step.
@@ -104,11 +110,16 @@ async function uploadMedia(buffer, filename, mimeType, creds) {
     return { _baileys: true, buffer, filename, mimeType };
   }
   const { mediaUrl, formHeaders, doFetch } = getApiConfig(creds);
+  // Meta lists the voice-note format as plain "audio/ogg" (Opus only, mono). Declaring
+  // "audio/ogg; codecs=opus" is not one of its documented types, and the voice flag is
+  // only honoured for audio/ogg — so the codecs parameter is dropped for Meta uploads.
+  // Kapso keeps the exact type it was given.
+  const declaredType = (creds.provider !== 'kapso' && /^audio\/ogg\b/i.test(mimeType || '')) ? VOICE_UPLOAD_MIME : mimeType;
   const makeForm = () => {
     const form = new FormData();
     form.append('messaging_product', 'whatsapp');
-    form.append('type', mimeType);
-    form.append('file', new Blob([buffer], { type: mimeType }), filename);
+    form.append('type', declaredType);
+    form.append('file', new Blob([buffer], { type: declaredType }), filename);
     return { method: 'POST', headers: formHeaders, body: form };
   };
   const res = await doFetch(mediaUrl(creds.phoneNumberId), makeForm, 'uploadMedia');
@@ -124,10 +135,15 @@ async function sendWhatsAppAudio(to, mediaId, creds, opts) {
     const sock = creds.socket;
     if (!sock) throw new Error('baileys: socket not available');
     if (!mediaId?._baileys) throw new Error('baileys: expected _baileys sentinel from uploadMedia');
+    // ptt=true is what makes it a voice note. seconds + waveform draw the duration and the
+    // wave; without them the note shows a flat line (see analyzeVoiceNote in audio.js).
+    const voice = opts && opts.voice;
     await sock.sendMessage(creds.remoteJid, {
       audio:    mediaId.buffer,
-      mimetype: mediaId.mimeType || 'audio/ogg; codecs=opus',
+      mimetype: VOICE_BAILEYS_MIME,
       ptt:      true,
+      ...(voice && voice.seconds ? { seconds: voice.seconds } : {}),
+      ...(voice && voice.waveform ? { waveform: voice.waveform } : {}),
     });
     return { provider: 'baileys', to };
   }
@@ -512,4 +528,4 @@ function sanitizeForClient(txt, logFn) {
   return cleaned;
 }
 
-module.exports = { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, markReadAndTyping, downloadKapsoMedia, downloadMetaMedia, isAllowedKapsoHost, parseSplitParts, splitAndSend, sanitizeForClient, isSendBlocked: _blockedByPause };
+module.exports = { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, markReadAndTyping, downloadKapsoMedia, downloadMetaMedia, isAllowedKapsoHost, parseSplitParts, splitAndSend, sanitizeForClient, isSendBlocked: _blockedByPause, VOICE_UPLOAD_MIME, VOICE_BAILEYS_MIME };

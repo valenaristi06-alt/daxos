@@ -297,7 +297,7 @@ const fs = require('fs');
 const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, markReadAndTyping, downloadKapsoMedia, downloadMetaMedia, parseSplitParts, splitAndSend, sanitizeForClient } = require('./whatsapp');
 const { getFreeSlots, formatSlotsForPrompt, formatSlotsForClient, formatAppointmentsBlock, getMaxBookingDate, isSlotsMapFresh, utcIsoToMvdHHMM, getMvdDow, DOW_LABELS, getBizHoursForDow, getAllSlotsForDate } = require('./agenda');
 const { generateAudioBuffer, transcribeAudio, getSubscriptionUsage } = require('./elevenlabs');
-const { convertToOgg } = require('./audio');
+const { convertToOgg, analyzeVoiceNote } = require('./audio');
 const { mediaReply, mediaPlaceholder, readIncomingDocument, IMAGE_MAX_BYTES, DOC_MAX_BYTES } = require('./incoming-media');
 
 // "120" → "2 horas", "90" → "1 hora 30 min", "45" → "45 min"
@@ -4310,8 +4310,15 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
         logError('tts-buffers', { message: `mp3=${mp3.length}b`, stack: '' });
         const ogg = await convertToOgg(mp3);
         logError('tts-buffers', { message: `ogg=${ogg.length}b mime=audio/ogg; codecs=opus`, stack: '' });
+        // Baileys needs the duration and waveform alongside ptt to draw the voice note.
+        // Best effort: if the analysis fails the note is still sent as a voice note.
+        let voice = null;
+        if (waCredentials.provider === 'baileys') {
+          try { voice = await analyzeVoiceNote(ogg); }
+          catch (waveErr) { logError('tts-waveform', { message: waveErr.message, stack: '' }); }
+        }
         const mediaId = await uploadMedia(ogg, 'reply.ogg', 'audio/ogg; codecs=opus', waCredentials);
-        await sendWhatsAppAudio(customerPhone, mediaId, waCredentials);
+        await sendWhatsAppAudio(customerPhone, mediaId, waCredentials, { voice });
         logError(sendCtxOk, { message: `mode=audio business_id=${business.id} to=****${customerPhone.slice(-4)}`, stack: '' });
       } catch (audioErr) {
         logError('webhook-audio-fallback', { message: audioErr.message, stack: audioErr.stack || '' });
