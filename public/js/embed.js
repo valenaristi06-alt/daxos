@@ -53,6 +53,15 @@
     return res;
   };
 
+  let lastState = null;
+  function sendState() { if (lastState) notifyParent('ready', lastState); }
+  // Pupi puede pedir el estado cuando quiera: postMessage({ source: 'assistant-host', event: 'get_state' }).
+  window.addEventListener('message', function (event) {
+    if (!PARENT_ORIGINS.includes(event.origin)) return;
+    const d = event.data;
+    if (d && d.source === 'assistant-host' && d.event === 'get_state') sendState();
+  });
+
   function applyTheme(theme) {
     if (!theme) return;
     const map = {
@@ -215,6 +224,7 @@
         });
         if (!r.ok) throw new Error();
         currentBusiness.bot_paused = paused;
+        if (lastState) lastState = Object.assign({}, lastState, { bot_paused: paused });
         $('status-label').textContent = paused ? 'Pausado' : 'Activo';
         notifyParent(paused ? 'paused' : 'resumed');
       } catch (_) {
@@ -235,6 +245,8 @@
     currentBusiness.connected = state.connected;
     currentBusiness.bot_paused = state.bot_paused;
     currentBusiness.plan = state.plan;
+    const next = { connected: !!state.connected, configured: !!state.configured, bot_paused: !!state.bot_paused };
+    if (!lastState || JSON.stringify(next) !== JSON.stringify(lastState)) { lastState = next; sendState(); }
     renderStep1();
     renderStep3(state);
     reportHeight();
@@ -295,8 +307,12 @@
     wirePauseToggle();
     wireViews();
     setView(state.connected ? 'convs' : 'steps');
-    // Estado inicial para Pupi (p. ej. mostrar "Conectado" en Herramientas).
-    notifyParent('ready', { connected: !!state.connected, configured: !!state.configured, bot_paused: !!state.bot_paused });
+    // Estado para Pupi (p. ej. "Conectado" en Herramientas). Se repite unos segundos por si
+    // el listener de Pupi todavía no estaba enganchado, y Pupi también puede pedirlo.
+    lastState = { connected: !!state.connected, configured: !!state.configured, bot_paused: !!state.bot_paused };
+    sendState();
+    setTimeout(sendState, 1000);
+    setTimeout(sendState, 3000);
 
     // 4) Paso 2: inyectar el configurador (usa window.__EMBED_TOKEN__).
     const s = document.createElement('script');
