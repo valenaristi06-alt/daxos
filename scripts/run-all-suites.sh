@@ -7,7 +7,7 @@ PROJ="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJ"
 
 kill_ports() {
-  for port in 3000 3132 3133 3134 3135 3136 3137 3138 3139 3140 3141 3091 3095 3096 3097 3098 3099 3100 3105 3106 3107 3108 3109 3110 3119 3215 3216 3222 3225 3230 3240 3241 3242 3271 3272 3273 3274 3275 3276 3277 3278 3279 3280 3281 3282 3283 3284 3285; do
+  for port in 3000 3142 3143 3132 3133 3134 3135 3136 3137 3138 3139 3140 3141 3091 3095 3096 3097 3098 3099 3100 3105 3106 3107 3108 3109 3110 3119 3215 3216 3222 3225 3230 3240 3241 3242 3271 3272 3273 3274 3275 3276 3277 3278 3279 3280 3281 3282 3283 3284 3285; do
     pids=$(lsof -ti tcp:$port 2>/dev/null)
     [ -n "$pids" ] && kill -9 $pids 2>/dev/null
   done
@@ -23,7 +23,7 @@ cleanup_dbs() {
          /tmp/test-mailtest-a /tmp/test-mailtest-b /tmp/test-mailtest-c /tmp/test-mark-read \
          /tmp/test-owner-view /tmp/test-panel-send /tmp/test-pause-keyword /tmp/test-reset-conv \
          /tmp/test-runtime-config /tmp/test-sale-intent-booking /tmp/test-sale-intent-db \
-         /tmp/test-partner /tmp/test-embed /tmp/test-embed-convs-ui /tmp/test-disk-usage /tmp/test-agenda-notice /tmp/test-security /tmp/test-security-prod /tmp/test-silent-window /tmp/test-spending-cap \
+         /tmp/test-partner /tmp/test-embed /tmp/test-embed-convs-ui /tmp/test-embed-parent /tmp/test-disk-usage /tmp/test-agenda-notice /tmp/test-security /tmp/test-security-prod /tmp/test-silent-window /tmp/test-spending-cap \
          /tmp/test-trial-grace /tmp/test-wa-disconnect /tmp/test-wa-health-check \
          /tmp/test-perf-static /tmp/test-agenda-form /tmp/test-config-mic /tmp/test-elevenlabs \
          /tmp/test-grounding /tmp/test-incoming-media /tmp/test-voice-note /tmp/test-trial-emails /tmp/test-trial-emails-history /tmp/test-pending-data-alert /tmp/test-plan-screen \
@@ -70,6 +70,7 @@ run_suite "test-security"        "scripts/test-security.js"
 run_suite "test-partner"         "scripts/test-partner.js"
 run_suite "test-embed"           "scripts/test-embed.js"
 run_suite "test-embed-convs-ui"  "scripts/test-embed-convs-ui.js"
+run_suite "test-embed-parent"    "scripts/test-embed-parent.js"
 run_suite "test-disk-usage"      "scripts/test-disk-usage.js"
 run_suite "test-agenda-notice"   "scripts/test-agenda-notice.js"
 run_suite "test-non-crm-parity"  "scripts/test-non-crm-parity.js"
