@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * A business that is NOT on the crm plan behaves exactly like on main.
- * Runs origin/main (git archive) and this branch side by side, with the same mocks
+ * A business that is NOT on the crm plan behaves exactly like Daxos before the Pupi work.
+ * Base = 9ead46e (main before any embed/crm change; override with PARITY_BASE).
+ * Runs the base (git archive) and this branch side by side, with the same mocks
  * (Meta Graph, ElevenLabs, Anthropic) and the same steps, and compares what each returns
  * and stores. The only intended differences are listed and asserted separately.
  * Run: node scripts/test-non-crm-parity.js
@@ -15,6 +16,7 @@ const Database = require('better-sqlite3');
 
 const ROOT = path.join(__dirname, '..');
 const MAIN_DIR = '/tmp/test-parity-main-src';
+const BASE_REF = process.env.PARITY_BASE || '9ead46e';
 const RUNS = {
   main:   { port: 3137, db: '/tmp/test-parity-db-main', cwd: MAIN_DIR },
   branch: { port: 3138, db: '/tmp/test-parity-db-branch', cwd: ROOT },
@@ -65,9 +67,9 @@ function strip(v) {
 }
 
 (async () => {
-  console.log('Preparing origin/main …');
+  console.log(`Preparing base ${BASE_REF} …`);
   execSync(`rm -rf ${MAIN_DIR} ${RUNS.main.db} ${RUNS.branch.db} && mkdir -p ${MAIN_DIR} ${RUNS.main.db} ${RUNS.branch.db}`);
-  execSync(`git -C "${ROOT}" fetch -q origin main && git -C "${ROOT}" archive origin/main | tar -x -C ${MAIN_DIR}`);
+  execSync(`git -C "${ROOT}" fetch -q origin main && git -C "${ROOT}" archive ${BASE_REF} | tar -x -C ${MAIN_DIR}`);
   fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(MAIN_DIR, 'node_modules'));
 
   // Shared mocks. Meta records outgoing messages per run by phone_number_id.
