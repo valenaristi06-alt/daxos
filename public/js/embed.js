@@ -171,6 +171,8 @@
     // Después de conectar, Ajustes suma "Más ajustes" (todo lo demás del panel).
     if (settingsMode && window.EmbedSettings) window.EmbedSettings.start({ authHeaders, onLayout: reportHeight });
     else show($('more-settings'), false);
+    if (settingsMode && window.EmbedAgenda) window.EmbedAgenda.start({ authHeaders, onLayout: reportHeight });
+    else show($('agenda-card'), false);
     window.scrollTo(0, 0);
     reportHeight();
   }

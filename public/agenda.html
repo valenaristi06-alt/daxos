@@ -2110,6 +2110,38 @@ document.getElementById('btn-retry').addEventListener('click', () => window.loca
   document.getElementById('chk-show-cancelled').addEventListener('change', function() { onCancelledToggle(this.checked); });
   document.getElementById('chk-show-cancelled-mobile').addEventListener('change', function() { onCancelledToggle(this.checked); });
 
+  // ── Aviso al cliente que no salió (ventana de 24 h de WhatsApp, etc.) ─────
+  // Nunca en silencio: el dueño ve el motivo y el texto exacto para mandarlo él.
+  function escNotice(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+  function showClientNoticeFailed(aptId, notice) {
+    if (!notice || notice.sent) return;
+    document.getElementById('notice-failed-overlay')?.remove();
+    const phone = String(notice.phone || '').replace(/\D/g, '');
+    const wa = `https://wa.me/${phone}?text=${encodeURIComponent(notice.text || '')}`;
+    const el = document.createElement('div');
+    el.id = 'notice-failed-overlay';
+    el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true');
+    el.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px;';
+    el.innerHTML = `<div style="background:var(--surface,#161616);color:var(--text,#f0ede8);border:1px solid #f59e0b66;border-radius:10px;max-width:440px;width:100%;padding:20px;font-size:14px;line-height:1.5;">
+      <h3 style="margin:0 0 8px;font-size:16px;">⚠ El cliente no recibió el aviso</h3>
+      <p style="margin:0 0 10px;">${escNotice(notice.reason)} Avisale vos con este mensaje:</p>
+      <textarea readonly rows="4" style="width:100%;box-sizing:border-box;font:inherit;padding:8px;border-radius:6px;background:#0000002e;color:inherit;border:1px solid #ffffff2e;">${escNotice(notice.text)}</textarea>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:12px;">
+        <button type="button" data-n="copy" class="btn-detail btn-detail-outline">Copiar mensaje</button>
+        <a href="${wa}" target="_blank" rel="noopener" class="btn-detail btn-detail-outline" style="text-decoration:none;">Abrir WhatsApp</a>
+        <button type="button" data-n="done" class="btn-detail">Ya le avisé</button>
+        <button type="button" data-n="later" class="btn-detail btn-detail-outline">Después</button>
+      </div></div>`;
+    el.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-n]'); if (!b) return;
+      if (b.dataset.n === 'copy') { try { await navigator.clipboard.writeText(notice.text); b.textContent = 'Copiado ✓'; } catch { el.querySelector('textarea').select(); } return; }
+      if (b.dataset.n === 'done') await fetch(`/api/agenda/appointments/${aptId}/notice-done`, { method: 'PATCH' }).catch(() => {});
+      el.remove();
+      if (b.dataset.n === 'done') { await navigateTo(currentDate); }
+    });
+    document.body.appendChild(el);
+  }
+
   // ── Detail content builder ────────────────────────────────────────────────
   function buildDetailHTML(apt) {
     const waLink       = `https://wa.me/${apt.customer_phone?.replace(/\D/g,'')}`;
@@ -2117,7 +2149,7 @@ document.getElementById('btn-retry').addEventListener('click', () => window.loca
     const notifyOk     = apt.wa_notify_status === 'ok';
     const isConfirmed  = apt.status === 'confirmed';
     return `
-      ${notifyFailed ? `<div class="apt-detail-warn">⚠ No se pudo avisar al cliente por WhatsApp${apt.wa_notify_reason ? ': <em>' + apt.wa_notify_reason + '</em>' : ''}. <a href="${waLink}" target="_blank" rel="noopener">Avisale vos directamente</a>.</div>` : ''}
+      ${notifyFailed ? `<div class="apt-detail-warn">⚠ No se pudo avisar al cliente por WhatsApp${apt.wa_notify_reason ? ': <em>' + escNotice(apt.wa_notify_reason) + '</em>' : ''}. <a href="${waLink}${apt.client_notice_text ? '?text=' + encodeURIComponent(apt.client_notice_text) : ''}" target="_blank" rel="noopener">Avisale vos directamente</a>.${apt.client_notice_text ? ` <button type="button" class="btn-detail btn-detail-outline" id="btn-notice-done" style="margin-top:6px;">Ya le avisé</button>` : ''}</div>` : ''}
       <div class="apt-detail-row"><span class="apt-detail-label">Cliente</span><span class="apt-detail-val">${apt.client_name || '—'}</span></div>
       <div class="apt-detail-row"><span class="apt-detail-label">Teléfono</span><span class="apt-detail-val"><a href="${waLink}" target="_blank" rel="noopener">${formatPhone(apt.customer_phone)}</a></span></div>
       ${apt.service_name ? `<div class="apt-detail-row"><span class="apt-detail-label">Servicio</span><span class="apt-detail-val">${apt.service_name}</span></div>` : ''}
@@ -2133,16 +2165,22 @@ document.getElementById('btn-retry').addEventListener('click', () => window.loca
   }
 
   function attachDetailActions(apt) {
+    document.getElementById('btn-notice-done')?.addEventListener('click', async () => {
+      await fetch(`/api/agenda/appointments/${apt.id}/notice-done`, { method: 'PATCH' }).catch(() => {});
+      closeSheet(); await navigateTo(currentDate);
+    });
     document.getElementById('btn-detail-cancel')?.addEventListener('click', async () => {
       if (!confirm('¿Cancelar este turno? Se avisará al cliente por WhatsApp.')) return;
       const res = await fetch(`/api/agenda/appointments/${apt.id}/cancel`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: '{}',
       });
       if (res.ok) {
+        const d = await res.json().catch(() => ({}));
         closeSheet();
         await navigateTo(currentDate);
         await updateSubtitle();
         showToast('Turno cancelado.', 'success');
+        showClientNoticeFailed(apt.id, d.client_notice);
       } else {
         const d = await res.json().catch(()=>({}));
         showToast(d.error || 'Error al cancelar.', 'error');
@@ -2302,10 +2340,12 @@ document.getElementById('btn-retry').addEventListener('click', () => window.loca
           body: JSON.stringify({ date, time }),
         });
         if (res.ok) {
+          const d = await res.json().catch(() => ({}));
           closeModal();
           await navigateTo(date);
           await updateSubtitle();
           showToast('Turno movido.', 'success');
+          showClientNoticeFailed(d.id, d.client_notice);
         } else {
           const d = await res.json().catch(()=>({}));
           errEl.textContent = d.error || 'Error al mover.';
@@ -2321,10 +2361,12 @@ document.getElementById('btn-retry').addEventListener('click', () => window.loca
           body: JSON.stringify({ serviceId: svcId ? Number(svcId) : null, customerPhone: phone, clientName: name || null, date, time }),
         });
         if (res.ok) {
+          const d = await res.json().catch(() => ({}));
           closeModal();
           await navigateTo(date);
           await updateSubtitle();
           showToast('Turno agregado.', 'success');
+          showClientNoticeFailed(d.id, d.client_notice);
         } else {
           const d = await res.json().catch(()=>({}));
           errEl.textContent = d.error || 'Error al agregar.';

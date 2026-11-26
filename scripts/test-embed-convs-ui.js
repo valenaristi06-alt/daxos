@@ -134,6 +134,38 @@ function req(method, p, body) {
   await page.click('#btn-back-convs');
   await page.waitForSelector('#embed-convs:not([hidden])');
 
+  // Agenda (plan crm): even with agenda_access = paid, crm keeps access.
+  db.prepare("INSERT OR REPLACE INTO runtime_config (key, value) VALUES ('agenda_access', 'paid')").run();
+  db.prepare('UPDATE businesses SET business_hours=? WHERE id=?')
+    .run(JSON.stringify(Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map(d => [d, [['08:00', '22:00']]]))), biz);
+  await page.click('#btn-open-settings');
+  await page.waitForSelector('#agenda-card:not([hidden]) #ag-enabled');
+  await page.click('#agenda-body details[data-sec="ag-services"] summary');
+  await page.fill('#ag-svc-name', 'Corte');
+  await page.click('[data-ag="add-svc"]');
+  await page.waitForSelector('#agenda-body .ex-row:has-text("Corte")');
+  ok('agenda: service created from the embed (crm plan)', db.prepare('SELECT COUNT(*) n FROM agenda_services WHERE business_id=? AND active=1').get(biz).n === 1);
+  await page.check('#ag-enabled');
+  await page.waitForSelector('[data-ag="open-new"]', { timeout: 6000 });
+  ok('agenda: turned on', db.prepare('SELECT agenda_enabled FROM businesses WHERE id=?').get(biz).agenda_enabled === 1);
+  await page.click('[data-ag="open-new"]');
+  const tomorrow = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Montevideo' }).format(new Date(Date.now() + 86400000));
+  await page.fill('#ag-phone', '099111222');
+  await page.fill('#ag-name', 'Carla');
+  await page.fill('#ag-date', tomorrow);
+  await page.dispatchEvent('#ag-date', 'change');
+  await page.waitForFunction(() => { const s = document.getElementById('ag-time'); return s && s.value && /^\d\d:\d\d$/.test(s.value); }, null, { timeout: 6000 });
+  await page.click('[data-ag="create"]');
+  await page.waitForSelector('.ag-appt:has-text("Carla")', { timeout: 6000 });
+  const apt = db.prepare("SELECT id, status FROM agenda_appointments WHERE business_id=? AND client_name='Carla'").get(biz);
+  ok('agenda: appointment created and listed', apt && apt.status === 'confirmed');
+  await page.click('.ag-appt:has-text("Carla") [data-ag="ask-cancel"]');
+  await page.click('[data-ag="cancel"]');
+  await page.waitForSelector('#ag-status:has-text("cancelado")', { timeout: 6000 });
+  ok('agenda: appointment cancelled', db.prepare('SELECT status FROM agenda_appointments WHERE id=?').get(apt.id).status === 'cancelled');
+  await page.click('#btn-back-convs');
+  await page.waitForSelector('#embed-convs:not([hidden])');
+
   await page.click('#btn-open-settings');
   ok('settings show the 3 steps with back link', await page.isVisible('#step-3') && await page.isVisible('#btn-back-convs'));
   ok('step 3 has no bar, percent or counts', !(await page.innerText('#step-3')).match(/\d+\s*%|conversaciones|de tu plan este mes/i) || false);

@@ -111,7 +111,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, getBusinessByCrmUserId, createCrmBusiness, createPartnerLoginToken, getPartnerLoginToken, markPartnerLoginTokenUsed, getMonthlyConvCount, getMonthlyUsage, setCrmCapOwnerNotified, setAudioCapNotifiedMonth, setCrmQuota, getPartnerUsageByMonth, createEmbedSession, getEmbedSession, purgeExpiredEmbedSessions, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage: _dbAddMessage, getLastUserMessageAt, getConversationHistory, getConversationMessagesForPanel, setMessageMedia, getMessageMedia, takeExpiredMessageMedia, takeConversationMedia, setConversationContactName, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, markConversationPausedByCrmCap, getTrialBusinesses, trialEmailAlreadySent, claimTrialEmail, releaseTrialEmail, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setConfigChatEnabled, saveConfigDraft, getConfigDraft, clearConfigDraft, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, getBusinessByCrmUserId, createCrmBusiness, createPartnerLoginToken, getPartnerLoginToken, markPartnerLoginTokenUsed, getMonthlyConvCount, getMonthlyUsage, setCrmCapOwnerNotified, setAudioCapNotifiedMonth, setCrmQuota, getPartnerUsageByMonth, createEmbedSession, getEmbedSession, purgeExpiredEmbedSessions, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage: _dbAddMessage, getLastUserMessageAt, getConversationHistory, getConversationMessagesForPanel, setMessageMedia, getMessageMedia, takeExpiredMessageMedia, takeConversationMedia, setConversationContactName, getLastUserMessageAtForPhone, setAppointmentNoticeText, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, markConversationPausedByCrmCap, getTrialBusinesses, trialEmailAlreadySent, claimTrialEmail, releaseTrialEmail, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setConfigChatEnabled, saveConfigDraft, getConfigDraft, clearConfigDraft, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
   incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
   incrementPreviewCall, getPreviewSpendingToday, setSpendingCapOwnerNotified, setSpendingCapNeedsAttention,
   getConvAssistantCountLastHour, setSpendingCapNotified,
@@ -1631,8 +1631,9 @@ function _hasOpenDay(hoursJson) {
   } catch { return false; }
 }
 
+// Agenda: Crecimiento, A medida, cortesía, and partner accounts (crm) — free for us.
 function _agendaPlanOk(biz) {
-  return !!biz.plan_cortesia || biz.plan === 'crecimiento' || biz.plan === 'a_medida';
+  return !!biz.plan_cortesia || biz.plan === 'crecimiento' || biz.plan === 'a_medida' || biz.plan === 'crm';
 }
 
 function _agendaAccessOk(biz) {
@@ -1801,25 +1802,13 @@ app.post('/api/agenda/appointments', requireAuth, async (req, res) => {
     return res.status(500).json({ error: 'Error al crear el turno.' });
   }
 
-  const waCredsPanelLookup = biz.wa_provider === 'kapso'
-    ? { phoneNumberId: biz.phone_number_id, provider: 'kapso' }
-    : biz.phone_number_id
-      ? { phoneNumberId: biz.phone_number_id, wabaId: biz.waba_id, provider: biz.wa_provider || 'meta' }
-      : null;
-  if (waCredsPanelLookup) {
-    const svcLabel  = svc?.name ? svc.name + ', ' : '';
-    const clientMsg = `Tu turno quedó agendado:\n${svcLabel}${_agendaApptSummary(startsAt)}.\nSi no podés venir, avisanos por acá.`;
-    sendWhatsAppMessage(normPhone, clientMsg, waCredsPanelLookup)
-      .then(() => updateAppointmentNotification(apt.id, { clientNotifiedAt: new Date().toISOString(), waNotifyStatus: 'ok' }))
-      .catch(err => {
-        updateAppointmentNotification(apt.id, { waNotifyStatus: 'failed', waNotifyReason: err.message.slice(0, 120) });
-        logError('agenda-notify-error', { message: `create apt=${apt.id}: ${err.message}`, stack: '' });
-      });
-  }
-  res.json(apt);
+  const svcLabel  = svc?.name ? svc.name + ', ' : '';
+  const clientMsg = `Tu turno quedó agendado:\n${svcLabel}${_agendaApptSummary(startsAt)}.\nSi no podés venir, avisanos por acá.`;
+  const client_notice = await notifyClientOfAgendaChange(biz, apt.id, normPhone, clientMsg, 'create');
+  res.json({ ...apt, client_notice });
 });
 
-app.patch('/api/agenda/appointments/:id/cancel', requireAuth, (req, res) => {
+app.patch('/api/agenda/appointments/:id/cancel', requireAuth, async (req, res) => {
   const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   const biz = getBusinessById(user.business_id);
@@ -1835,25 +1824,75 @@ app.patch('/api/agenda/appointments/:id/cancel', requireAuth, (req, res) => {
   const ok = cancelAppointment(apt.id, 'owner', req.body?.reason ?? null);
   if (!ok) return res.status(409).json({ error: 'El turno ya fue cancelado.' });
 
-  const waCredsPanelLookup = biz.wa_provider === 'kapso'
-    ? { phoneNumberId: biz.phone_number_id, provider: 'kapso' }
-    : biz.phone_number_id
-      ? { phoneNumberId: biz.phone_number_id, wabaId: biz.waba_id, provider: biz.wa_provider || 'meta' }
-      : null;
-  if (waCredsPanelLookup && apt.customer_phone) {
+  let client_notice = null;
+  if (apt.customer_phone) {
     const svcLabel  = apt.service_name ? ' (' + apt.service_name + ')' : '';
     const clientMsg = `Tu turno del ${_agendaApptSummary(apt.starts_at)}${svcLabel} fue cancelado. Si querés reagendar, escribinos.`;
-    sendWhatsAppMessage(apt.customer_phone, clientMsg, waCredsPanelLookup)
-      .then(() => updateAppointmentNotification(apt.id, { clientNotifiedAt: new Date().toISOString(), waNotifyStatus: 'ok' }))
-      .catch(err => {
-        updateAppointmentNotification(apt.id, { waNotifyStatus: 'failed', waNotifyReason: err.message.slice(0, 120) });
-        logError('agenda-notify-error', { message: `cancel apt=${apt.id}: ${err.message}`, stack: '' });
-      });
+    client_notice = await notifyClientOfAgendaChange(biz, apt.id, apt.customer_phone, clientMsg, 'cancel');
   }
+  res.json({ ok: true, client_notice });
+});
+
+
+// ── Owner agenda actions → notice to the client ──────────────────────────────
+// The owner created / moved / cancelled an appointment. The client gets a WhatsApp
+// notice, but Meta only allows free text within 24 h of the client's last message (no
+// template is used: it would cost per message). When it cannot go out, it is never
+// silent: the API answers client_notice.sent=false with the reason and the exact text,
+// the appointment keeps wa_notify_status='failed' + the text, and the panel / embed show
+// the owner "avisale vos" with the message to copy until they mark it as done.
+const AGENDA_WINDOW_MS = 23.5 * 3600 * 1000;
+function _agendaWaCreds(biz) {
+  if (!biz.phone_number_id) return null;
+  if (biz.wa_provider === 'kapso') return { phoneNumberId: biz.phone_number_id, provider: 'kapso' };
+  return { phoneNumberId: biz.phone_number_id, wabaId: biz.waba_id, accessToken: biz.wa_access_token || undefined, provider: biz.wa_provider || 'meta' };
+}
+async function notifyClientOfAgendaChange(biz, aptId, phone, text, kind) {
+  const fail = (reason) => {
+    updateAppointmentNotification(aptId, { waNotifyStatus: 'failed', waNotifyReason: reason });
+    setAppointmentNoticeText(aptId, text);
+    return { sent: false, reason, text, phone };
+  };
+  const creds = _agendaWaCreds(biz);
+  if (!creds) return fail('WhatsApp no está conectado.');
+  // Baileys (QR connection): baileys.js only answers inside a live chat; it cannot start
+  // a message from the panel. Say so instead of failing quietly.
+  if (creds.provider === 'baileys') return fail('Con esta conexión de WhatsApp no podemos mandarle avisos desde acá.');
+  {
+    const lastMs = parseSqliteUtc(getLastUserMessageAtForPhone(biz.id, phone));
+    if (!lastMs || Date.now() - lastMs > AGENDA_WINDOW_MS) {
+      logError('agenda-notify-window', { message: `${kind} apt=${aptId} business_id=${biz.id} last_user_msg=${lastMs ? new Date(lastMs).toISOString() : 'never'}`, stack: '' });
+      return fail('Pasaron más de 24 h desde el último mensaje del cliente y WhatsApp no deja escribirle primero.');
+    }
+  }
+  try {
+    const r = await Promise.race([
+      sendWhatsAppMessage(phone, text, creds, { bypassPause: true }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000)),
+    ]);
+    if (r && r.skipped) throw new Error(`skipped:${r.skipped}`);
+    updateAppointmentNotification(aptId, { clientNotifiedAt: new Date().toISOString(), waNotifyStatus: 'ok', waNotifyReason: null });
+    setAppointmentNoticeText(aptId, null);
+    return { sent: true };
+  } catch (err) {
+    logError('agenda-notify-error', { message: `${kind} apt=${aptId}: ${err.message}`, stack: '' });
+    return fail(/131047|re-engage|24/.test(err.message)
+      ? 'Pasaron más de 24 h desde el último mensaje del cliente y WhatsApp no deja escribirle primero.'
+      : 'WhatsApp no aceptó el mensaje.');
+  }
+}
+
+// The owner told the client themselves: clears the pending notice.
+app.patch('/api/agenda/appointments/:id/notice-done', requireAuth, (req, res) => {
+  const user = getUserById(reqUserId(req));
+  const apt = getAppointmentById(Number(req.params.id));
+  if (!user?.business_id || !apt || apt.business_id !== user.business_id) return res.status(404).json({ error: 'Turno no encontrado.' });
+  updateAppointmentNotification(apt.id, { waNotifyStatus: 'owner_manual' });
+  setAppointmentNoticeText(apt.id, null);
   res.json({ ok: true });
 });
 
-app.patch('/api/agenda/appointments/:id/reschedule', requireAuth, (req, res) => {
+app.patch('/api/agenda/appointments/:id/reschedule', requireAuth, async (req, res) => {
   const user = getUserById(reqUserId(req));
   if (!user?.business_id) return res.status(400).json({ error: 'No business' });
   const biz = getBusinessById(user.business_id);
@@ -1887,22 +1926,12 @@ app.patch('/api/agenda/appointments/:id/reschedule', requireAuth, (req, res) => 
     return res.status(500).json({ error: 'Error al mover el turno.' });
   }
 
-  const waCredsPanelLookup = biz.wa_provider === 'kapso'
-    ? { phoneNumberId: biz.phone_number_id, provider: 'kapso' }
-    : biz.phone_number_id
-      ? { phoneNumberId: biz.phone_number_id, wabaId: biz.waba_id, provider: biz.wa_provider || 'meta' }
-      : null;
-  if (waCredsPanelLookup && oldApt.customer_phone) {
-    const svcLabel  = newApt.service_name ? newApt.service_name + ', ' : '';
-    const clientMsg = `Tu turno se movió al ${_agendaApptSummary(startsAt)}${svcLabel ? ' (' + svcLabel.replace(', ', '') + ')' : ''}.`;
-    sendWhatsAppMessage(oldApt.customer_phone, clientMsg, waCredsPanelLookup)
-      .then(() => updateAppointmentNotification(newApt.id, { clientNotifiedAt: new Date().toISOString(), waNotifyStatus: 'ok' }))
-      .catch(err => {
-        updateAppointmentNotification(newApt.id, { waNotifyStatus: 'failed', waNotifyReason: err.message.slice(0, 120) });
-        logError('agenda-notify-error', { message: `reschedule newApt=${newApt.id}: ${err.message}`, stack: '' });
-      });
+  let client_notice = null;
+  if (oldApt.customer_phone) {
+    const clientMsg = `Tu turno se movió al ${_agendaApptSummary(startsAt)}${newApt.service_name ? ' (' + newApt.service_name + ')' : ''}.`;
+    client_notice = await notifyClientOfAgendaChange(biz, newApt.id, oldApt.customer_phone, clientMsg, 'reschedule');
   }
-  res.json(newApt);
+  res.json({ ...newApt, client_notice });
 });
 
 // Exact consent text — stored verbatim for legal record

@@ -138,6 +138,29 @@ async function main() {
   ct(c1, tPedido); ct(c1, tCumple); ct(c2, tReclamo); ct(c5, tPedido);
   db.prepare("UPDATE businesses SET business_hours=?, pricing_info=?, pause_keywords='persona, reclamo' WHERE id=?")
     .run(JSON.stringify({ 1: [['09:00', '19:00']], 2: [['09:00', '19:00']], 3: [['09:00', '19:00']], 4: [['09:00', '19:00']], 5: [['09:00', '20:00']], 6: [['10:00', '14:00']] }), 'Torta 15 personas $1.450\nTorta 25 personas $2.200', bizId);
+  // Agenda: servicios + turnos de ejemplo (mañana y pasado)
+  db.prepare("UPDATE businesses SET business_hours=? WHERE id=?").run(JSON.stringify(Object.fromEntries([0,1,2,3,4,5,6].map(d => [d, [['09:00', '19:00']]]))), bizId);
+  const svc = (n, m) => db.prepare('INSERT INTO agenda_services (business_id, name, duration_min, active) VALUES (?, ?, ?, 1)').run(bizId, n, m).lastInsertRowid;
+  const sTorta = svc('Degustación de tortas', 30), sRetiro = svc('Retiro de pedido', 15);
+  db.prepare('UPDATE businesses SET agenda_enabled=1, agenda_cancel_min_before=1440 WHERE id=?').run(bizId);
+  const mvd = (daysAhead, hhmm) => {
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Montevideo' }).format(new Date(Date.now() + daysAhead * 86400000));
+    return new Date(`${day}T${hhmm}:00-03:00`);
+  };
+  const apt = (svcId, mins, phone, name, d, t, notes) => {
+    const st = mvd(d, t);
+    db.prepare("INSERT INTO agenda_appointments (business_id, service_id, customer_phone, client_name, notes, starts_at, ends_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'confirmed')")
+      .run(bizId, svcId, phone, name, notes, st.toISOString(), new Date(st.getTime() + mins * 60000).toISOString());
+  };
+  apt(sRetiro, 15, '59899412387', 'Sofía Martínez', 1, '11:00', 'Torta cumple Sofi');
+  apt(sTorta, 30, '59897788990', 'Ana Rodríguez', 1, '16:30', null);
+  apt(sTorta, 30, '59894455667', 'Martín', 2, '10:00', null);
+  // Un turno cancelado cuyo aviso no le llegó al cliente (más de 24 h sin escribir)
+  apt(sTorta, 30, '59891234567', 'Lucía Fernández', 3, '15:00', null);
+  db.prepare(`UPDATE agenda_appointments SET status='cancelled', cancelled_by='owner', wa_notify_status='failed',
+    wa_notify_reason='Pasaron más de 24 h desde el último mensaje del cliente y WhatsApp no deja escribirle primero.',
+    client_notice_text='Tu turno del domingo 29/11 a las 15:00 (Degustación de tortas) fue cancelado. Si querés reagendar, escribinos.'
+    WHERE client_name='Lucía Fernández'`).run();
   db.pragma('wal_checkpoint(FULL)');
   db.close();
 
@@ -192,6 +215,14 @@ async function main() {
     await page.click('#more-list details[data-sec="hours"] summary');
     await sleep(300);
     await snap(page, `3b-ajustes-completo-${label}.png`);
+    await page.waitForSelector('#agenda-card:not([hidden]) .ag-appt');
+    await page.locator('#agenda-card').scrollIntoViewIfNeeded();
+    await page.locator('#agenda-card').screenshot({ path: path.join(SHOTS_DIR, `5-agenda-${label}.png`) });
+    console.log('  📸 ' + path.join(SHOTS_DIR, `5-agenda-${label}.png`));
+    await page.click('[data-ag="open-new"]');
+    await sleep(700);
+    await page.locator('#agenda-card').screenshot({ path: path.join(SHOTS_DIR, `5b-agenda-nuevo-turno-${label}.png`) });
+    console.log('  📸 ' + path.join(SHOTS_DIR, `5b-agenda-nuevo-turno-${label}.png`));
     await ctx.close();
   }
 

@@ -923,6 +923,9 @@ db.exec(`
       // WhatsApp profile name of the client, for the chat list.
       const convCols = db.prepare('PRAGMA table_info(conversations)').all().map(c => c.name);
       if (!convCols.includes('contact_name')) db.exec('ALTER TABLE conversations ADD COLUMN contact_name TEXT');
+      // Text of an agenda notice that could not reach the client (owner sends it by hand).
+      const aptCols = db.prepare('PRAGMA table_info(agenda_appointments)').all().map(c => c.name);
+      if (aptCols.length && !aptCols.includes('client_notice_text')) db.exec('ALTER TABLE agenda_appointments ADD COLUMN client_notice_text TEXT');
       db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('034_message_media');
       console.log('[migration 034] messages media columns added');
     } catch (e) {
@@ -1723,6 +1726,20 @@ function setMessageMedia(messageId, { kind, mime, name, path: filePath }) {
 
 function getMessageMedia(messageId) {
   return db.prepare('SELECT id, conversation_id, media_kind, media_mime, media_name, media_path FROM messages WHERE id = ?').get(messageId);
+}
+
+// Last message the client sent to this business from this number (any conversation).
+// Phones are compared by digits, so "598 99…" and "59899…" match.
+function getLastUserMessageAtForPhone(businessId, phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return null;
+  const row = db.prepare(`SELECT MAX(m.created_at) AS at FROM messages m JOIN conversations c ON c.id = m.conversation_id
+    WHERE c.business_id = ? AND m.role = 'user' AND REPLACE(REPLACE(REPLACE(c.customer_id, '+', ''), ' ', ''), '-', '') = ?`).get(businessId, digits);
+  return row ? row.at : null;
+}
+
+function setAppointmentNoticeText(id, text) {
+  db.prepare("UPDATE agenda_appointments SET client_notice_text = ?, updated_at = datetime('now') WHERE id = ?").run(text, id);
 }
 
 function setConversationContactName(businessId, customerId, name) {
@@ -2678,6 +2695,8 @@ module.exports = {
   takeExpiredMessageMedia,
   takeConversationMedia,
   setConversationContactName,
+  getLastUserMessageAtForPhone,
+  setAppointmentNoticeText,
   markConversationPaused,
   markConversationResumed,
   resetConversation,
