@@ -372,7 +372,7 @@
         if (!expiry || !expiryD || expiryD < new Date()) {
           banner.className = 'trial-banner trial-banner--expired';
           banner.innerHTML = `<span class="trial-msg">Tu suscripción está inactiva.</span>
-            <a href="https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan" class="trial-action" target="_blank" rel="noopener">Quiero activar mi plan</a>`;
+            <a href="/dashboard.html#planes" class="trial-action">Quiero activar mi plan</a>`;
           banner.style.display = 'flex';
         }
       } else if (b.plan === 'arranque' && !b.plan_paid_at && !b.plan_cortesia) {
@@ -385,7 +385,7 @@
           const graceHoursLeft = graceStart ? Math.max(0, 72 - (Date.now() - graceStart.getTime()) / 3600000) : 0;
           banner.className = 'trial-banner trial-banner--expired';
           banner.innerHTML = `<span class="trial-msg">Prueba vencida — modo de gracia: ${Math.ceil(graceHoursLeft)} h restantes.</span>
-            <a href="https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan" class="trial-action" target="_blank" rel="noopener">Activar mi plan</a>`;
+            <a href="/dashboard.html#planes" class="trial-action">Activar mi plan</a>`;
           banner.style.display = 'flex';
         } else {
           const startsAt    = parseISO(b.trial_starts_at);
@@ -400,7 +400,7 @@
           if (trialOver) {
             banner.className = 'trial-banner trial-banner--expired';
             banner.innerHTML = `<span class="trial-msg">Tu prueba gratuita terminó.</span>
-              <a href="https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan" class="trial-action" target="_blank" rel="noopener">Activar mi plan</a>`;
+              <a href="/dashboard.html#planes" class="trial-action">Activar mi plan</a>`;
           } else {
             banner.className = 'trial-banner trial-banner--active';
             banner.innerHTML = `<span class="trial-msg">Prueba: día ${dayNum} de 14 · ${convCount} de ${convLimit} conversaciones.</span>`;

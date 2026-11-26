@@ -254,16 +254,17 @@ async function sendAdminNotificationEmail({ adminEmail, event, data }) {
   }
 }
 
-const PLAN_LINK = 'https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan';
-const PLAN_PHONE_TEXT = '+598 92 052 508';
+// "Activar mi plan" → the plans screen in the panel (3 plans, each with its Mercado Pago
+// button). If the owner is logged out, the panel sends them to log in and back here.
+const PLAN_LINK = `${process.env.APP_URL || 'https://daxos.lat'}/dashboard.html#planes`;
 
 
 // Trial emails (3 stages). Each returns { skipped: true } when email is not configured,
 // so the caller can tell "sent" from "nothing went out".
 const TRIAL_CLIENT_MSG = 'En este momento no puedo responder, alguien del negocio te va a contestar a la brevedad.';
-const _trialButton = `
+const _trialButton = (to) => `
       <p><a href="${PLAN_LINK}" style="background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:8px">Activar mi plan</a></p>
-      <p style="color:#666;font-size:13px">El botón abre un chat de WhatsApp con el equipo de Daxos. Si no se abre, escribinos al ${PLAN_PHONE_TEXT}.</p>`;
+      <p style="color:#666;font-size:13px">El botón te lleva a tu panel de Daxos para elegir el plan y pagarlo con Mercado Pago. Pagá con el mismo email de tu cuenta (${escapeHtml(to)}) para que se active solo.</p>`;
 
 async function _sendTrialEmail({ to, subject, html, what }) {
   const key = process.env.RESEND_API_KEY;
@@ -290,7 +291,7 @@ async function sendTrialWarningEmail({ to, businessName, convCount, convLimit, d
         <tr><td style="padding:4px 12px 4px 0;color:#666">Conversaciones</td><td>${convCount} de ${convLimit}</td></tr>
       </table>
       <p>La prueba termina cuando llegues al día ${dayLimit} o a las ${convLimit} conversaciones, lo que pase primero. Después tu asistente sigue respondiendo ${graceHours} horas más (o ${graceConvs} conversaciones) y luego deja de responder.</p>
-      <p>Para que siga atendiendo a tus clientes sin cortes, activá tu plan:</p>${_trialButton}
+      <p>Para que siga atendiendo a tus clientes sin cortes, activá tu plan:</p>${_trialButton(to)}
     `,
   });
 }
@@ -308,7 +309,7 @@ async function sendTrialGraceEmail({ to, businessName, graceConvsLeft, graceHour
         <tr><td style="padding:4px 12px 4px 0;color:#666">Conversaciones restantes</td><td>${graceConvsLeft}</td></tr>
       </table>
       <p>Cuando se termine cualquiera de los dos, el asistente deja de responder y tus clientes reciben este mensaje: <em>"${TRIAL_CLIENT_MSG}"</em></p>
-      <p>Para que siga atendiendo, activá tu plan:</p>${_trialButton}
+      <p>Para que siga atendiendo, activá tu plan:</p>${_trialButton(to)}
     `,
   });
 }
@@ -322,7 +323,7 @@ async function sendTrialEndedEmail({ to, businessName, subjectPrefix = '' }) {
       <p>Hola,</p>
       <p>La prueba gratis de <strong>${escapeHtml(businessName)}</strong> terminó y tu asistente ya no responde a tus clientes.</p>
       <p>Quien te escriba recibe este mensaje: <em>"${TRIAL_CLIENT_MSG}"</em></p>
-      <p>Tu configuración y tus conversaciones siguen guardadas. Al activar tu plan, el asistente vuelve a responder:</p>${_trialButton}
+      <p>Tu configuración y tus conversaciones siguen guardadas. Al activar tu plan, el asistente vuelve a responder:</p>${_trialButton(to)}
     `,
   });
 }

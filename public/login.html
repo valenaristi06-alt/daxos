@@ -54,7 +54,7 @@
       let d;
       try { d = decodeURIComponent(val); } catch { return null; }
       if (!/^\/[a-zA-Z]/.test(d) || /[\\:\n\r]|\/\//.test(d)) return null;
-      const p = d.split('?')[0];
+      const p = d.split(/[?#]/)[0];
       return ['/conversations.html', '/inicio.html', '/dashboard.html'].includes(p) ? d : null;
     }
 

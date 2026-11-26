@@ -215,6 +215,10 @@
     <div id="activation-panel" style="display:none"></div>
     <div id="trial-banner" style="display:none"></div>
 
+    <!-- Planes: /dashboard.html#planes (link de los emails y avisos de fin de prueba).
+         Siempre muestra los 3 planes con su botón de pago, en cualquier etapa. -->
+    <section id="planes" class="plan-screen" hidden aria-labelledby="planes-title"></section>
+
     <!-- Chat configurador (Fase 2) — arriba de todo, encima de los bloques. Oculto sin flag. -->
     <section id="config-chat" class="cfg-chat" style="display:none" aria-live="polite">
       <div class="cfg-chat-head">
@@ -1013,12 +1017,70 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
       });
     })();
 
+    let ownerEmail = '';
+
+    // ── Plan cards (shared by the trial banner and the #planes screen) ──
+    function escPlan(v) {
+      return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    }
+    function planCardsHtml() {
+      const emailLine = ownerEmail
+        ? `<p class="plan-pay-email">Pagá con este mismo email: <strong>${escPlan(ownerEmail)}</strong></p>
+           <p class="plan-upgrade-note">Así tu plan se activa solo. Si pagás con otro email, avisanos.</p>`
+        : `<p class="plan-upgrade-note">Pagá con el mismo email con el que te registraste en Daxos, así activamos tu plan automáticamente.</p>`;
+      return `${emailLine}
+          <div class="plan-upgrade-grid">
+            <div class="plan-upgrade-card">
+              <span class="plan-upgrade-name">Arranque</span>
+              <span class="plan-upgrade-price">$2.990<span class="plan-upgrade-period">/mes</span></span>
+              <span class="plan-upgrade-desc">300 conversaciones/mes</span>
+              <a href="${PLAN_PAYMENT_LINKS.arranque}" class="plan-upgrade-btn" data-plan="arranque" target="_blank" rel="noopener">Pagar →</a>
+            </div>
+            <div class="plan-upgrade-card plan-upgrade-card--featured">
+              <span class="plan-upgrade-name">Crecimiento</span>
+              <span class="plan-upgrade-price">$5.990<span class="plan-upgrade-period">/mes</span></span>
+              <span class="plan-upgrade-desc">800 conversaciones/mes</span>
+              <a href="${PLAN_PAYMENT_LINKS.crecimiento}" class="plan-upgrade-btn plan-upgrade-btn--accent" data-plan="crecimiento" target="_blank" rel="noopener">Pagar →</a>
+            </div>
+            <div class="plan-upgrade-card">
+              <span class="plan-upgrade-name">Negocio</span>
+              <span class="plan-upgrade-price">$12.990<span class="plan-upgrade-period">/mes</span></span>
+              <span class="plan-upgrade-desc">1.800 conversaciones/mes</span>
+              <a href="${PLAN_PAYMENT_LINKS.a_medida}" class="plan-upgrade-btn" data-plan="a_medida" target="_blank" rel="noopener">Pagar →</a>
+            </div>
+          </div>`;
+    }
+
+    // #planes: the destination of every "Activar mi plan" button (emails, owner WhatsApp).
+    function renderPlanScreen(b) {
+      const sec = document.getElementById('planes');
+      if (location.hash !== '#planes') { sec.hidden = true; return false; }
+      if (b && (b.plan === 'crm' || b.plan_cortesia)) {
+        sec.innerHTML = `<h2 class="plan-screen-title" id="planes-title">Tu plan</h2>
+          <p class="plan-upgrade-note">Tu cuenta no necesita pagar un plan desde acá.</p>`;
+      } else {
+        sec.innerHTML = `<h2 class="plan-screen-title" id="planes-title">Elegí tu plan</h2>
+          <div class="plan-upgrade-wrap">${planCardsHtml()}</div>`;
+      }
+      sec.hidden = false;
+      sec.scrollIntoView({ block: 'start' });
+      return true;
+    }
+    window.addEventListener('hashchange', () => { if (currentBusiness !== undefined) renderPlanScreen(currentBusiness); });
+
     // ── Redirect if not logged in ── (auth + business fetched in parallel)
     const _bizPrefetch = fetch('/api/business');
     (async () => {
       const res = await fetch('/auth/me');
-      if (!res.ok) { window.location.href = '/login.html'; return; }
+      if (!res.ok) {
+        // Not logged in: after login, come back to the same place (e.g. the plans screen).
+        window.location.href = location.hash === '#planes'
+          ? '/login.html?next=' + encodeURIComponent('/dashboard.html#planes')
+          : '/login.html';
+        return;
+      }
       const { email } = await res.json();
+      ownerEmail = email || '';
       document.getElementById('user-email').textContent = email;
       loadBusiness(_bizPrefetch).catch(err => {
         console.error('[loadBusiness] uncaught error:', err);
@@ -1194,30 +1256,13 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
       }
 
       // Trial banner — runs even if no business saved yet
+      const planScreenOpen = renderPlanScreen(b);
       function planUpgradeHtml(msg) {
+        // With the plans screen open, the banner keeps only the message (no duplicate cards).
+        if (planScreenOpen) return `<span class="trial-msg">${msg}</span>`;
         return `<div class="plan-upgrade-wrap">
           <span class="trial-msg">${msg}</span>
-          <p class="plan-upgrade-note">Pagá con el mismo email con el que te registraste en Daxos, así activamos tu plan automáticamente.</p>
-          <div class="plan-upgrade-grid">
-            <div class="plan-upgrade-card">
-              <span class="plan-upgrade-name">Arranque</span>
-              <span class="plan-upgrade-price">$2.990<span class="plan-upgrade-period">/mes</span></span>
-              <span class="plan-upgrade-desc">300 conversaciones/mes</span>
-              <a href="${PLAN_PAYMENT_LINKS.arranque}" class="plan-upgrade-btn" target="_blank" rel="noopener">Pagar →</a>
-            </div>
-            <div class="plan-upgrade-card plan-upgrade-card--featured">
-              <span class="plan-upgrade-name">Crecimiento</span>
-              <span class="plan-upgrade-price">$5.990<span class="plan-upgrade-period">/mes</span></span>
-              <span class="plan-upgrade-desc">800 conversaciones/mes</span>
-              <a href="${PLAN_PAYMENT_LINKS.crecimiento}" class="plan-upgrade-btn plan-upgrade-btn--accent" target="_blank" rel="noopener">Pagar →</a>
-            </div>
-            <div class="plan-upgrade-card">
-              <span class="plan-upgrade-name">Negocio</span>
-              <span class="plan-upgrade-price">$12.990<span class="plan-upgrade-period">/mes</span></span>
-              <span class="plan-upgrade-desc">1.800 conversaciones/mes</span>
-              <a href="${PLAN_PAYMENT_LINKS.a_medida}" class="plan-upgrade-btn" target="_blank" rel="noopener">Pagar →</a>
-            </div>
-          </div>
+          ${planCardsHtml()}
         </div>`;
       }
 
@@ -2590,7 +2635,7 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
       const redirectPhoneId  = params.get('phone_number_id');
       const redirectWabaId   = params.get('business_account_id');
       // Clean URL before any async work so the user never sees raw params
-      history.replaceState(null, '', '/dashboard');
+      history.replaceState(null, '', '/dashboard' + location.hash);
 
       if (wa === 'error') {
         document.getElementById('wa-connect-error').textContent = 'Hubo un error al conectar tu WhatsApp con Kapso. Intentá de nuevo.';
