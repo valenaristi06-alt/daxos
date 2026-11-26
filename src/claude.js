@@ -27,6 +27,13 @@ function getClient() {
   return new Anthropic({ apiKey });
 }
 
+const SURVEY_LABELS = {
+  objeciones_precio: { text: 'Qué responder cuando el cliente dice que es caro' },
+  prioridad: { text: 'Prioridad al atender', values: { cerrar_rapido: 'cerrar la venta rápido', generar_confianza: 'generar confianza antes de vender', equilibrado: 'equilibrio entre confianza y cierre' } },
+  largo_mensajes: { text: 'Largo de mensajes preferido', values: { corto: 'cortos', medio: 'medios', largo: 'largos' } },
+  sin_respuesta: { text: 'Si el cliente deja de responder', values: { no_hacer_nada: 'no insistir, esperar', recordatorio_24h: 'un recordatorio a las 24 hs', dos_recordatorios: 'dos recordatorios y cerrar', seguir_insistiendo: 'seguir escribiendo hasta que responda' } },
+};
+
 // Returns { staticText, dynamicText } to enable prompt caching.
 // staticText: stable per business+label+bookingEnabled — cached with cache_control ephemeral.
 // dynamicText: changes per message (current time, booking step, needsHuman) — not cached.
@@ -50,6 +57,18 @@ function buildSystemPrompt(business, label, bookingContext = null, runtimeCtx = 
 
   if (runtimeCtx?.hoursText) {
     staticLines.push(`\nHORARIOS DE ATENCIÓN — cargados por el dueño. Son los únicos horarios que podés informar: ${runtimeCtx.hoursText}`);
+  }
+
+  // These used to reach the model only while the business was CLOSED, so a daytime
+  // "¿a qué número llamo de noche?" had no answer even though the owner loaded it.
+  if (business.after_hours_instructions) {
+    staticLines.push(`\nFUERA DE HORARIO — instrucciones cargadas por el dueño sobre qué pasa cuando el negocio está cerrado. Podés informarlas cuando el cliente pregunte, a cualquier hora: ${business.after_hours_instructions}`);
+  }
+  if (business.urgent_phone) {
+    staticLines.push(`\nTELÉFONO DE URGENCIAS — cargado por el dueño: ${business.urgent_phone}. Es el número para urgencias fuera del horario de atención. Dalo cuando el cliente lo pida o tenga una urgencia; no lo presentes como el teléfono general del negocio.`);
+  }
+  if (business.website_url) {
+    staticLines.push(`\nSitio web del negocio (cargado por el dueño): ${business.website_url}`);
   }
 
   if (business.website_summary) {
@@ -82,7 +101,10 @@ function buildSystemPrompt(business, label, bookingContext = null, runtimeCtx = 
   if (business.survey_answers && Object.keys(business.survey_answers).length > 0) {
     staticLines.push('\nInformación del negocio:');
     for (const [key, val] of Object.entries(business.survey_answers)) {
-      if (val !== null && val !== undefined && val !== '') staticLines.push(`- ${key}: ${val}`);
+      if (val === null || val === undefined || val === '') continue;
+      // Panel fields are stored as codes ("prioridad: cerrar_rapido"); give the model the meaning.
+      const label = SURVEY_LABELS[key];
+      staticLines.push(label ? `- ${label.text}: ${(label.values && label.values[val]) || val}` : `- ${key}: ${val}`);
     }
   }
 
@@ -134,6 +156,7 @@ function buildSystemPrompt(business, label, bookingContext = null, runtimeCtx = 
       '- Para cambiar un turno del cliente: informale que vas a cargar la disponibilidad e incluí [WANT_RESCHEDULE:Ax] en una línea separada (Ax = código del turno a cambiar). El sistema va a cargar los horarios para ese servicio. Cuando el cliente confirme el nuevo horario, usá [BOOK_RESCHEDULE:Tx] en una línea separada.',
       '- Si no tenés el nombre del cliente y lo necesitás antes de confirmar, pedíselo brevemente (solo una vez). Cuando te lo dé, usá [AGENDA_CLIENT_NAME:nombre] al final de tu respuesta.',
       `- Si el cliente pide una fecha fuera del rango disponible, informale que solo podés agendar hasta ${ag.maxDate}.`,
+      ...(ag.cancelText ? [`- Cancelaciones y cambios de turno: se aceptan hasta ${ag.cancelText} antes del turno. Es el único plazo que podés informar.`] : []),
       '- Si el cliente menciona una hora que no está en la lista, decile que esa hora no está disponible.',
     );
   }

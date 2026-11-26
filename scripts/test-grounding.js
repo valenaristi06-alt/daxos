@@ -162,6 +162,46 @@ const types = vs => vs.map(v => v.type);
     ok('price-cap text no longer promises "te lo confirmo"', !/lo consultás con el equipo y se lo confirmás/.test(capped.dynamicText));
   }
 
+  // ── 4b. Every panel field that carries business data reaches the prompt ─────
+  console.log('\n--- 4b. Panel fields → prompt (one by one) ---');
+  {
+    const full = {
+      id: 1, name: 'NOMBRE_NEGOCIO_X',
+      business_context: 'CONTEXTO_X', pricing_info: 'PRECIOS_X $111', website_url: 'https://web-x.example.uy',
+      website_summary: 'RESUMEN_WEB_X', owner_rules: 'REGLAS_X', sales_examples: ['EJEMPLO_X'],
+      survey_answers: { objeciones_precio: 'OBJECION_X', prioridad: 'cerrar_rapido', largo_mensajes: 'corto', sin_respuesta: 'recordatorio_24h', otra_clave: 'LIBRE_X' },
+      style_profile: { tono: 'TONO_X', uso_emojis: 'ninguno', largo_mensajes: 'corto', forma_de_cerrar: 'abierto', caracteristicas: ['RASGO_X'] },
+      document_name: 'CATALOGO_X.pdf', after_hours_instructions: 'FUERA_HORARIO_X', urgent_phone: '099 123 987',
+    };
+    const ctx = (over = {}) => ({
+      now: NOW, hoursText: 'lunes 09:00 a 18:00; domingo cerrado',
+      documents: [{ name: 'DOC_X', text: 'TEXTO_DOC_X' }], images: [{ label: 'IMAGEN_X' }],
+      agenda: { services: [{ code: 'S1', name: 'SERVICIO_X', duration: 45 }, { code: 'S2', name: 'SERVICIO_Y', duration: 30 }], maxDate: '10/12', cancelText: '3 horas', appointmentsMap: {} },
+      ...over,
+    });
+    const fields = [
+      ['name', 'NOMBRE_NEGOCIO_X'], ['business_context', 'CONTEXTO_X'], ['pricing_info', 'PRECIOS_X $111'],
+      ['website_url', 'https://web-x.example.uy'], ['website_summary', 'RESUMEN_WEB_X'], ['owner_rules', 'REGLAS_X'],
+      ['sales_examples', 'EJEMPLO_X'], ['survey: objeciones_precio', 'OBJECION_X'], ['survey: prioridad (as text, not a code)', 'cerrar la venta rápido'],
+      ['survey: largo_mensajes (as text)', 'Largo de mensajes preferido: cortos'], ['survey: sin_respuesta (as text)', 'un recordatorio a las 24 hs'],
+      ['survey: unknown key kept', 'otra_clave: LIBRE_X'], ['style_profile', 'TONO_X'], ['document_name', 'CATALOGO_X.pdf'],
+      ['business_hours (weekly)', 'lunes 09:00 a 18:00'], ['after_hours_instructions', 'FUERA_HORARIO_X'], ['urgent_phone', '099 123 987'],
+      ['reference documents', 'TEXTO_DOC_X'], ['images', 'IMAGEN_X'], ['agenda services', 'SERVICIO_X (45 min)'], ['agenda cancellation window', '3 horas'],
+    ];
+    for (const [state, over] of [['open', { isOpenResult: { open: true, closesAt: '18:00' } }], ['closed', { isOpenResult: { open: false, nextOpen: { day: 1, time: '09:00', today: false } }, afterHoursInstructions: 'FUERA_HORARIO_X', urgentPhone: '099 123 987' }], ['no open/closed info', {}]]) {
+      const p = buildSystemPrompt(full, null, null, ctx(over));
+      const text = p.staticText + '\n' + p.dynamicText;
+      for (const [field, needle] of fields) ok(`${state}: ${field} reaches the prompt`, text.includes(needle), needle);
+      ok(`${state}: no raw panel codes in the prompt`, !/cerrar_rapido|recordatorio_24h/.test(text));
+    }
+    const open = buildSystemPrompt(full, null, null, ctx({ isOpenResult: { open: true, closesAt: '18:00' } }));
+    ok('urgent phone and after-hours text are in the cached static block (available while open)', open.staticText.includes('099 123 987') && open.staticText.includes('FUERA_HORARIO_X'));
+    const bare = buildSystemPrompt({ id: 2, name: 'Vacío' }, null, null, { now: NOW });
+    ok('empty fields add no empty blocks', !/TELÉFONO DE URGENCIAS|FUERA DE HORARIO —|Sitio web del negocio|HORARIOS DE ATENCIÓN/.test(bare.staticText));
+    const src = buildSources({ business: full, runtimeCtx: ctx() });
+    ok('those fields are valid sources for the verifier', findUngrounded('Por urgencias llamá al 099 123 987. Web: web-x.example.uy. Podés cancelar hasta 3 horas antes.', src).length === 0);
+  }
+
   // ── 5. End-to-end through processIncomingMessage ───────────────────────────
   console.log('\n--- 5. End-to-end (test harness) ---');
   let token = '';

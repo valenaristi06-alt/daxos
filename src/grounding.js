@@ -169,7 +169,7 @@ function buildSources({ business = {}, runtimeCtx = null, bookingState = null, h
   if (rc.agenda) {
     const ag = rc.agenda;
     for (const s of ag.services || []) push(`${s.name} ${s.duration} min`);
-    push(ag.maxDate); push(ag.appointmentsText); push(ag.slotsText); push(ag.clientName);
+    push(ag.maxDate); push(ag.appointmentsText); push(ag.slotsText); push(ag.clientName); push(ag.cancelText);
     if (ag.selectedService) push(ag.selectedService.name);
   }
   if (bookingState) { push(bookingState.name); push(bookingState.reason); push(JSON.stringify(bookingState.slots || '')); }
