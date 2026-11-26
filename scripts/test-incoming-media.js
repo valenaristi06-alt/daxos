@@ -174,6 +174,7 @@ const fakeExtract = async (buf, mime) => {
     ok('audio: downloaded and transcribed', downloads === 1 && calls.length === 1 && calls[0].args.text === 'quiero un turno para mañana', JSON.stringify(calls[0]?.args));
     ok('audio: old "no puedo escuchar audios" reply is gone', replies.length === 0 && !logs.some(l => l.includes('baileys-audio-fallback')));
     ok('audio: phone resolved by baileys.js', calls[0].args.customerPhone === '59899111222' && calls[0].creds.provider === 'baileys');
+    ok('audio: file passed on so the owner can listen to it', calls[0].args.media?.kind === 'audio' && Buffer.isBuffer(calls[0].args.media.buffer) && calls[0].args.media.mime.startsWith('audio/ogg'));
 
     reset(); sttImpl = async () => '';
     await deliver(waMsg({ audioMessage: { mimetype: 'audio/ogg' } }));
@@ -205,6 +206,7 @@ const fakeExtract = async (buf, mime) => {
     reset(); downloadImpl = async () => PDF;
     await deliver(waMsg({ documentMessage: { mimetype: 'application/pdf', fileName: 'presu.pdf', caption: 'revisalo' } }));
     ok('PDF: text reaches the model', calls.length === 1 && calls[0].args.claudeText.includes('Presupuesto 4321') && calls[0].args.text.startsWith('[documento: presu.pdf] revisalo'));
+    ok('PDF: file passed on so the owner can open it', calls[0].args.media?.kind === 'document' && calls[0].args.media.filename === 'presu.pdf' && calls[0].args.media.mime === 'application/pdf');
 
     reset(); downloadImpl = async () => PDF;
     await deliver(waMsg({ documentWithCaptionMessage: { message: { documentMessage: { mimetype: 'application/pdf', fileName: 'a.pdf', caption: 'mirá' } } } }));
@@ -221,6 +223,7 @@ const fakeExtract = async (buf, mime) => {
     reset(); downloadImpl = async () => XLSX;
     await deliver(waMsg({ documentMessage: { mimetype: 'application/vnd.ms-excel', fileName: 'lista.xlsx' } }));
     ok('spreadsheet: honest "no puedo leer ese tipo de archivo"', calls.length === 0 && replies[0]?.args.kind === 'document_unsupported');
+    ok('spreadsheet: file still kept for the owner', replies[0]?.args.media?.kind === 'document' && replies[0].args.media.filename === 'lista.xlsx');
 
     reset(); downloadImpl = async () => JPEG;
     await deliver(waMsg({ documentMessage: { mimetype: 'image/jpeg', fileName: 'foto.jpg' } }));
@@ -486,6 +489,53 @@ const fakeExtract = async (buf, mime) => {
       await post('59891000040', { type: 'video', video: { id: 'v2' } });
       await sleep(600);
       ok('bot paused: video stored, no reply sent', sent.length === sentBefore && stored('59891000040').length === 1 && stored('59891000040')[0].content === '[video]');
+
+      // ── Media kept: plan crm only (embed). Any other plan: as on main, nothing kept ──
+      const mediaRows = phone => sql.prepare(`SELECT m.role, m.content, m.media_kind, m.media_mime, m.media_name, m.media_path FROM messages m
+        JOIN conversations c ON c.id = m.conversation_id WHERE c.business_id = ? AND c.customer_id = ? ORDER BY m.id`).all(bizId, phone);
+      const userRow = phone => mediaRows(phone).find(m => m.role === 'user');
+      const keptNonCrm = sql.prepare('SELECT COUNT(*) n FROM messages WHERE media_path IS NOT NULL OR media_kind IS NOT NULL').get().n;
+      ok('non-crm business: no photo / audio / document kept (same as main)', keptNonCrm === 0 && !fs.existsSync(path.join(DB_DIR, 'media')));
+      ok('non-crm business: no profile name stored', sql.prepare('SELECT COUNT(*) n FROM conversations WHERE contact_name IS NOT NULL').get().n === 0);
+
+      sql.prepare("UPDATE businesses SET plan = 'crm', bot_paused = 0 WHERE id = ?").run(bizId); sql.pragma('wal_checkpoint(FULL)');
+      await run('59892000002', { type: 'image', image: { id: 'img-ok', mime_type: 'image/jpeg', caption: '¿tienen este?' } });
+      let row = userRow('59892000002');
+      ok('crm kept: photo saved with the message', row?.media_kind === 'image' && row.media_mime === 'image/jpeg' && fs.existsSync(row.media_path) && fs.readFileSync(row.media_path).equals(JPEG));
+      ok('crm kept: file lives under DB_DIR/media/<business>', !!row && row.media_path.startsWith(path.join(DB_DIR, 'media', String(bizId)) + path.sep));
+      await run('59892000004', { type: 'audio', audio: { id: 'aud-ok', mime_type: 'audio/ogg' } });
+      row = userRow('59892000004');
+      ok('crm kept: audio saved with its transcript', row?.media_kind === 'audio' && row.content === 'quiero un turno para mañana' && fs.existsSync(row.media_path));
+      sttText = '';
+      await run('59892000005', { type: 'audio', audio: { id: 'aud-ok' } }, { expectAi: false });
+      sttText = 'quiero un turno para mañana';
+      row = userRow('59892000005');
+      ok('crm kept: audio that could not be transcribed is still saved', row?.media_kind === 'audio' && row.content === '[audio]');
+      await run('59892000007', { type: 'document', document: { id: 'pdf-ok', mime_type: 'application/pdf', filename: 'presu.pdf' } });
+      row = userRow('59892000007');
+      ok('crm kept: PDF saved with its name', row?.media_kind === 'document' && row.media_name === 'presu.pdf' && row.media_mime === 'application/pdf');
+      await run('59892000010', { type: 'document', document: { id: 'xlsx', mime_type: 'application/vnd.ms-excel', filename: 'lista.xlsx' } }, { expectAi: false });
+      row = userRow('59892000010');
+      ok('crm kept: unreadable spreadsheet still saved for the owner', row?.media_kind === 'document' && row.media_name === 'lista.xlsx');
+      await run('59892000001', { type: 'text', text: { body: 'hola' } });
+      ok('crm kept: plain text has no media', !userRow('59892000001')?.media_kind);
+      await run('59892000021', { type: 'video', video: { id: 'v9', mime_type: 'video/mp4' } }, { expectAi: false });
+      ok('crm kept: video (not downloaded) has no media', !userRow('59892000021')?.media_kind);
+      await run('59892000003', { type: 'image', image: { id: 'img-missing', mime_type: 'image/jpeg' } }, { expectAi: false });
+      ok('crm kept: failed download has no media', !userRow('59892000003')?.media_kind);
+
+      // A later text in the same chat never inherits the previous photo.
+      const before2 = mediaRows('59892000002').length;
+      await post('59892000002', { type: 'text', text: { body: '¿y en azul?' } });
+      await waitFor(() => mediaRows('59892000002').length >= before2 + 2, 7000);
+      const follow = mediaRows('59892000002').filter(m => m.role === 'user');
+      ok('crm kept: next text in the chat has no media', follow.length === 2 && follow[1].content === '¿y en azul?' && !follow[1].media_kind, JSON.stringify(follow.map(f => [f.content, f.media_kind])));
+
+      // Muted bot: the photo is still saved for the owner.
+      sql.prepare('UPDATE businesses SET bot_paused = 1 WHERE id = ?').run(bizId); sql.pragma('wal_checkpoint(FULL)');
+      await post('59892000041', { type: 'image', image: { id: 'img-ok', mime_type: 'image/jpeg' } });
+      await waitFor(() => !!userRow('59892000041'), 5000);
+      ok('crm kept: photo saved while the bot is paused', userRow('59892000041')?.media_kind === 'image');
       sql.close();
     } catch (e) {
       ok('Meta run', false, e.stack || e.message);
