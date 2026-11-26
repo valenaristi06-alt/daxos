@@ -44,7 +44,9 @@ const mailSrv = http.createServer((req, res) => {
     let m = null;
     try { m = JSON.parse(body); } catch (_) {}
     if (m && failFor && m.to[0] === failFor) { res.writeHead(500, { 'Content-Type': 'application/json' }); return res.end('{"message":"provider down"}'); }
-    if (m) mails.push({ to: m.to[0], subject: m.subject, html: m.html });
+    // The server sends other emails through the same provider (signup notices, send
+    // failures). Only the three trial emails are counted here.
+    if (m && stageOf(m) !== 'other') mails.push({ to: m.to[0], subject: m.subject, html: m.html });
     res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{"id":"mock"}');
   });
 });
