@@ -67,6 +67,8 @@ function normalizeTtsText(text, { stripUrls = false } = {}) {
 
 // Allowed explicit model values stored in DB; anything else falls back to legacy path with a warning.
 const ALLOWED_V4_MODELS = ['eleven_v4_turbo', 'eleven_v4'];
+// The natural-voice recipe always runs on this model, whatever ELEVENLABS_MODEL_ID says.
+const RECIPE_MODEL = 'eleven_multilingual_v2';
 
 // Simple presets the owner picks in the panel. Defaults ('normal' + 'natural') are the
 // natural-voice recipe every audio business gets when it never touches them.
@@ -133,7 +135,7 @@ function ttsBody(text, opts = {}) {
   let { model, stability } = opts;
 
   // Validate model: only NULL or an explicitly allowed value; unknown → warn + legacy
-  if (model !== null && model !== undefined && !ALLOWED_V4_MODELS.includes(model) && !model.startsWith('eleven_v4')) {
+  if (model !== null && model !== undefined && model !== RECIPE_MODEL && !ALLOWED_V4_MODELS.includes(model) && !model.startsWith('eleven_v4')) {
     console.error(`[elevenlabs:voice_tts_model] unknown model "${model}" — falling back to default`);
     model = null;
   }
@@ -380,7 +382,10 @@ async function generateNaturalAudio(voiceId, text, opts = {}, { takes = RECIPE_T
   const spoken = applyPronunciations(text, opts.pronunciations);
   const sentences = splitSentences(spoken);
   if (!sentences.length) throw new Error('empty text');
-  const baseOpts = { ...opts, pronunciations: null };
+  // Exactly the blind-test recipe: multilingual_v2 pinned (an ELEVENLABS_MODEL_ID env var
+  // must not swap the model under it) and no admin stability override (a v4-era value such
+  // as 0.35 would beat the recipe's 0.45). Owner presets (speed/tone) still apply.
+  const baseOpts = naturalOpts(opts);
 
   const cacheKey = `natural|${voiceId}|${takes}|${ttsBody(spoken, baseOpts)}`;
   if (_audioCache.has(cacheKey)) {
@@ -409,7 +414,7 @@ async function generateNaturalAudio(voiceId, text, opts = {}, { takes = RECIPE_T
     if (bufs.length === 1) return bufs[0];
     sttSeconds += bufs.reduce((a, b) => a + b.length / TAKE_BYTES_PER_SEC, 0);
     const transcripts = await Promise.all(bufs.map(b =>
-      transcribeAudio(b, 'audio/mpeg', RECIPE_STT_MODEL).catch(() => null)));
+      transcribeAudio(b, 'audio/mpeg', RECIPE_STT_MODEL).catch(e => { _noteSttFailure(e); return null; })));
     return bufs[pickBestTake(bodies[i].text, bufs, transcripts)];
   }));
 
@@ -419,6 +424,18 @@ async function generateNaturalAudio(voiceId, text, opts = {}, { takes = RECIPE_T
   _audioCache.set(cacheKey, out);
   noteCreditsUsed(billedChars);
   return { ...out, billedChars, sttSeconds };
+}
+
+function naturalOpts(opts = {}) {
+  return { ...opts, pronunciations: null, model: RECIPE_MODEL, stability: null };
+}
+
+// Scribe failing on every take means the "best take" is always the first one: say so once.
+let _sttFailureLogged = false;
+function _noteSttFailure(e) {
+  if (_sttFailureLogged) return;
+  _sttFailureLogged = true;
+  console.error('[elevenlabs:recipe] transcription failed, using the first take:', e.message);
 }
 
 // True when this business's audio goes through the natural recipe (not the v4 single call).
@@ -471,7 +488,16 @@ async function getCreditState({ maxAgeMs = CREDIT_MAX_AGE_MS } = {}) {
       _credit.at = Date.now();
     } catch (e) {
       _credit.at = Date.now() - maxAgeMs + 60_000; // retry in a minute, not on every message
-      console.error('[elevenlabs:credits]', e.message);
+      // A key without the user_read permission can never read the credits: the 20% / 100%
+      // rules then stay off. Logged once per process so it shows in Railway.
+      if (/missing_permissions|user_read/.test(e.message)) {
+        if (!_credit.permissionLogged) {
+          _credit.permissionLogged = true;
+          console.error('[elevenlabs:credits] API key lacks user_read — credit checks disabled until the key gets that permission');
+        }
+      } else {
+        console.error('[elevenlabs:credits]', e.message);
+      }
     }
   }
   return _creditView();
@@ -551,6 +577,8 @@ module.exports = {
   generateNaturalAudio, usesNaturalRecipe, getCreditState, planTakes, onCreditsExhausted, markCreditsExhausted,
   RECIPE_TAKES, LOW_CREDIT_RATIO,
   _ttsBody: ttsBody,
+  _naturalOpts: naturalOpts,
+  RECIPE_MODEL,
   _splitSentences: splitSentences,
   _wordSimilarity: wordSimilarity,
   _pickBestTake: pickBestTake,
