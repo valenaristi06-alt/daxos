@@ -166,10 +166,20 @@ function runUnitTests() {
   assert(many.length === 8, 'split: at most 8 sentences');
   assert(el._wordSimilarity('Te lo agendo.', 'te lo agendo') === 1, 'similarity: same words (case/punct) = 1');
   assert(el._wordSimilarity('Te lo agendo.', 'te la gendo') < 0.5, 'similarity: different words < 0.5');
-  const takes = [Buffer.alloc(100), Buffer.alloc(110), Buffer.alloc(105), Buffer.alloc(500)];
-  assert(el._pickBestTake('Mañana a las tres.', takes, ['mañana a las tres y', 'mañana a las tres', null, 'mañana a las tres']) === 1,
-    'pick: best transcription wins; tie → duration closest to median');
-  assert(el._pickBestTake('Hola.', takes, [null, null, null, null]) === 0, 'pick: all transcriptions failed → first take');
+  // takes as mp3 128 kbps: 16000 bytes per second
+  const sec = x => Buffer.alloc(Math.round(x * 16000));
+  const mid = 'Mañana a las tres y media tenemos lugar.'; // 40 chars → expected ≈ 2.09 s at 1.1
+  assert(Math.abs(el._expectedSeconds(mid, 1.1) - 2.09) < 0.01, 'expected duration at 1.1 ≈ 2.09 s for 40 chars');
+  assert(el._expectedSeconds(mid, 1.0) > el._expectedSeconds(mid, 1.1), 'slower speed → longer expected duration');
+  // real calibration takes for this sentence: 2.07 2.20 1.94 2.38 — all transcribed perfectly
+  assert(el._pickBestTake(mid, [sec(2.07), sec(2.20), sec(1.94), sec(2.38)], [mid, mid, mid, mid], 1.1) === 0,
+    'pick: equal transcriptions → closest to the expected duration (2.07 s, not the dragged 2.38 s)');
+  assert(el._pickBestTake(mid, [sec(2.40), sec(2.05), sec(2.10), sec(2.60)], [mid, 'mañana a las', mid, mid], 1.1) === 2,
+    'pick: a bad transcription is out even if its duration is perfect');
+  assert(el._pickBestTake(mid, [sec(2.9), sec(2.5), sec(3.1), sec(2.7)], [mid, mid, mid, mid], 1.1) === 1,
+    'pick: all takes dragged → the least dragged one');
+  assert(el._pickBestTake(mid, [sec(2.6), sec(2.05), sec(2.3), sec(2.5)], [null, null, null, null], 1.1) === 1,
+    'pick: all transcriptions failed → still chosen by duration');
   // credits → takes
   assert(el.planTakes({ known: true, exhausted: false, remaining: 900, remainingRatio: 0.9 }, 100).takes === 4, 'credits 90% left → 4 takes');
   assert(el.planTakes({ known: true, exhausted: false, remaining: 150, remainingRatio: 0.15 }, 100).takes === 1, 'credits 15% left → 1 take');

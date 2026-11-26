@@ -39,7 +39,7 @@ function convertToOgg(buffer) {
       .audioCodec('libopus')
       .audioChannels(1)
       .audioFrequency(16000)
-      .audioBitrate('16k')
+      .audioBitrate('32k') // 32 kbps Opus mono: clearer voice, still a native-looking 16 kHz note
       .outputOptions([
         '-application voip',
         '-vbr off',
