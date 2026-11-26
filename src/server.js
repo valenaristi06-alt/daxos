@@ -3653,6 +3653,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
       slotsText: _slotsText,
       clientName: agendaState.clientName ?? null,
       slotsGeneratedAt: agendaState.slotsGeneratedAt ?? null,
+      cancelText: _formatMinutes(business.agenda_cancel_min_before ?? 120),
     };
   }
 
