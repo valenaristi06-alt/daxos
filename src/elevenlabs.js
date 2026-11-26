@@ -68,14 +68,15 @@ function normalizeTtsText(text, { stripUrls = false } = {}) {
 // Allowed explicit model values stored in DB; anything else falls back to legacy path with a warning.
 const ALLOWED_V4_MODELS = ['eleven_v4_turbo', 'eleven_v4'];
 
-// Simple presets the owner picks in the panel. Defaults ('normal' + 'natural') are exactly
-// the settings Daxos always used, so a business that never touches them sounds the same.
-// 'expresiva' + 'rapida' is the configuration used for the Daxos content videos.
+// Simple presets the owner picks in the panel. Defaults ('normal' + 'natural') are the
+// natural-voice recipe every audio business gets when it never touches them.
 const VOICE_SPEEDS = { lenta: 1.0, normal: 1.1, rapida: 1.18 };
+// 'natural' is the Daxos natural-voice recipe (blind test 26/11, ronda 10): stability 0.45,
+// style 0.3, similarity 0.85, speed 1.1. The other two move around it.
 const VOICE_TONES = {
-  tranquila: { stability: 0.6,  style: 0.1 },
-  natural:   { stability: 0.5,  style: 0.2 },
-  expresiva: { stability: 0.45, style: 0.3 },
+  tranquila: { stability: 0.6,  style: 0.15 },
+  natural:   { stability: 0.45, style: 0.3 },
+  expresiva: { stability: 0.35, style: 0.45 },
 };
 const MAX_PRONUNCIATIONS = 30;
 
@@ -186,7 +187,7 @@ async function getVoice(voiceId) {
   });
   if (!res.ok) throw new Error(`ElevenLabs voice ${res.status}`);
   const d = await res.json();
-  return { voice_id: d.voice_id, name: d.name };
+  return { voice_id: d.voice_id, name: d.name, category: d.category || null };
 }
 
 const DEFAULT_PREVIEW_TEXT = 'Hola, así sonará tu asistente de ventas. ¿En qué te puedo ayudar hoy?';
@@ -242,6 +243,254 @@ async function generateAudioBuffer(voiceId, text, opts = {}) {
   return buf;
 }
 
+// ── Natural-voice recipe ────────────────────────────────────────────────────
+// Sentence by sentence, each with the text around it as context (previous_text everywhere,
+// next_text everywhere except the last sentence, so the message closes with a falling
+// intonation), N takes per sentence, the take whose transcription best matches the text
+// wins, 250 ms of silence between sentences and loudness normalisation. Chosen in the blind
+// tests of 26/11 (ronda 9: receta A; ronda 10: variante 1).
+const RECIPE_TAKES = 4;
+const SENTENCE_GAP_MS = 250;
+const RECIPE_CONCURRENCY = Math.max(1, parseInt(process.env.ELEVENLABS_CONCURRENCY || '4', 10));
+const RECIPE_STT_MODEL = process.env.ELEVENLABS_STT_PICK_MODEL || 'scribe_v2';
+const MIN_SENTENCE_CHARS = 12;
+const MAX_SENTENCES = 8;
+// Bitrate of the takes (mp3_44100_128) — bytes → seconds without decoding.
+const TAKE_BYTES_PER_SEC = 128000 / 8;
+
+// Splits on . ! ? … followed by a space. A short capitalised word with a period ("Dr.",
+// "Sra.", "Av.") is an abbreviation, not the end of a sentence. Very short pieces are glued
+// to the next one, and the tail is merged so there are at most MAX_SENTENCES.
+function splitSentences(text) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!t) return [];
+  const parts = [];
+  let start = 0;
+  const re = /[.!?…]+["»)]*\s+/g;
+  let m;
+  while ((m = re.exec(t)) !== null) {
+    const end = m.index + m[0].length;
+    const chunk = t.slice(start, end).trim();
+    const lastWord = chunk.split(' ').pop();
+    if (/^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{0,3}\.$/.test(lastWord) && m[0].trim() === '.') continue;
+    parts.push(chunk);
+    start = end;
+  }
+  if (start < t.length) parts.push(t.slice(start).trim());
+
+  const merged = [];
+  for (const p of parts) {
+    if (merged.length && merged[merged.length - 1].length < MIN_SENTENCE_CHARS) {
+      merged[merged.length - 1] += ' ' + p;
+    } else merged.push(p);
+  }
+  if (merged.length > 1 && merged[merged.length - 1].length < MIN_SENTENCE_CHARS) {
+    const last = merged.pop();
+    merged[merged.length - 1] += ' ' + last;
+  }
+  while (merged.length > MAX_SENTENCES) {
+    const last = merged.pop();
+    merged[merged.length - 1] += ' ' + last;
+  }
+  return merged.map(p => normalizeTtsText(p));
+}
+
+const _normWords = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/[^a-z0-9ñ ]/g, ' ').split(/\s+/).filter(Boolean);
+
+// 1 = transcription identical to the text, 0 = nothing in common (word-level edit distance).
+function wordSimilarity(a, b) {
+  const x = _normWords(a), y = _normWords(b);
+  if (!x.length) return y.length ? 0 : 1;
+  let prev = Array.from({ length: y.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= x.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= y.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return Math.max(0, 1 - prev[y.length] / x.length);
+}
+
+// Best take: highest similarity; ties → duration closest to the median take. If every
+// transcription fails, the first take is used (the audio still goes out).
+function pickBestTake(sentence, takes, transcripts) {
+  if (transcripts.every(t => t == null)) return 0;
+  const durs = takes.map(b => b.length);
+  const med = [...durs].sort((a, b) => a - b)[Math.floor(durs.length / 2)];
+  let best = 0, bestScore = -Infinity, bestDd = Infinity;
+  takes.forEach((_, k) => {
+    const score = transcripts[k] == null ? -1 : wordSimilarity(sentence, transcripts[k]);
+    const dd = Math.abs(durs[k] - med);
+    if (score > bestScore || (score === bestScore && dd < bestDd)) { best = k; bestScore = score; bestDd = dd; }
+  });
+  return best;
+}
+
+// Runs async jobs with at most `limit` in flight. Keeps result order.
+async function runPool(jobs, limit) {
+  const out = new Array(jobs.length);
+  let next = 0;
+  async function worker() {
+    while (next < jobs.length) {
+      const i = next++;
+      out[i] = await jobs[i]();
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, jobs.length) }, worker));
+  return out;
+}
+
+function _isQuotaError(status, body) {
+  return /quota_exceeded|insufficient.*credit|exceeds your quota/i.test(body || '') || status === 402;
+}
+
+// One TTS request with up to 2 retries on 429/5xx. Quota errors mark the account as out of
+// credits so the bot answers in text until the next check.
+async function ttsRequest(voiceId, bodyObj) {
+  requireKey();
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetchWithTimeout(`${BASE}/text-to-speech/${voiceId}?output_format=mp3_44100_128`, {
+      method: 'POST',
+      headers: { 'xi-api-key': API_KEY, 'Accept': 'audio/mpeg', 'Content-Type': 'application/json' },
+      body: JSON.stringify(bodyObj),
+    });
+    if (res.ok) return Buffer.from(await res.arrayBuffer());
+    const err = await res.text().catch(() => '');
+    if (_isQuotaError(res.status, err)) {
+      markCreditsExhausted();
+      throw new Error(`ElevenLabs TTS quota ${res.status}: ${err.slice(0, 200)}`);
+    }
+    if ((res.status === 429 || res.status >= 500) && attempt < 2) {
+      await new Promise(r => setTimeout(r, 700 * (attempt + 1)));
+      continue;
+    }
+    throw new Error(`ElevenLabs TTS error ${res.status}: ${err.slice(0, 300)}`);
+  }
+}
+
+// Builds the audio for a whole reply with the natural recipe.
+// Returns { mp3, billedChars, sttSeconds, sentences, takes }.
+// opts: voiceOptsFor(business). takes: 4 normally, 1 when the account is low on credits.
+async function generateNaturalAudio(voiceId, text, opts = {}, { takes = RECIPE_TAKES } = {}) {
+  requireKey();
+  const { concatWithGaps } = require('./audio');
+  // Pronunciations go first on the whole text: "Dr. = doctor" must not split a sentence.
+  const spoken = applyPronunciations(text, opts.pronunciations);
+  const sentences = splitSentences(spoken);
+  if (!sentences.length) throw new Error('empty text');
+  const baseOpts = { ...opts, pronunciations: null };
+
+  const cacheKey = `natural|${voiceId}|${takes}|${ttsBody(spoken, baseOpts)}`;
+  if (_audioCache.has(cacheKey)) {
+    console.log(`[elevenlabs:cache-hit] voiceId=${voiceId} chars=${text.length}`);
+    return { ..._audioCache.get(cacheKey), billedChars: 0, sttSeconds: 0, cached: true };
+  }
+
+  const bodies = sentences.map((s, i) => {
+    const b = JSON.parse(ttsBody(s, baseOpts));
+    const prev = sentences.slice(0, i).join(' ');
+    const next = sentences.slice(i + 1).join(' ');
+    if (prev) b.previous_text = prev;
+    if (next) b.next_text = next; // never on the last sentence → closing intonation
+    return b;
+  });
+
+  const jobs = [];
+  bodies.forEach((b, i) => { for (let k = 0; k < takes; k++) jobs.push(() => ttsRequest(voiceId, b).then(buf => ({ i, buf }))); });
+  const results = await runPool(jobs, RECIPE_CONCURRENCY);
+  const bySentence = sentences.map(() => []);
+  results.forEach(r => bySentence[r.i].push(r.buf));
+  const billedChars = bodies.reduce((a, b) => a + b.text.length * takes, 0);
+
+  let sttSeconds = 0;
+  const picked = await Promise.all(bySentence.map(async (bufs, i) => {
+    if (bufs.length === 1) return bufs[0];
+    sttSeconds += bufs.reduce((a, b) => a + b.length / TAKE_BYTES_PER_SEC, 0);
+    const transcripts = await Promise.all(bufs.map(b =>
+      transcribeAudio(b, 'audio/mpeg', RECIPE_STT_MODEL).catch(() => null)));
+    return bufs[pickBestTake(bodies[i].text, bufs, transcripts)];
+  }));
+
+  const mp3 = await concatWithGaps(picked, SENTENCE_GAP_MS);
+  const out = { mp3, sentences: sentences.length, takes };
+  if (_audioCache.size >= _AUDIO_CACHE_MAX) _audioCache.delete(_audioCache.keys().next().value);
+  _audioCache.set(cacheKey, out);
+  noteCreditsUsed(billedChars);
+  return { ...out, billedChars, sttSeconds };
+}
+
+// True when this business's audio goes through the natural recipe (not the v4 single call).
+function usesNaturalRecipe(opts = {}) {
+  const m = opts.model;
+  return !(m && String(m).startsWith('eleven_v4'));
+}
+
+// ── ElevenLabs account credits ──────────────────────────────────────────────
+// Cached view of /user/subscription so the send path never waits on it more than once
+// every few minutes. Between checks the chars Daxos spends are added locally.
+const CREDIT_MAX_AGE_MS = 5 * 60_000;
+const _credit = { at: 0, count: 0, limit: 0, reset: null, exhausted: false };
+let _onCreditsExhausted = null;
+
+function onCreditsExhausted(fn) { _onCreditsExhausted = fn; }
+
+function markCreditsExhausted() {
+  const was = _credit.exhausted;
+  _credit.exhausted = true;
+  _credit.at = Date.now();
+  if (!was && _onCreditsExhausted) { try { _onCreditsExhausted(); } catch (_) {} }
+}
+
+function noteCreditsUsed(chars) { if (chars > 0) _credit.count += chars; }
+
+function _creditView() {
+  const known = _credit.limit > 0;
+  const remaining = known ? Math.max(0, _credit.limit - _credit.count) : null;
+  return {
+    known,
+    count: _credit.count,
+    limit: _credit.limit,
+    remaining,
+    remainingRatio: known ? remaining / _credit.limit : null,
+    exhausted: _credit.exhausted || (known && remaining <= 0),
+    reset: _credit.reset,
+  };
+}
+
+// Refreshes when older than maxAgeMs (0 = always). On error keeps the last known state.
+async function getCreditState({ maxAgeMs = CREDIT_MAX_AGE_MS } = {}) {
+  if (API_KEY && Date.now() - _credit.at >= maxAgeMs) {
+    try {
+      const u = await getSubscriptionUsage();
+      _credit.count = u.character_count;
+      _credit.limit = u.character_limit;
+      _credit.reset = u.next_reset_unix;
+      _credit.exhausted = u.character_limit > 0 && u.character_count >= u.character_limit;
+      _credit.at = Date.now();
+    } catch (e) {
+      _credit.at = Date.now() - maxAgeMs + 60_000; // retry in a minute, not on every message
+      console.error('[elevenlabs:credits]', e.message);
+    }
+  }
+  return _creditView();
+}
+
+// How a reply should go out given the account credits:
+//   'text' (out of credits / not enough for this reply), 1 take (< 20% left), or the full recipe.
+const LOW_CREDIT_RATIO = 0.2;
+function planTakes(credit, charsNeeded) {
+  if (credit.exhausted) return { mode: 'text', reason: 'credits_exhausted' };
+  if (credit.known && credit.remaining < charsNeeded) return { mode: 'text', reason: 'credits_insufficient' };
+  if (credit.known && credit.remainingRatio < LOW_CREDIT_RATIO) return { mode: 'audio', takes: 1, reason: 'credits_low' };
+  return { mode: 'audio', takes: RECIPE_TAKES };
+}
+
+function _resetCreditStateForTests() {
+  Object.assign(_credit, { at: 0, count: 0, limit: 0, reset: null, exhausted: false });
+}
+
 async function deleteVoice(voiceId) {
   requireKey();
   const res = await fetchWithTimeout(`${BASE}/voices/${voiceId}`, {
@@ -254,11 +503,12 @@ async function deleteVoice(voiceId) {
   }
 }
 
-async function transcribeAudio(buffer, contentType) {
+async function transcribeAudio(buffer, contentType, model = 'scribe_v1') {
   requireKey();
   const form = new FormData();
-  form.append('file', new Blob([buffer], { type: contentType || 'audio/ogg' }), 'audio.ogg');
-  form.append('model_id', 'scribe_v1');
+  const fname = (contentType || '').includes('mpeg') ? 'audio.mp3' : 'audio.ogg';
+  form.append('file', new Blob([buffer], { type: contentType || 'audio/ogg' }), fname);
+  form.append('model_id', model);
   form.append('language_code', 'spa');
   // No Content-Type header — let fetch set it with the multipart boundary
   const res = await fetchWithTimeout(`${BASE}/speech-to-text`, {
@@ -298,7 +548,13 @@ module.exports = {
   cloneVoice, generatePreview, generateAudioBuffer, deleteVoice, transcribeAudio, getSubscriptionUsage,
   getVoice, voiceOptsFor, VOICE_CATALOG, CATALOG_SAMPLE_TEXT, isCatalogVoice, parsePronunciations, VOICE_SPEEDS, VOICE_TONES, MAX_PRONUNCIATIONS,
   // Exported for unit tests only — not part of the public API
+  generateNaturalAudio, usesNaturalRecipe, getCreditState, planTakes, onCreditsExhausted, markCreditsExhausted,
+  RECIPE_TAKES, LOW_CREDIT_RATIO,
   _ttsBody: ttsBody,
+  _splitSentences: splitSentences,
+  _wordSimilarity: wordSimilarity,
+  _pickBestTake: pickBestTake,
+  _resetCreditStateForTests,
   _normalizeTtsText: normalizeTtsText,
   _applyPronunciations: applyPronunciations,
 };

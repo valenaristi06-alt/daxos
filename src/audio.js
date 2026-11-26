@@ -100,4 +100,40 @@ function analyzeVoiceNote(buffer) {
   });
 }
 
-module.exports = { convertToMp3, convertToOgg, analyzeVoiceNote };
+// Joins mp3 clips with `gapMs` of silence between them and normalises loudness (EBU R128,
+// -16 LUFS — voice-note level). Clips go through temp files: ffmpeg can't read several pipes.
+async function concatWithGaps(buffers, gapMs = 250) {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const { execFile } = require('child_process');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'daxos-tts-'));
+  try {
+    const inputs = buffers.map((b, i) => {
+      const f = path.join(dir, `p${i}.mp3`);
+      fs.writeFileSync(f, b);
+      return f;
+    });
+    const out = path.join(dir, 'out.mp3');
+    const n = inputs.length;
+    let fc = '';
+    for (let i = 0; i < n; i++) {
+      fc += `[${i}:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=mono[a${i}];`;
+      if (i < n - 1) fc += `anullsrc=r=44100:cl=mono,atrim=duration=${(gapMs / 1000).toFixed(3)}[g${i}];`;
+    }
+    const seq = [];
+    for (let i = 0; i < n; i++) { seq.push(`[a${i}]`); if (i < n - 1) seq.push(`[g${i}]`); }
+    fc += `${seq.join('')}concat=n=${seq.length}:v=0:a=1[c];[c]loudnorm=I=-16:TP=-1.5:LRA=11[out]`;
+    const args = ['-hide_banner', '-loglevel', 'error', '-y'];
+    inputs.forEach(f => args.push('-i', f));
+    args.push('-filter_complex', fc, '-map', '[out]', '-ar', '44100', '-ac', '1', '-c:a', 'libmp3lame', '-b:a', '128k', out);
+    await new Promise((resolve, reject) => {
+      execFile(ffmpegPath, args, { timeout: 30_000 }, (err, _so, se) => err ? reject(new Error(`ffmpeg concat: ${String(se || err.message).slice(0, 300)}`)) : resolve());
+    });
+    return fs.readFileSync(out);
+  } finally {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
+  }
+}
+
+module.exports = { concatWithGaps, convertToMp3, convertToOgg, analyzeVoiceNote };

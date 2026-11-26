@@ -228,6 +228,8 @@ async function sendAdminNotificationEmail({ adminEmail, event, data }) {
     backup_anomalia_tamano: `⚠️ Backup anómalo (tamaño) — Daxos`,
     backup_silencio:        `⚠️ Sin backup en más de 30h — Daxos`,
     backup_sin_copias:      `⚠️ Sin backups en R2 — Daxos`,
+    'elevenlabs-usage-80':  `⚠️ ElevenLabs al 80% de créditos — Daxos`,
+    'elevenlabs-usage-100': `🔴 ElevenLabs sin créditos: audios en texto — Daxos`,
   };
   const subject = subjects[event] || `Daxos Admin: ${event}`;
 
