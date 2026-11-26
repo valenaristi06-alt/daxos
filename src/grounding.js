@@ -410,6 +410,18 @@ async function groundReply({ reply, sources, regenerate, mode = 'enforce', hasIm
   return { reply: `[NEEDS_HUMAN]\n${FALLBACK_REPLY}`, action: 'replaced', first, second: [], regenerated: false };
 }
 
+// True when a reply tells the client that the team (not the assistant) will get back with
+// something: "eso te lo confirma alguien del equipo", "lo consulto con el equipo"…
+// Used to flag the conversation and tell the owner what the client asked.
+const _DEFER_VERB = '(?:confirm|avis|consult|respond|contact|comunic|escrib|llam)\\w*';
+const _DEFER_WHO = '(?:equipo|alguien del negocio|una persona del negocio)';
+const TEAM_DEFERRAL_RE = new RegExp(
+  `${_DEFER_VERB}[^.!?\\n]{0,60}\\b${_DEFER_WHO}\\b|\\b${_DEFER_WHO}\\b[^.!?\\n]{0,60}${_DEFER_VERB}|\\bte los? paso[^.!?\\n]{0,40}en breve`
+);
+function isTeamDeferral(text) {
+  return TEAM_DEFERRAL_RE.test(norm(stripMarkers(text)));
+}
+
 function groundingMode() {
   const m = (process.env.GROUNDING_MODE || 'enforce').toLowerCase();
   return ['enforce', 'log', 'off'].includes(m) ? m : 'enforce';
@@ -417,5 +429,5 @@ function groundingMode() {
 
 module.exports = {
   FALLBACK_REPLY, buildSources, findUngrounded, groundReply, buildCorrectionNote,
-  summarizeViolations, groundingMode, norm,
+  summarizeViolations, groundingMode, norm, isTeamDeferral,
 };

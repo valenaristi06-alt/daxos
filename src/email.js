@@ -1,4 +1,8 @@
-async function sendPauseEmail({ to, businessName, contactId, messageText, conversationId, convUrl, subject: subjectOverride }) {
+// RESEND_BASE_URL lets tests point email sending at a local mock. Never honoured in production.
+const _IS_PROD_MAIL = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT;
+const RESEND_EMAILS_URL = ((!_IS_PROD_MAIL && process.env.RESEND_BASE_URL) || 'https://api.resend.com') + '/emails';
+
+async function sendPauseEmail({ to, businessName, contactId, messageText, conversationId, convUrl, subject: subjectOverride, intro = null, note = null }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     console.warn('[resend] RESEND_API_KEY not set, skipping email');
@@ -14,17 +18,17 @@ async function sendPauseEmail({ to, businessName, contactId, messageText, conver
     subject: subjectOverride || `Nueva conversación pausada — ${businessName}`,
     html: `
       <p>Hola,</p>
-      <p>Un cliente necesita atención humana en tu asistente de <strong>${escapeHtml(businessName)}</strong>.</p>
+      <p>${intro ? escapeHtml(intro) : 'Un cliente necesita atención humana en tu asistente de'} <strong>${escapeHtml(businessName)}</strong>.</p>
       <table style="border-collapse:collapse;margin:16px 0">
         <tr><td style="padding:4px 12px 4px 0;color:#666">Teléfono</td><td>${escapeHtml(contactId)}</td></tr>
         <tr><td style="padding:4px 12px 4px 0;color:#666">Mensaje</td><td style="max-width:400px">${escapeHtml(messageText)}</td></tr>
       </table>
-      <p>El asistente pausó la conversación. Respondé vos directamente.</p>
+      <p>${note ? escapeHtml(note) : 'El asistente pausó la conversación. Respondé vos directamente.'}</p>
       ${linkHtml}
     `,
   };
 
-  const res = await fetch('https://api.resend.com/emails', {
+  const res = await fetch(RESEND_EMAILS_URL, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${key}`,
@@ -69,7 +73,7 @@ async function sendUnmatchedPaymentAlert({ adminEmail, payerEmail, amount, curre
     `,
   };
 
-  const res = await fetch('https://api.resend.com/emails', {
+  const res = await fetch(RESEND_EMAILS_URL, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${key}`,
@@ -117,7 +121,7 @@ async function sendBookingNotificationEmail({ to, businessName, clientName, reas
     `,
   };
 
-  const res = await fetch('https://api.resend.com/emails', {
+  const res = await fetch(RESEND_EMAILS_URL, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -156,7 +160,7 @@ async function sendWeeklySummaryEmail({ to, businessName, stats, weekLabel }) {
     `,
   };
 
-  const res = await fetch('https://api.resend.com/emails', {
+  const res = await fetch(RESEND_EMAILS_URL, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -198,7 +202,7 @@ async function sendSaleIntentEmail({ to, businessName, clientName, clientPhone, 
     `,
   };
 
-  const res = await fetch('https://api.resend.com/emails', {
+  const res = await fetch(RESEND_EMAILS_URL, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -238,7 +242,7 @@ async function sendAdminNotificationEmail({ adminEmail, event, data }) {
     html: `<p>Evento: <strong>${escapeHtml(event)}</strong></p><table style="border-collapse:collapse;margin:16px 0">${rows}</table>`,
   };
 
-  const res = await fetch('https://api.resend.com/emails', {
+  const res = await fetch(RESEND_EMAILS_URL, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -253,9 +257,6 @@ async function sendAdminNotificationEmail({ adminEmail, event, data }) {
 const PLAN_LINK = 'https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan';
 const PLAN_PHONE_TEXT = '+598 92 052 508';
 
-// RESEND_BASE_URL lets tests point email sending at a local mock. Never honoured in production.
-const _IS_PROD_MAIL = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT;
-const RESEND_EMAILS_URL = ((!_IS_PROD_MAIL && process.env.RESEND_BASE_URL) || 'https://api.resend.com') + '/emails';
 
 // Trial emails (3 stages). Each returns { skipped: true } when email is not configured,
 // so the caller can tell "sent" from "nothing went out".
@@ -335,7 +336,7 @@ async function sendBillingDataEmail({ adminEmail, businessName, businessId }) {
     subject: `Nuevos datos de facturación — ${businessName}`,
     html: `<p>El negocio <strong>${escapeHtml(businessName)}</strong> (id: ${Number(businessId)}) completó sus datos de facturación.</p>`,
   };
-  const res = await fetch('https://api.resend.com/emails', {
+  const res = await fetch(RESEND_EMAILS_URL, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -355,7 +356,7 @@ async function sendPauseFollowupEmail({ to, businessName, conversationId, custom
     subject: `Recordatorio — conversación sin respuesta en ${escapeHtml(businessName)}`,
     html: `<p>Hola,</p><p>Hace más de 30 minutos que la conversación con <strong>${escapeHtml(customerPhone || String(conversationId))}</strong> en <strong>${escapeHtml(businessName)}</strong> sigue sin respuesta.</p>${linkHtml}`,
   };
-  const res = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetch(RESEND_EMAILS_URL, { method: 'POST', headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
 }
 
@@ -371,7 +372,7 @@ async function sendPause24hReminderEmail({ to, businessName, conversationId, cus
     subject: `24 horas sin atender — ${escapeHtml(businessName)}`,
     html: `<p>Hola,</p><p>La conversación con <strong>${escapeHtml(customerPhone || String(conversationId))}</strong> en <strong>${escapeHtml(businessName)}</strong> lleva 24 horas pausada sin atención.</p>${linkHtml}`,
   };
-  const res = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetch(RESEND_EMAILS_URL, { method: 'POST', headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
 }
 
@@ -396,7 +397,7 @@ async function sendWaSilenceAlertEmail({ adminEmail, businessName, phoneNumber, 
       </ul>
     `,
   };
-  const res = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetch(RESEND_EMAILS_URL, { method: 'POST', headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
 }
 
@@ -414,7 +415,7 @@ async function sendWaSilenceRecoveryEmail({ adminEmail, businessName, phoneNumbe
       <p>Último mensaje entrante: ${lastMsgStr}</p>
     `,
   };
-  const res = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetch(RESEND_EMAILS_URL, { method: 'POST', headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
 }
 
@@ -440,7 +441,7 @@ async function sendWaHealthAlertEmail({ adminEmail, ownerEmail, businessName, ph
       </ul>
     `,
   };
-  const res = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetch(RESEND_EMAILS_URL, { method: 'POST', headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
 }
 
@@ -457,7 +458,7 @@ async function sendWaHealthRecoveryEmail({ adminEmail, ownerEmail, businessName,
       <p>El negocio <strong>${escapeHtml(businessName)}</strong> (número: <strong>${escapeHtml(String(phoneNumber || ''))}</strong>) volvió a reportar estado healthy en Kapso.</p>
     `,
   };
-  const res = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetch(RESEND_EMAILS_URL, { method: 'POST', headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Resend ${res.status}: ${t}`); }
 }
 
@@ -480,7 +481,7 @@ async function sendPasswordResetEmail({ to, resetUrl }) {
       <p style="color:#666;font-size:12px">El enlace vence en 1 hora.</p>
     `,
   };
-  const res = await fetch('https://api.resend.com/emails', {
+  const res = await fetch(RESEND_EMAILS_URL, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -514,7 +515,7 @@ async function sendUrgentAlertEmail({ to, businessName, contactId, messageText, 
       ${linkHtml}
     `,
   };
-  const res = await fetch('https://api.resend.com/emails', {
+  const res = await fetch(RESEND_EMAILS_URL, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -552,7 +553,7 @@ async function sendSpendingCapEmail({ to, businessName, panelUrl, plan, dailyCap
     `,
   };
 
-  const res = await fetch('https://api.resend.com/emails', {
+  const res = await fetch(RESEND_EMAILS_URL, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${key}`,
@@ -599,7 +600,7 @@ async function sendOwnerBotStoppedEmail({ to, businessName, clientName, convUrl,
     ? `<p><a href="${convUrl}" style="background:#2563eb;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;display:inline-block;margin-top:8px">Abrir la conversación</a></p>`
     : '';
 
-  const res = await fetch('https://api.resend.com/emails', {
+  const res = await fetch(RESEND_EMAILS_URL, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from: 'Daxos <notificaciones@daxos.lat>', to: [to], subject, html: bodyHtml + linkHtml }),
@@ -625,7 +626,7 @@ function sendClaudeErrorAdminEmail({ errorType, businessId, businessName, errorM
   };
   const subject = subjectPrefix + (subjects[errorType] || '⚠️ Daxos: Claude error');
 
-  return fetch('https://api.resend.com/emails', {
+  return fetch(RESEND_EMAILS_URL, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${key}`,
@@ -667,7 +668,7 @@ async function sendAgendaNewAppointmentEmail({ to, businessName, clientName, ser
       <p style="color:#666;font-size:12px">No se pudo enviar el aviso por WhatsApp — revisá la conexión de tu cuenta.</p>
     `,
   };
-  const res = await fetch('https://api.resend.com/emails', {
+  const res = await fetch(RESEND_EMAILS_URL, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

@@ -147,7 +147,7 @@ const { generateReply, analyzeStyle, summarizeWebsite, initAnthropicKey, getLast
 initAnthropicKey(_apiKey);
 const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = require('./bookings');
 const { extractPricesFromMany, enforcePriceCap } = require('./pricecap');
-const { buildSources: buildGroundingSources, groundReply, summarizeViolations, groundingMode } = require('./grounding');
+const { buildSources: buildGroundingSources, groundReply, summarizeViolations, groundingMode, isTeamDeferral } = require('./grounding');
 const { handleDemoFlow, processFollowups } = require('./demo-flow');
 const { sendWeeklySummaries } = require('./weekly');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
@@ -2509,7 +2509,7 @@ app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
       sent_doc = true;
       reply = reply.replace(/^\[SEND_DOC\]\s*/m, '');
     }
-    reply = reply.replace(/\[INTERES_COMPRA\]\n?/g, '');
+    reply = reply.replace(/\[INTERES_COMPRA\]\n?/g, '').replace(/\n?\[DATO_PENDIENTE\]\n?/g, '\n');
     // Strip any remaining internal markers (agenda tags, etc.) before returning to panel
     reply = sanitizeForClient(reply, logError);
     reply = reply.trim();
@@ -2697,7 +2697,7 @@ function isTrialExpired(business) {
   return false;
 }
 
-async function notifyOwnerOfPause({ business, owner, contactId, messageText, conversationId, waCredentials, subject = '⚠️ Conversación pausada' }) {
+async function notifyOwnerOfPause({ business, owner, contactId, messageText, conversationId, waCredentials, subject = '⚠️ Conversación pausada', email = null }) {
   const convUrl = `${process.env.APP_URL || 'https://daxos.lat'}/conversations.html?conv=${conversationId}`;
 
   if (!owner) {
@@ -2726,7 +2726,8 @@ async function notifyOwnerOfPause({ business, owner, contactId, messageText, con
       .catch(err => logError('pause-notify-wa-error', { message: `conv ${conversationId} dest=****${normPhone.slice(-4)}: ${err.message}`, stack: '' }));
   }
 
-  const emailPromise = sendPauseEmail({ to: owner.email, businessName: business.name, contactId, messageText, conversationId, convUrl })
+  // `email` = { subject, intro, note } overrides the default "conversation paused" wording.
+  const emailPromise = sendPauseEmail({ to: owner.email, businessName: business.name, contactId, messageText, conversationId, convUrl, ...(email || {}) })
     .catch(async (err) => {
       logError('pause-notify-error', { message: `conv ${conversationId} owner email failed: ${err.message} — sending fallback to admin`, stack: '' });
       const adminEmail = process.env.ADMIN_EMAIL;
@@ -3104,7 +3105,10 @@ function isMsgStale(business, msgTimestamp) {
   return null;
 }
 
-const _groundingNotifyAt = new Map(); // `${convId}:${hourKey}` → true (owner alert throttle)
+// When the assistant tells a client "the team will confirm that", the owner is told what the
+// client asked — at most once per conversation in this window, so a chat with several
+// unknowns does not flood them.
+const PENDING_DATA_ALERT_SEC = 2 * 3600;
 
 // True when this message will be dropped or only stored (message too old, contact excluded).
 // Used to skip media downloads and transcription cost. A muted bot is NOT skipped: the owner
@@ -3774,6 +3778,11 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     isSaleIntent = true;
     reply = reply.replace(/\[INTERES_COMPRA\]\n?/g, '');
   }
+  let dataPendingMarker = false;
+  if (/\[DATO_PENDIENTE\]/.test(reply)) {
+    dataPendingMarker = true;
+    reply = reply.replace(/\n?\[DATO_PENDIENTE\]\n?/g, '\n').trim();
+  }
   if (reply.startsWith('[SEND_DOC]')) {
     sendDoc = true;
     reply = reply.replace(/^\[SEND_DOC\]\n?/, '');
@@ -4150,9 +4159,11 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
 
   // ── Per-customer price cap: correct the reply if it quotes more distinct new
   // prices than allowed, then alert the owner. ──────────────────────────────
+  let _priceCapNotified = false; // the price-cap notice already tells the owner about its deferral
   if (_priceCapCtx && _priceCapPrior) {
     const _pc = enforcePriceCap(reply, _priceCapPrior, _priceCapCtx.remaining);
     if (_pc.dropped > 0) {
+      _priceCapNotified = true;
       reply = _pc.text;
       logError('price-cap', { message: `biz=${business.id} conv=${conversation.id} dropped=${_pc.dropped} remaining=${_priceCapCtx.remaining} disallowed=${JSON.stringify(_pc.disallowed)}`, stack: '' });
       try {
@@ -4338,28 +4349,39 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     markAsRead(msgId, waCredentials).catch(() => {});
   }
 
-  // Derivación: notificar al dueño pero NO pausar el bot — sigue respondiendo
-  const _groundingBlocked = _grounding?.action === 'replaced';
-  if (needsHuman && !conversation.needs_human) {
+  // Derivación: notificar al dueño pero NO pausar el bot — sigue respondiendo.
+  //
+  // "Pending data": the client was told the team will confirm something — because the
+  // anti-invention check replaced the reply, because the model flagged it ([DATO_PENDIENTE])
+  // or because the reply says so. The conversation is marked for attention and the owner
+  // gets the client's question, at most once per conversation every 2 hours.
+  const _pendingData = !_priceCapNotified && (_grounding?.action === 'replaced' || dataPendingMarker || isTeamDeferral(reply));
+  const _pendingRecent = _pendingData && ownerAlertRecentlySent(conversation.id, 'data_pending', PENDING_DATA_ALERT_SEC);
+  const _pendingSubject = '❓ Dato sin cargar — el cliente espera respuesta';
+  if (_pendingData && !conversation.needs_human) setNeedsHuman(conversation.id, 1);
+  if (_pendingData) {
+    if (_pendingRecent) {
+      logError('data-pending-alert', { message: `conv ${conversation.id} biz=${business.id} throttled (already notified in the last 2h)`, stack: '' });
+    } else {
+      recordOwnerAlert(business.id, conversation.id, 'data_pending');
+      logError('data-pending-alert', { message: `conv ${conversation.id} biz=${business.id} owner notified source=${_grounding?.action === 'replaced' ? 'check' : dataPendingMarker ? 'marker' : 'text'}`, stack: '' });
+      notifyOwnerOfPause({
+        business, owner: getUserByBusinessId(business.id), channel: 'whatsapp', contactId: customerPhone,
+        messageText: text, conversationId: conversation.id, waCredentials, subject: _pendingSubject,
+        email: {
+          subject: `Dato sin cargar: un cliente espera respuesta — ${business.name}`,
+          intro: 'Un cliente preguntó algo que tu asistente no tiene cargado, en',
+          note: 'El asistente le dijo que el equipo se lo confirma y sigue respondiendo el resto. Contestale vos ese dato. Si lo cargás en el panel, la próxima vez lo responde solo.',
+        },
+      }).catch(err => console.error('[notify-pending-data]', err.message));
+    }
+  } else if (needsHuman && !conversation.needs_human) {
     setNeedsHuman(conversation.id, 1);
     const owner = getUserByBusinessId(business.id);
     notifyOwnerOfPause({
       business, owner, channel: 'whatsapp', contactId: customerPhone,
       messageText: text, conversationId: conversation.id, waCredentials,
-      ...(_groundingBlocked ? { subject: '❓ Dato sin cargar — el cliente espera respuesta' } : {}),
     }).catch(err => console.error('[notify-human]', err.message));
-  } else if (_groundingBlocked) {
-    // Conversation was already flagged: still tell the owner, at most once per hour per conversation.
-    const _gKey = `${conversation.id}:${Math.floor(Date.now() / 3_600_000)}`;
-    if (!_groundingNotifyAt.has(_gKey)) {
-      if (_groundingNotifyAt.size > 5000) _groundingNotifyAt.clear();
-      _groundingNotifyAt.set(_gKey, true);
-      notifyOwnerOfPause({
-        business, owner: getUserByBusinessId(business.id), channel: 'whatsapp', contactId: customerPhone,
-        messageText: text, conversationId: conversation.id, waCredentials,
-        subject: '❓ Dato sin cargar — el cliente espera respuesta',
-      }).catch(err => console.error('[notify-grounding]', err.message));
-    }
   }
 
   if (isUrgente && business.urgent_alert_enabled) {
