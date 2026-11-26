@@ -30,6 +30,29 @@
     notifyParent('resize', { height: h });
   }
 
+  // El link de un solo uso venció / ya se usó, o la sesión de 8 h terminó: avisamos a Pupi
+  // para que pida un link nuevo y recargue el iframe. Sin datos (va a '*' solo si todavía
+  // no conocemos los orígenes permitidos, p. ej. link inválido).
+  let expiredSent = false;
+  function sessionExpired() {
+    if (!expiredSent && window.parent !== window) {
+      expiredSent = true;
+      const msg = { source: 'assistant-embed', event: 'expired' };
+      if (PARENT_ORIGINS.length) PARENT_ORIGINS.forEach(o => { try { window.parent.postMessage(msg, o); } catch (_) {} });
+      else { try { window.parent.postMessage(msg, '*'); } catch (_) {} }
+    }
+    fatal('La sesión venció. Volvé a abrir el asistente.');
+  }
+  // Cualquier 401 con el token del embed = sesión vencida.
+  const _fetch = window.fetch.bind(window);
+  window.fetch = async function (input, init) {
+    const res = await _fetch(input, init);
+    const h = init && init.headers;
+    const usedToken = !!(h && (h['X-Embed-Token'] || (typeof h.get === 'function' && h.get('X-Embed-Token'))));
+    if (res.status === 401 && usedToken && EMBED_TOKEN) sessionExpired();
+    return res;
+  };
+
   function applyTheme(theme) {
     if (!theme) return;
     const map = {
@@ -226,7 +249,7 @@
   async function init() {
     const params = new URLSearchParams(location.search);
     const token = params.get('token');
-    if (!token) return fatal('Enlace inválido o vencido.');
+    if (!token) return sessionExpired();
 
     // 1) Canjear el token de un solo uso por un token de sesión del embed.
     let session;
@@ -238,7 +261,7 @@
       session = await r.json();
       if (!r.ok) throw new Error(session.error || 'Error');
     } catch (_) {
-      return fatal('Enlace inválido o vencido.');
+      return sessionExpired();
     }
     EMBED_TOKEN = session.embed_token;
     window.__EMBED_TOKEN__ = EMBED_TOKEN;
@@ -272,6 +295,8 @@
     wirePauseToggle();
     wireViews();
     setView(state.connected ? 'convs' : 'steps');
+    // Estado inicial para Pupi (p. ej. mostrar "Conectado" en Herramientas).
+    notifyParent('ready', { connected: !!state.connected, configured: !!state.configured, bot_paused: !!state.bot_paused });
 
     // 4) Paso 2: inyectar el configurador (usa window.__EMBED_TOKEN__).
     const s = document.createElement('script');
