@@ -24,7 +24,56 @@
   <main id="embed-root" class="embed-root" aria-live="polite">
     <div id="embed-loading" class="embed-loading">Cargando…</div>
 
+    <!-- Vista principal una vez conectado WhatsApp: conversaciones -->
+    <div id="embed-convs" class="convs" hidden>
+      <div class="convs-top">
+        <h1 class="convs-title">Conversaciones</h1>
+        <button type="button" id="btn-open-settings" class="link-btn">Ajustes del asistente</button>
+      </div>
+      <div class="convs-box" id="convs-box">
+        <aside class="convs-list" aria-label="Chats">
+          <div id="conv-list" class="conv-list"></div>
+        </aside>
+        <section class="convs-thread" id="conv-thread" aria-live="polite">
+          <div class="thread-empty" id="thread-empty">Elegí un chat para ver los mensajes.</div>
+          <div class="thread" id="thread" hidden>
+            <header class="thread-head">
+              <button type="button" class="thread-back" id="thread-back" aria-label="Volver a los chats">‹</button>
+              <div class="thread-who">
+                <span class="thread-phone" id="thread-phone"></span>
+                <span class="thread-sub" id="thread-sub"></span>
+              </div>
+              <button type="button" class="chip-btn" id="btn-take" hidden>Atiendo yo</button>
+              <button type="button" class="icon-btn" id="btn-delete" title="Borrar chat" aria-label="Borrar chat">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </header>
+            <div class="thread-confirm" id="delete-confirm" hidden>
+              <span>¿Borrar este chat? Se borra solo de acá, en WhatsApp queda igual.</span>
+              <div class="thread-confirm-btns">
+                <button type="button" class="chip-btn" id="btn-delete-cancel">Cancelar</button>
+                <button type="button" class="chip-btn chip-danger" id="btn-delete-ok">Borrar</button>
+              </div>
+            </div>
+            <div class="thread-banner" id="thread-banner" hidden>
+              <span id="thread-banner-text"></span>
+              <button type="button" class="chip-btn" id="btn-banner-action"></button>
+            </div>
+            <div class="thread-msgs" id="thread-msgs"></div>
+            <div class="reply">
+              <p class="reply-err" id="reply-err" hidden></p>
+              <div class="reply-row">
+                <textarea id="reply-text" class="reply-ta" rows="1" maxlength="4096" placeholder="Escribí tu respuesta…"></textarea>
+                <button type="button" class="btn btn-accent reply-send" id="reply-send">Enviar</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
     <div id="embed-steps" class="embed-steps" hidden>
+      <button type="button" id="btn-back-convs" class="link-btn link-back" hidden>‹ Conversaciones</button>
       <!-- Paso 1 -->
       <section class="step" id="step-1">
         <div class="step-head"><span class="step-num">1</span><h2>Conectá tu WhatsApp</h2></div>
@@ -67,11 +116,7 @@
               <span class="switch-label" id="status-label">—</span>
             </label>
           </div>
-          <div class="usage">
-            <div class="usage-top"><span id="plan-pct-label">Usaste —% de tu plan este mes</span></div>
-            <div class="bar"><div class="bar-fill" id="plan-bar"></div></div>
-            <div class="conv-line" id="conv-line">—</div>
-          </div>
+          <p class="limit-notice" id="limit-notice" hidden></p>
         </div>
       </section>
     </div>
@@ -79,6 +124,9 @@
     <div id="embed-error" class="embed-error" hidden></div>
   </main>
 
+  <div class="lightbox" id="lightbox" hidden><img id="lightbox-img" alt="Foto" /></div>
+
+  <script src="/js/embed-conversations.js"></script>
   <script src="/js/embed.js"></script>
 </body>
 </html>

@@ -43,6 +43,8 @@
   function fatal(msg) {
     show($('embed-loading'), false);
     show($('embed-steps'), false);
+    show($('embed-convs'), false);
+    if (window.EmbedConversations) window.EmbedConversations.stop();
     const e = $('embed-error'); e.textContent = msg; show(e, true);
     reportHeight();
   }
@@ -70,6 +72,7 @@
       show(errEl, false);
       notifyParent('whatsapp_connected');
       refreshState();
+      setView('convs');
     } catch (err) {
       errEl.textContent = 'No pudimos guardar la conexión. Intentá de nuevo.';
       show(errEl, true);
@@ -138,14 +141,37 @@
     toggle.checked = !paused;           // marcado = activo
     $('status-label').textContent = paused ? 'Pausado' : 'Activo';
 
-    // Sin dólares: una sola barra con el % del plan usado y la cuenta de conversaciones.
-    const u = state.usage || {};
-    const pct = Math.max(0, u.percent_used || 0);
-    $('plan-pct-label').textContent = `Usaste ${Math.min(pct, 100)}% de tu plan este mes`;
-    const bar = $('plan-bar');
-    bar.style.width = Math.min(100, pct) + '%';
-    bar.classList.toggle('over', pct >= 100);
-    $('conv-line').textContent = `${u.conversations || 0} de ${u.conv_cap || 0} conversaciones`;
+    // Sin números ni porcentajes: solo un aviso desde el 80% del plan y otro al 100%.
+    const notice = $('limit-notice');
+    const texts = {
+      near: 'Tu asistente está por llegar al límite de tu plan este mes.',
+      reached: 'Llegaste al límite de tu plan este mes. Las conversaciones nuevas te llegan a vos.',
+    };
+    notice.textContent = texts[state.limit_notice] || '';
+    notice.classList.toggle('limit-notice--reached', state.limit_notice === 'reached');
+    show(notice, !!texts[state.limit_notice]);
+  }
+
+  // ── Vistas: antes de conectar WhatsApp solo los 3 pasos; después, conversaciones
+  // como vista principal y los pasos detrás de "Ajustes del asistente". ──
+  let view = null; // 'steps' | 'convs'
+  function setView(next) {
+    if (next === 'convs' && !currentBusiness.connected) next = 'steps';
+    view = next;
+    show($('embed-convs'), next === 'convs');
+    show($('embed-steps'), next === 'steps');
+    show($('btn-back-convs'), next === 'steps' && currentBusiness.connected);
+    document.body.classList.toggle('view-convs', next === 'convs');
+    if (window.EmbedConversations) {
+      if (next === 'convs') window.EmbedConversations.start({ authHeaders, onLayout: reportHeight });
+      else window.EmbedConversations.stop();
+    }
+    window.scrollTo(0, 0);
+    reportHeight();
+  }
+  function wireViews() {
+    $('btn-open-settings').addEventListener('click', () => setView('steps'));
+    $('btn-back-convs').addEventListener('click', () => setView('convs'));
   }
 
   function wirePauseToggle() {
@@ -228,7 +254,6 @@
     const state = await r2.json();
 
     show($('embed-loading'), false);
-    show($('embed-steps'), true);
 
     currentBusiness = { connected: state.connected, bot_paused: state.bot_paused, plan: state.plan, id: null };
     // business id para /auth/whatsapp/callback (lo tomamos de /api/business).
@@ -238,6 +263,8 @@
     renderStep3(state);
     wireWaButton();
     wirePauseToggle();
+    wireViews();
+    setView(state.connected ? 'convs' : 'steps');
 
     // 4) Paso 2: inyectar el configurador (usa window.__EMBED_TOKEN__).
     const s = document.createElement('script');

@@ -140,9 +140,10 @@ function createBaileysMediaBridge(deps) {
     const { kind, caption, content } = entry;
     const { customerPhone, msgTimestamp } = args;
     const tag = `business_id=${business.id} msgId=${args.msgId}`;
-    const fail = (failKind, err) => {
+    // `media`: the downloaded file, kept so the owner can still open it in the panel.
+    const fail = (failKind, err, media = null) => {
       logError('baileys-media-fallback', { message: `${tag} kind=${failKind}${err ? ' err=' + String(err.message || err).slice(0, 160) : ''}`, stack: '' });
-      return replyUnprocessable(business, waCredentials, { customerPhone, kind: failKind, storedText: mediaPlaceholder(failKind, caption), msgTimestamp });
+      return replyUnprocessable(business, waCredentials, { customerPhone, kind: failKind, storedText: mediaPlaceholder(failKind, caption), msgTimestamp, media });
     };
 
     // Contact excluded or message too old: the pipeline stores/drops the placeholder and
@@ -152,17 +153,18 @@ function createBaileysMediaBridge(deps) {
     }
 
     if (kind === 'audio') {
-      let text;
+      let text, media = null;
       try {
         const buffer = await _fetch(entry, waCredentials, AUDIO_MAX_BYTES, content.audioMessage);
+        media = { kind: 'audio', buffer, mime: content.audioMessage?.mimetype || 'audio/ogg' };
         logError('audio-download', { message: `${tag} provider=baileys bytes=${buffer.length}`, stack: '' });
         text = (await transcribeAudio(buffer, (content.audioMessage?.mimetype || 'audio/ogg').split(';')[0].trim()) || '').trim();
         logError('audio-transcribe', { message: `${tag} provider=baileys chars=${text.length}`, stack: '' });
       } catch (err) {
-        return fail(/^too_large/.test(err.message) ? 'audio_too_long' : 'audio_failed', err);
+        return fail(/^too_large/.test(err.message) ? 'audio_too_long' : 'audio_failed', err, media);
       }
-      if (!text) return fail('audio_failed', 'empty_transcript');
-      return processIncomingMessage(business, waCredentials, { ...args, text });
+      if (!text) return fail('audio_failed', 'empty_transcript', media);
+      return processIncomingMessage(business, waCredentials, { ...args, text, media });
     }
 
     if (kind === 'image') {
@@ -184,17 +186,18 @@ function createBaileysMediaBridge(deps) {
 
     if (kind === 'document') {
       const doc = content.documentMessage || {};
-      let read;
+      let read, media = null;
       try {
         const buffer = await _fetch(entry, waCredentials, DOC_MAX_BYTES, doc);
+        media = { kind: 'document', buffer, mime: detectMimeFromBytes(buffer) || doc.mimetype, filename: doc.fileName || doc.title };
         read = await readIncomingDocument({ buffer, mime: doc.mimetype, filename: doc.fileName || doc.title, caption, extractTextFromFile, detectMimeFromBytes });
       } catch (err) {
         return fail('document_failed', err);
       }
-      if (!read.ok) return fail(read.reason);
+      if (!read.ok) return fail(read.reason, null, media);
       logError('baileys-document-read', { message: `${tag} as=${read.kind}${read.kind === 'text' ? ` chars=${read.chars} truncated=${read.truncated}` : ''}`, stack: '' });
       if (read.kind === 'image') return processIncomingMessage(business, waCredentials, { ...args, text: read.storedText, imageData: read.imageData });
-      return processIncomingMessage(business, waCredentials, { ...args, text: read.storedText, claudeText: read.claudeText });
+      return processIncomingMessage(business, waCredentials, { ...args, text: read.storedText, claudeText: read.claudeText, media });
     }
 
     // video, sticker, location, contacts, other

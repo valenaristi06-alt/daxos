@@ -165,10 +165,10 @@ async function main() {
 
     const state = await req('GET', '/api/embed/state', null, embed(sessionToken));
     assert(state.status === 200 && state.body.plan === 'crm', 'state with embed token → 200, plan crm');
-    assert(state.body.usage && typeof state.body.usage.conv_cap === 'number'
-      && typeof state.body.usage.percent_used === 'number', 'state includes percent_used + conversations vs cap');
-    assert(state.body.usage.cost_usd === undefined && state.body.usage.spend_cap_usd === undefined
-      && JSON.stringify(state.body).indexOf('usd') === -1, 'state never exposes dollars to the owner');
+    assert(state.body.usage === undefined && !('percent_used' in state.body) && !('conv_cap' in state.body),
+      'state exposes no usage numbers or percentages');
+    assert(state.body.limit_notice === null, 'below 80% → no limit notice');
+    assert(JSON.stringify(state.body).indexOf('usd') === -1, 'state never exposes dollars to the owner');
     assert(state.body.config_chat_enabled === true, 'configurador enabled for crm in embed');
 
     // Pause toggle via embed token (no cookie)
@@ -180,6 +180,117 @@ async function main() {
     // Bad embed token → 401
     const bad = await req('GET', '/api/embed/state', null, embed('not-a-real-token'));
     assert(bad.status === 401, 'invalid embed token → 401');
+  }
+
+  // ── Suite 6: limit notice (80% / 100%), no numbers ──
+  console.log('\nSuite 6: limit notice');
+  {
+    await req('POST', '/api/partner/businesses/quota', { crm_user_id: 'emb_1', conv_cap: 10, spend_cap_usd: 1000 }, bearer(PARTNER_KEY));
+    const db = new Database(path.join(DB_DIR, 'daxos.db'));
+    const bizId = db.prepare("SELECT id FROM businesses WHERE crm_user_id = 'emb_1'").get().id;
+    const convIns = db.prepare('INSERT INTO conversations (business_id, customer_id) VALUES (?, ?)');
+    const msgIns = db.prepare("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, 'user', 'hola', datetime('now'))");
+    const addConvs = (n, base) => { for (let i = 0; i < n; i++) msgIns.run(convIns.run(bizId, String(base + i)).lastInsertRowid); };
+    addConvs(8, 59890000);
+    db.close();
+    const near = await req('GET', '/api/embed/state', null, embed(sessionToken));
+    assert(near.body.limit_notice === 'near', '8 of 10 conversations (80%) → limit_notice near');
+    const db2 = new Database(path.join(DB_DIR, 'daxos.db'));
+    const conv2 = db2.prepare('INSERT INTO conversations (business_id, customer_id) VALUES (?, ?)');
+    const msg2 = db2.prepare("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, 'user', 'hola', datetime('now'))");
+    for (let i = 0; i < 2; i++) msg2.run(conv2.run(bizId, String(59891000 + i)).lastInsertRowid);
+    db2.close();
+    const reached = await req('GET', '/api/embed/state', null, embed(sessionToken));
+    assert(reached.body.limit_notice === 'reached', '10 of 10 (100%) → limit_notice reached');
+    assert(!/\d+\s*%|percent/.test(JSON.stringify(reached.body)), 'no percentage in the state payload');
+  }
+
+  // ── Suite 7: conversations inside the embed + isolation between businesses ──
+  console.log('\nSuite 7: embed conversations + isolation');
+  {
+    await req('POST', '/api/partner/businesses', { crm_user_id: 'emb_2', name: 'Otro Negocio', email: 'otro@test.com' }, bearer(PARTNER_KEY));
+    const db = new Database(path.join(DB_DIR, 'daxos.db'));
+    const bizA = db.prepare("SELECT id FROM businesses WHERE crm_user_id = 'emb_1'").get().id;
+    const bizB = db.prepare("SELECT id FROM businesses WHERE crm_user_id = 'emb_2'").get().id;
+    const mkConv = (biz, phone) => db.prepare('INSERT INTO conversations (business_id, customer_id) VALUES (?, ?)').run(biz, phone).lastInsertRowid;
+    const mkMsg = (conv, role, content) => db.prepare("INSERT INTO messages (conversation_id, role, content, created_at) VALUES (?, ?, ?, datetime('now'))").run(conv, role, content).lastInsertRowid;
+    const convA = mkConv(bizA, '59899111222');
+    mkMsg(convA, 'user', 'Hola, ¿tienen turno mañana?');
+    const convB = mkConv(bizB, '59899333444');
+    mkMsg(convB, 'user', 'Mensaje privado del negocio B');
+    // Media for B's conversation (a tiny PNG on disk)
+    const mediaDir = path.join(DB_DIR, 'media', String(bizB));
+    fs.mkdirSync(mediaDir, { recursive: true });
+    const pngPath = path.join(mediaDir, 'b.png');
+    fs.writeFileSync(pngPath, Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8cfc0f01f0005000201a5e0b8a60000000049454e44ae426082', 'hex'));
+    const mediaMsgB = mkMsg(convB, 'user', '[imagen]');
+    db.prepare("UPDATE messages SET media_kind='image', media_mime='image/png', media_path=? WHERE id=?").run(pngPath, mediaMsgB);
+    // Media for A's conversation
+    const mediaDirA = path.join(DB_DIR, 'media', String(bizA));
+    fs.mkdirSync(mediaDirA, { recursive: true });
+    const pngA = path.join(mediaDirA, 'a.png');
+    fs.copyFileSync(pngPath, pngA);
+    const mediaMsgA = mkMsg(convA, 'user', '[imagen] mirá esto');
+    db.prepare("UPDATE messages SET media_kind='image', media_mime='image/png', media_path=? WHERE id=?").run(pngA, mediaMsgA);
+    // A path outside the media folder must never be served
+    const evilMsg = mkMsg(convA, 'user', '[documento: x]');
+    db.prepare("UPDATE messages SET media_kind='document', media_mime='application/pdf', media_path=? WHERE id=?").run(path.join(DB_DIR, 'daxos.db'), evilMsg);
+    db.close();
+
+    const list = await req('GET', '/api/conversations', null, embed(sessionToken));
+    assert(list.status === 200 && Array.isArray(list.body), 'embed token → own conversation list');
+    assert(list.body.some(c => c.id === convA), 'list includes own conversation');
+    assert(!list.body.some(c => c.id === convB) && !JSON.stringify(list.body).includes('privado del negocio B'),
+      'list never includes the other business\'s conversations');
+
+    const own = await req('GET', `/api/conversations/${convA}/messages`, null, embed(sessionToken));
+    assert(own.status === 200 && own.body.messages.length >= 2, 'opens own conversation');
+    const withMedia = own.body.messages.find(m => m.id === mediaMsgA);
+    assert(withMedia && withMedia.media && withMedia.media.kind === 'image' && withMedia.media.url === `/api/conversations/${convA}/media/${mediaMsgA}`,
+      'message carries media kind + url');
+    assert(!JSON.stringify(own.body).includes('media_path') && !JSON.stringify(own.body).includes(DB_DIR), 'file path never sent to the browser');
+
+    const ownMedia = await req('GET', `/api/conversations/${convA}/media/${mediaMsgA}`, null, embed(sessionToken));
+    assert(ownMedia.status === 200 && ownMedia.headers['content-type'] === 'image/png', 'own media served (image/png)');
+    const evil = await req('GET', `/api/conversations/${convA}/media/${evilMsg}`, null, embed(sessionToken));
+    assert(evil.status === 404, 'file outside the media folder is never served');
+    const noTokMedia = await req('GET', `/api/conversations/${convA}/media/${mediaMsgA}`);
+    assert(noTokMedia.status === 401, 'media without token → 401');
+
+    // Every action on B's conversation with A's embed token → 404, and nothing changes.
+    const tries = [
+      ['GET',    `/api/conversations/${convB}/messages`],
+      ['GET',    `/api/conversations/${convB}/media/${mediaMsgB}`],
+      ['GET',    `/api/conversations/${convA}/media/${mediaMsgB}`],
+      ['PATCH',  `/api/conversations/${convB}/pause`],
+      ['PATCH',  `/api/conversations/${convB}/resume`],
+      ['POST',   `/api/conversations/${convB}/send`, { text: 'hola' }],
+      ['DELETE', `/api/conversations/${convB}`],
+    ];
+    for (const [m, u, b] of tries) {
+      const r = await req(m, u, b || null, embed(sessionToken));
+      assert(r.status === 404, `${m} ${u.replace(String(convB), 'B').replace(String(convA), 'A')} → 404 for another business`);
+      assert(!r.raw.includes('privado del negocio B'), `${m} leaks nothing from the other business`);
+    }
+    const dbc = new Database(path.join(DB_DIR, 'daxos.db'));
+    const rowB = dbc.prepare('SELECT needs_attention, deleted_at FROM conversations WHERE id = ?').get(convB);
+    dbc.close();
+    assert(rowB.needs_attention === 0 && rowB.deleted_at === null, 'other business\'s conversation untouched');
+
+    // Own actions work with the embed token
+    const p = await req('PATCH', `/api/conversations/${convA}/pause`, null, embed(sessionToken));
+    const afterPause = await req('GET', `/api/conversations/${convA}/messages`, null, embed(sessionToken));
+    assert(p.status === 200 && afterPause.body.conversation.needs_attention === 1, '"Atiendo yo" pauses the bot in that chat');
+    const rs = await req('PATCH', `/api/conversations/${convA}/resume`, null, embed(sessionToken));
+    const afterResume = await req('GET', `/api/conversations/${convA}/messages`, null, embed(sessionToken));
+    assert(rs.status === 200 && afterResume.body.conversation.needs_attention === 0, 'reactivate turns the bot back on in that chat');
+    const del = await req('DELETE', `/api/conversations/${convA}`, null, embed(sessionToken));
+    const listAfter = await req('GET', '/api/conversations', null, embed(sessionToken));
+    assert(del.status === 200 && !listAfter.body.some(c => c.id === convA), 'delete chat removes it from the list (Daxos only)');
+    const dbm = new Database(path.join(DB_DIR, 'daxos.db'));
+    const kept = dbm.prepare('SELECT COUNT(*) AS n FROM messages WHERE conversation_id = ?').get(convA).n;
+    dbm.close();
+    assert(kept >= 2, 'deleted chat keeps its messages (counters never drop)');
   }
 
   console.log('\n================================');

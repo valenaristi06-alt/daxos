@@ -111,7 +111,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, getBusinessByCrmUserId, createCrmBusiness, createPartnerLoginToken, getPartnerLoginToken, markPartnerLoginTokenUsed, getMonthlyConvCount, getMonthlyUsage, setCrmCapOwnerNotified, setAudioCapNotifiedMonth, setCrmQuota, getPartnerUsageByMonth, createEmbedSession, getEmbedSession, purgeExpiredEmbedSessions, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage, getLastUserMessageAt, getConversationHistory, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, markConversationPausedByCrmCap, getTrialBusinesses, trialEmailAlreadySent, claimTrialEmail, releaseTrialEmail, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setConfigChatEnabled, saveConfigDraft, getConfigDraft, clearConfigDraft, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, getBusinessByCrmUserId, createCrmBusiness, createPartnerLoginToken, getPartnerLoginToken, markPartnerLoginTokenUsed, getMonthlyConvCount, getMonthlyUsage, setCrmCapOwnerNotified, setAudioCapNotifiedMonth, setCrmQuota, getPartnerUsageByMonth, createEmbedSession, getEmbedSession, purgeExpiredEmbedSessions, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage: _dbAddMessage, getLastUserMessageAt, getConversationHistory, getConversationMessagesForPanel, setMessageMedia, getMessageMedia, takeExpiredMessageMedia, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, markConversationPausedByCrmCap, getTrialBusinesses, trialEmailAlreadySent, claimTrialEmail, releaseTrialEmail, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setConfigChatEnabled, saveConfigDraft, getConfigDraft, clearConfigDraft, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
   incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
   incrementPreviewCall, getPreviewSpendingToday, setSpendingCapOwnerNotified, setSpendingCapNeedsAttention,
   getConvAssistantCountLastHour, setSpendingCapNotified,
@@ -136,6 +136,38 @@ const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserByI
   rescheduleAppointmentByOwner, setAgendaEnabled, setAgendaCancelMinBefore,
   updateAppointmentNotification,
 } = require('./db');
+
+// Client media (photo / audio / document) is attached to the user message that the
+// pipeline stores while processing it. processIncomingMessage runs inside an
+// AsyncLocalStorage context carrying the file; the first 'user' message stored in that
+// context gets it. One call → at most one attachment.
+const { AsyncLocalStorage } = require('async_hooks');
+const { writeMediaFile, isInsideMediaRoot, deleteMediaFiles } = require('./message-media');
+const _mediaCtx = new AsyncLocalStorage();
+function addMessage(conversationId, role, content, silent = 0) {
+  const id = _dbAddMessage(conversationId, role, content, silent);
+  if (role === 'user') {
+    const st = _mediaCtx.getStore();
+    if (st && st.media && !st.done) {
+      st.done = true;
+      try {
+        const saved = writeMediaFile(st.businessId, st.media);
+        if (saved) setMessageMedia(id, saved);
+      } catch (err) {
+        logError('media-save', { message: `business_id=${st.businessId} conv_id=${conversationId} err=${err.message}`, stack: '' });
+      }
+    }
+  }
+  return id;
+}
+function withIncomingMedia(businessId, media, fn) {
+  if (!media) return fn();
+  const store = { businessId, media, done: false };
+  return _mediaCtx.run(store, async () => {
+    try { return await fn(); } finally { store.done = true; }
+  });
+}
+
 
 // If startup process has the key but request-handler process doesn't,
 // persist it to the shared SQLite DB so getClient() can retrieve it.
@@ -1094,7 +1126,9 @@ app.get('/api/embed/state', requireAuth, (req, res) => {
   const convPct  = convCap > 0 ? convs / convCap : 0;
   const spendCap = business.crm_spend_cap_usd;
   const spendPct = (spendCap != null && spendCap > 0) ? cost.total / spendCap : 0;
-  const percentUsed = Math.round(Math.max(convPct, spendPct) * 100);
+  const usedFraction = Math.max(convPct, spendPct);
+  // The owner sees no numbers: only a notice from 80% of the plan, and another at 100%.
+  const limitNotice = usedFraction >= 1 ? 'reached' : usedFraction >= 0.8 ? 'near' : null;
   res.json({
     partner_name: PARTNER_NAME,
     theme: { ...EMBED_DEFAULT_THEME, ...(req.embedTheme ? (() => { try { return JSON.parse(req.embedTheme); } catch { return {}; } })() : {}) },
@@ -1103,11 +1137,7 @@ app.get('/api/embed/state', requireAuth, (req, res) => {
     bot_paused: !!business.bot_paused,
     config_chat_enabled: !!business.config_chat_enabled,
     plan: business.plan,
-    usage: {
-      conversations: convs,
-      conv_cap:      convCap,
-      percent_used:  percentUsed,
-    },
+    limit_notice: limitNotice,
   });
 });
 // ──────────────────────────────────────────────────────────────────────────────
@@ -2013,7 +2043,14 @@ app.get('/api/conversations/:id/messages', requireAuth, (req, res) => {
   if (!conv || !user.business_id || conv.business_id !== user.business_id) {
     return res.status(404).json({ error: 'No encontramos esa conversación' });
   }
-  const messages = getConversationHistory(conv.id, 200);
+  // Latest 500, oldest first. The file path never leaves the server: media is served by
+  // /api/conversations/:id/media/:messageId after the same ownership check.
+  const messages = getConversationMessagesForPanel(conv.id, 500).map(m => {
+    const { media_kind, media_mime, media_name, media_path, ...rest } = m;
+    return media_kind && media_path
+      ? { ...rest, media: { kind: media_kind, mime: media_mime, name: media_name, url: `/api/conversations/${conv.id}/media/${m.id}` } }
+      : rest;
+  });
   const business = getBusinessById(user.business_id);
 
   const normCustomer = normalizeContactPhone(conv.customer_id);
@@ -2021,6 +2058,27 @@ app.get('/api/conversations/:id/messages', requireAuth, (req, res) => {
   const last_user_message_at = getLastUserMessageAt(conv.id);
   res.json({ conversation: conv, messages, wa_connected: !!business?.phone_number_id, owner_phone: user?.phone || null, is_excluded, last_user_message_at });
 
+});
+
+// A photo / audio / document the client sent. Only for a conversation of the caller's
+// own business. Documents always download (never rendered inline by the browser).
+const MEDIA_INLINE_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/amr', 'audio/webm', 'audio/wav']);
+app.get('/api/conversations/:id/media/:messageId', requireAuth, (req, res) => {
+  const user = getUserById(reqUserId(req));
+  const conv = getConversationById(Number(req.params.id));
+  if (!conv || !user?.business_id || conv.business_id !== user.business_id) return res.status(404).json({ error: 'No encontrado' });
+  const m = getMessageMedia(Number(req.params.messageId));
+  if (!m || m.conversation_id !== conv.id || !m.media_path || !isInsideMediaRoot(m.media_path) || !fs.existsSync(m.media_path)) {
+    return res.status(404).json({ error: 'No encontrado' });
+  }
+  const mime = m.media_mime || 'application/octet-stream';
+  const inline = m.media_kind !== 'document' && MEDIA_INLINE_MIME.has(mime);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  res.setHeader('Content-Type', inline ? mime : (mime === 'application/pdf' ? mime : 'application/octet-stream'));
+  const rawName = m.media_name || (m.media_kind === 'document' ? 'documento' : m.media_kind);
+  const asciiName = rawName.replace(/[^\w.\- ()]/g, '_');
+  res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(rawName)}`);
+  fs.createReadStream(m.media_path).pipe(res);
 });
 
 app.get('/api/stats', requireAuth, (req, res) => {
@@ -2245,7 +2303,7 @@ app.delete('/api/conversations/:id/exclude', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/conversations/:id/send', requireAuth, rateLimitWith(30, 15 * 60 * 1000, req => `panel-send:user:${req.session.userId}`), async (req, res) => {
+app.post('/api/conversations/:id/send', requireAuth, rateLimitWith(30, 15 * 60 * 1000, req => `panel-send:user:${reqUserId(req)}`), async (req, res) => {
   const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.status(400).json({ error: 'Sin negocio.' });
 
@@ -3126,7 +3184,10 @@ function shouldSkipIncomingMedia(business, customerPhone, msgTimestamp) {
 // every 10 minutes, so a burst of stickers gets one reply.
 const _mediaReplyAt = new Map(); // `${convId}:${kind}` → ms of last reply
 const MEDIA_REPLY_THROTTLE_MS = 10 * 60_000;
-async function replyUnprocessableMedia(business, waCredentials, { customerPhone, kind, storedText = null, msgTimestamp = null }) {
+async function replyUnprocessableMedia(business, waCredentials, opts) {
+  return withIncomingMedia(business?.id, opts?.media || null, () => _replyUnprocessableMedia(business, waCredentials, opts));
+}
+async function _replyUnprocessableMedia(business, waCredentials, { customerPhone, kind, storedText = null, msgTimestamp = null }) {
   const tag = `type=${kind} business_id=${business.id}`;
   if (!customerPhone) return { sent: false, reason: 'no_phone' };
   if (msgTimestamp != null) {
@@ -3174,7 +3235,15 @@ async function replyUnprocessableMedia(business, waCredentials, { customerPhone,
   return { sent: true, reply: replyText };
 }
 
-async function processIncomingMessage(business, waCredentials, { msgId, customerPhone, text, msgTimestamp, msgTimestampField, imageData = null, claudeText = null, waProfileName = null }) {
+async function processIncomingMessage(business, waCredentials, args) {
+  let media = args?.media || null;
+  if (!media && args?.imageData?.base64) {
+    media = { kind: 'image', buffer: Buffer.from(args.imageData.base64, 'base64'), mime: args.imageData.mimeType };
+  }
+  return withIncomingMedia(business?.id, media, () => _processIncomingMessage(business, waCredentials, args));
+}
+
+async function _processIncomingMessage(business, waCredentials, { msgId, customerPhone, text, msgTimestamp, msgTimestampField, imageData = null, claudeText = null, waProfileName = null }) {
   if (!customerPhone) {
     logError('process-incoming', { message: `customerPhone missing — skipping outbound or malformed message msgId=${msgId} business=${business.id}`, stack: '' });
     return;
@@ -4734,12 +4803,13 @@ app.post('/webhook', async (req, res) => {
             // Message too old: the pipeline drops it. Skip the download.
             if (shouldSkipIncomingMedia(business, customerPhone, msgTimestamp)) { runDoc({ text: docStored }); continue; }
 
-            let read = null, docErr = null;
+            let read = null, docErr = null, docMedia = null;
             if (!msg.document?.id) {
               docErr = 'no_media_id';
             } else {
               try {
                 const { buffer } = await downloadMetaMedia(msg.document.id, business.wa_access_token, { maxBytes: DOC_MAX_BYTES, timeoutMs: 15000 });
+                docMedia = { kind: 'document', buffer, mime: detectMimeFromBytes(buffer) || msg.document.mime_type, filename: docName };
                 read = await readIncomingDocument({
                   buffer, mime: msg.document.mime_type, filename: docName, caption: docCaption,
                   extractTextFromFile, detectMimeFromBytes,
@@ -4751,12 +4821,12 @@ app.post('/webhook', async (req, res) => {
             if (!read || !read.ok) {
               const failKind = read ? read.reason : 'document_failed';
               logError('meta-document-fallback', { message: `business_id=${business.id} kind=${failKind}${docErr ? ' err=' + String(docErr).slice(0, 160) : ''}`, stack: '' });
-              await replyUnprocessableMedia(business, waCredentials, { customerPhone, kind: failKind, storedText: docStored, msgTimestamp });
+              await replyUnprocessableMedia(business, waCredentials, { customerPhone, kind: failKind, storedText: docStored, msgTimestamp, media: docMedia });
               continue;
             }
             logError('meta-document-read', { message: `business_id=${business.id} as=${read.kind}${read.kind === 'text' ? ` chars=${read.chars} truncated=${read.truncated}` : ''}`, stack: '' });
             if (read.kind === 'image') runDoc({ text: read.storedText, imageData: read.imageData });
-            else runDoc({ text: read.storedText, claudeText: read.claudeText });
+            else runDoc({ text: read.storedText, claudeText: read.claudeText, media: docMedia });
             continue;
           }
 
@@ -4776,7 +4846,7 @@ app.post('/webhook', async (req, res) => {
             continue;
           }
 
-          let text;
+          let text, audioMedia = null;
           if (msgType === 'text' || _tappedText) {
             text = _tappedText || msg.text?.body;
             if (!text) {
@@ -4788,7 +4858,7 @@ app.post('/webhook', async (req, res) => {
           } else {
             // audio — download from Meta then transcribe with ElevenLabs Scribe
             const mediaId = msg.audio?.id;
-            const audioFail = (kind) => replyUnprocessableMedia(business, waCredentials, { customerPhone, kind, storedText: '[audio]', msgTimestamp });
+            const audioFail = (kind) => replyUnprocessableMedia(business, waCredentials, { customerPhone, kind, storedText: '[audio]', msgTimestamp, media: audioMedia });
             if (shouldSkipIncomingMedia(business, customerPhone, msgTimestamp)) {
               // Message too old: no download, no transcription cost. The pipeline drops it.
               text = '[audio]';
@@ -4807,6 +4877,7 @@ app.post('/webhook', async (req, res) => {
                 continue;
               }
               try {
+                audioMedia = { kind: 'audio', buffer: audioBuffer, mime: audioContentType };
                 text = await transcribeAudio(audioBuffer, audioContentType);
                 logError('audio-transcribe', { message: `business_id=${business.id} from=${customerPhone} chars=${text.length}`, stack: '' });
               } catch (sttErr) {
@@ -4827,7 +4898,7 @@ app.post('/webhook', async (req, res) => {
               await processIncomingMessage(business, waCredentials, {
                 msgId: msg.id, customerPhone, text,
                 msgTimestamp, msgTimestampField: 'msg.timestamp',
-                waProfileName,
+                waProfileName, media: audioMedia,
               });
             } catch (err) {
               // Rollback both dedup marks so Meta retry can reprocess
@@ -6857,6 +6928,15 @@ const _httpServer = app.listen(PORT, () => {
   setTimeout(() => startupBackupCheck().catch(err => logError('backup-startup', err)), 15_000);
   purgeOldErrorLog();
   setInterval(() => purgeOldErrorLog(), 24 * 60 * 60 * 1000);
+  // Client photos/audios/documents are kept 90 days, then removed from disk.
+  const purgeOldMedia = () => {
+    try {
+      const n = deleteMediaFiles(takeExpiredMessageMedia(90));
+      if (n) logError('media-purge', { message: `deleted=${n}`, stack: '' });
+    } catch (err) { logError('media-purge', { message: err.message, stack: '' }); }
+  };
+  purgeOldMedia();
+  setInterval(purgeOldMedia, 24 * 60 * 60 * 1000);
 
   if (process.env.BAILEYS_ENABLED === '1') {
     const { initBaileys } = require('./baileys');

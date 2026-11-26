@@ -910,6 +910,23 @@ db.exec(`
     }
   }
 
+  // Migration 034: photos, audios and documents a client sends are kept so the owner can
+  // see them in the panel / embed. The file lives on disk (DB_DIR/media/<business>/…);
+  // the row only keeps its kind, type, original name and path.
+  if (!applied('034_message_media')) {
+    try {
+      const msgCols = db.prepare('PRAGMA table_info(messages)').all().map(c => c.name);
+      if (!msgCols.includes('media_kind')) db.exec('ALTER TABLE messages ADD COLUMN media_kind TEXT');
+      if (!msgCols.includes('media_mime')) db.exec('ALTER TABLE messages ADD COLUMN media_mime TEXT');
+      if (!msgCols.includes('media_name')) db.exec('ALTER TABLE messages ADD COLUMN media_name TEXT');
+      if (!msgCols.includes('media_path')) db.exec('ALTER TABLE messages ADD COLUMN media_path TEXT');
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('034_message_media');
+      console.log('[migration 034] messages media columns added');
+    } catch (e) {
+      console.error('[migration 034] failed (non-fatal):', e.message);
+    }
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -1685,6 +1702,38 @@ const stmtGetHistory = db.prepare(`
 const stmtGetHistoryExcludeSilent = db.prepare(`
   SELECT * FROM messages WHERE conversation_id = ? AND silent = 0 ORDER BY created_at ASC LIMIT ?
 `);
+
+// Panel / embed thread: the LATEST `limit` messages, oldest first (getConversationHistory
+// returns the first N, which hides the newest messages of a long chat).
+function getConversationMessagesForPanel(conversationId, limit = 500) {
+  return db.prepare(
+    `SELECT * FROM (SELECT id, role, content, created_at, media_kind, media_mime, media_name, media_path
+       FROM messages WHERE conversation_id = ? ORDER BY created_at DESC, id DESC LIMIT ?)
+     ORDER BY created_at ASC, id ASC`
+  ).all(conversationId, limit);
+}
+
+function setMessageMedia(messageId, { kind, mime, name, path: filePath }) {
+  db.prepare('UPDATE messages SET media_kind = ?, media_mime = ?, media_name = ?, media_path = ? WHERE id = ?')
+    .run(kind, mime || null, name || null, filePath, messageId);
+}
+
+function getMessageMedia(messageId) {
+  return db.prepare('SELECT id, conversation_id, media_kind, media_mime, media_name, media_path FROM messages WHERE id = ?').get(messageId);
+}
+
+// Media files older than `days` are deleted from disk; the row keeps the text ("[imagen]")
+// and loses the file reference. Returns the paths to unlink.
+function takeExpiredMessageMedia(days = 90) {
+  const rows = db.prepare(
+    `SELECT id, media_path FROM messages WHERE media_path IS NOT NULL AND created_at < datetime('now', ?)`
+  ).all(`-${days} days`);
+  if (rows.length) {
+    const clear = db.prepare('UPDATE messages SET media_path = NULL WHERE id = ?');
+    db.transaction(() => { for (const r of rows) clear.run(r.id); })();
+  }
+  return rows.map(r => r.media_path);
+}
 
 function getConversationHistory(conversation_id, limit = 50, { excludeSilent = false } = {}) {
   if (excludeSilent) return stmtGetHistoryExcludeSilent.all(conversation_id, limit);
@@ -2605,6 +2654,10 @@ module.exports = {
   addMessage,
   getLastUserMessageAt,
   getConversationHistory,
+  getConversationMessagesForPanel,
+  setMessageMedia,
+  getMessageMedia,
+  takeExpiredMessageMedia,
   markConversationPaused,
   markConversationResumed,
   resetConversation,
