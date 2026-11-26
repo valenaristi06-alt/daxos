@@ -141,7 +141,7 @@ async function testEmailFunctions() {
 
   const rawName    = 'Café <&> Test';
   const escaped    = 'Café &lt;&amp;&gt; Test';
-  const PLAN_LINK  = 'https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan';
+  const PLAN_LINK  = 'https://daxos.lat/dashboard.html#planes';
 
   // -- sendTrialWarningEmail --
   calls.length = 0;

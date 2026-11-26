@@ -6432,7 +6432,8 @@ async function checkElevenLabsUsage() {
   return { pct: parseFloat(pct.toFixed(4)), character_count, character_limit, alerted };
 }
 
-const TRIAL_ACTIVATE_LINK = 'https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan';
+// Plans screen in the panel (3 plans with their Mercado Pago buttons). Never WhatsApp.
+const TRIAL_ACTIVATE_LINK = `${process.env.APP_URL || 'https://daxos.lat'}/dashboard.html#planes`;
 
 // Sends the trial notice for a stage ('warning' | 'grace' | 'ended') at most ONCE per
 // business and per trial: email to the owner, plus a WhatsApp notice when credentials are

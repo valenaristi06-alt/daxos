@@ -78,7 +78,7 @@ function req(method, urlPath, body, opts = {}) {
     global.fetch = async (url, opts) => { sentBodies.push({ url, ...JSON.parse(opts.body) }); return { ok: true, status: 200 }; };
     process.env.RESEND_API_KEY = 'unit-key';
     const email = require('../src/email');
-    const LINK = 'https://wa.me/59892052508?text=Quiero%20activar%20mi%20plan';
+    const LINK = 'https://daxos.lat/dashboard.html#planes';
     const name = 'Café <Sol> & Cía';
     await email.sendTrialWarningEmail({ to: 'a@b.com', businessName: name, convCount: 120, convLimit: 150, dayNum: 11, dayLimit: 14 });
     await email.sendTrialGraceEmail({ to: 'a@b.com', businessName: name, graceConvsLeft: 25, graceHoursLeft: 71.2 });
@@ -89,8 +89,9 @@ function req(method, urlPath, body, opts = {}) {
     ok('gracia: subject says it ended and the assistant keeps answering', /terminó/.test(g.subject) && /sigue respondiendo/.test(g.subject));
     ok('terminada: subject says the assistant stopped', /dejó de responder/.test(e.subject));
     for (const [label, b] of [['aviso', w], ['gracia', g], ['terminada', e]]) {
-      ok(`${label}: activation link present and well-formed`, b.html.includes(`href="${LINK}"`) && /^https:\/\/wa\.me\/\d{11}\?text=[\w%]+$/.test(LINK));
-      ok(`${label}: fallback phone number shown as text`, b.html.includes('+598 92 052 508'));
+      ok(`${label}: "Activar mi plan" goes to the plans screen in the panel`, b.html.includes(`href="${LINK}"`) && b.html.includes('>Activar mi plan<'));
+      ok(`${label}: no WhatsApp link anywhere`, !/wa\.me|whatsapp\.com/i.test(b.html));
+      ok(`${label}: tells the owner to pay with their own account email`, b.html.includes('Pagá con el mismo email de tu cuenta (a@b.com)') && /Mercado Pago/.test(b.html));
       ok(`${label}: no internal costs or amounts`, !/\$|USD|U\$S|costo|gasto|tokens?|d[oó]lar/i.test(b.html));
       ok(`${label}: business name escaped`, b.html.includes('Café &lt;Sol&gt; &amp; Cía') && !b.html.includes('<Sol>'));
       ok(`${label}: sent from the Daxos address to the owner`, b.from.includes('notificaciones@daxos.lat') && b.to[0] === 'a@b.com');
