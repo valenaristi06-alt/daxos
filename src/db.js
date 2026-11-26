@@ -920,6 +920,9 @@ db.exec(`
       if (!msgCols.includes('media_mime')) db.exec('ALTER TABLE messages ADD COLUMN media_mime TEXT');
       if (!msgCols.includes('media_name')) db.exec('ALTER TABLE messages ADD COLUMN media_name TEXT');
       if (!msgCols.includes('media_path')) db.exec('ALTER TABLE messages ADD COLUMN media_path TEXT');
+      // WhatsApp profile name of the client, for the chat list.
+      const convCols = db.prepare('PRAGMA table_info(conversations)').all().map(c => c.name);
+      if (!convCols.includes('contact_name')) db.exec('ALTER TABLE conversations ADD COLUMN contact_name TEXT');
       db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('034_message_media');
       console.log('[migration 034] messages media columns added');
     } catch (e) {
@@ -1720,6 +1723,21 @@ function setMessageMedia(messageId, { kind, mime, name, path: filePath }) {
 
 function getMessageMedia(messageId) {
   return db.prepare('SELECT id, conversation_id, media_kind, media_mime, media_name, media_path FROM messages WHERE id = ?').get(messageId);
+}
+
+function setConversationContactName(businessId, customerId, name) {
+  const clean = String(name || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 80);
+  if (!clean) return;
+  db.prepare('UPDATE conversations SET contact_name = ? WHERE business_id = ? AND customer_id = ? AND deleted_at IS NULL AND (contact_name IS NULL OR contact_name != ?)')
+    .run(clean, businessId, customerId, clean);
+}
+
+// Chat deleted / reset from the panel: its files go too. Clears the references and
+// returns the paths to unlink (the message text stays, counters never drop).
+function takeConversationMedia(conversationId) {
+  const rows = db.prepare('SELECT id, media_path FROM messages WHERE conversation_id = ? AND media_path IS NOT NULL').all(conversationId);
+  if (rows.length) db.prepare('UPDATE messages SET media_path = NULL WHERE conversation_id = ? AND media_path IS NOT NULL').run(conversationId);
+  return rows.map(r => r.media_path);
 }
 
 // Media files older than `days` are deleted from disk; the row keeps the text ("[imagen]")
@@ -2658,6 +2676,8 @@ module.exports = {
   setMessageMedia,
   getMessageMedia,
   takeExpiredMessageMedia,
+  takeConversationMedia,
+  setConversationContactName,
   markConversationPaused,
   markConversationResumed,
   resetConversation,

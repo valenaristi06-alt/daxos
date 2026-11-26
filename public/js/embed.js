@@ -160,12 +160,17 @@
     view = next;
     show($('embed-convs'), next === 'convs');
     show($('embed-steps'), next === 'steps');
-    show($('btn-back-convs'), next === 'steps' && currentBusiness.connected);
+    const settingsMode = next === 'steps' && currentBusiness.connected;
+    show($('btn-back-convs'), settingsMode);
+    show($('steps-title'), settingsMode);
     document.body.classList.toggle('view-convs', next === 'convs');
     if (window.EmbedConversations) {
       if (next === 'convs') window.EmbedConversations.start({ authHeaders, onLayout: reportHeight });
       else window.EmbedConversations.stop();
     }
+    // Después de conectar, Ajustes suma "Más ajustes" (todo lo demás del panel).
+    if (settingsMode && window.EmbedSettings) window.EmbedSettings.start({ authHeaders, onLayout: reportHeight });
+    else show($('more-settings'), false);
     window.scrollTo(0, 0);
     reportHeight();
   }

@@ -291,6 +291,10 @@ async function main() {
     const kept = dbm.prepare('SELECT COUNT(*) AS n FROM messages WHERE conversation_id = ?').get(convA).n;
     dbm.close();
     assert(kept >= 2, 'deleted chat keeps its messages (counters never drop)');
+    assert(!fs.existsSync(pngA), 'deleted chat: its files are removed from disk');
+    assert(fs.existsSync(pngPath), 'other business\'s files untouched');
+    const goneMedia = await req('GET', `/api/conversations/${convA}/media/${mediaMsgA}`, null, embed(sessionToken));
+    assert(goneMedia.status === 404, 'deleted chat: media no longer served');
   }
 
   console.log('\n================================');

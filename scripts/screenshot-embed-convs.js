@@ -129,12 +129,21 @@ async function main() {
   const c5 = conv('59897788990');
   msg(c5, 'user', 'Gracias! Quedó riquísima', 60 * 50);
   msg(c5, 'assistant', '¡Qué alegría! Gracias a vos 💛', 60 * 50);
+  // Nombres de perfil de WhatsApp + etiquetas como en un negocio real
+  const names = { [c1]: 'Sofía Martínez', [c2]: 'Diego Pérez', [c3]: 'Lucía Fernández', [c4]: 'Martín', [c5]: 'Ana Rodríguez' };
+  for (const [id, n] of Object.entries(names)) db.prepare('UPDATE conversations SET contact_name=? WHERE id=?').run(n, id);
+  const tag = (name, color) => db.prepare('INSERT INTO tags (business_id, name, color, is_default) VALUES (?, ?, ?, 0)').run(bizId, name, color).lastInsertRowid;
+  const tPedido = tag('Pedido', '#22c55e'), tCumple = tag('Cumpleaños', '#a855f7'), tReclamo = tag('Reclamo', '#ef4444');
+  const ct = (c, t) => db.prepare('INSERT INTO conversation_tags (conversation_id, tag_id) VALUES (?, ?)').run(c, t);
+  ct(c1, tPedido); ct(c1, tCumple); ct(c2, tReclamo); ct(c5, tPedido);
+  db.prepare("UPDATE businesses SET business_hours=?, pricing_info=?, pause_keywords='persona, reclamo' WHERE id=?")
+    .run(JSON.stringify({ 1: [['09:00', '19:00']], 2: [['09:00', '19:00']], 3: [['09:00', '19:00']], 4: [['09:00', '19:00']], 5: [['09:00', '20:00']], 6: [['10:00', '14:00']] }), 'Torta 15 personas $1.450\nTorta 25 personas $2.200', bizId);
   db.pragma('wal_checkpoint(FULL)');
   db.close();
 
   async function openEmbed(w, h) {
     const ll = await req('POST', '/api/partner/login-link', { crm_user_id: 'shot_1', mode: 'embed', theme: {} }, bearer);
-    const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2 });
+    const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, locale: 'es-UY' });
     const page = await ctx.newPage();
     await page.route('**/connect.facebook.net/**', r => r.abort());
     await page.goto(ll.body.url, { waitUntil: 'domcontentloaded' });
@@ -152,12 +161,26 @@ async function main() {
     // Lista
     let { ctx, page } = await openEmbed(w, h);
     await snap(page, `1-lista-${label}.png`);
+    // Filtro abierto
+    await page.click('#btn-filter');
+    await sleep(250);
+    await snap(page, `1b-filtro-${label}.png`);
+    await page.click('#btn-filter');
     // Chat abierto (el de la foto/audio/documento)
-    await page.click(`.conv-item:has-text("412 387")`);
+    await page.click(`.conv-item:has-text("Sofía")`);
     await page.waitForSelector('.media-img img[src^="blob:"]', { timeout: 8000 });
     await page.waitForSelector('.media-audio audio[src^="blob:"]', { timeout: 8000 });
     await sleep(600);
     await snap(page, `2-chat-abierto-${label}.png`);
+    // Menú ⋯
+    await page.click('#btn-more');
+    await sleep(250);
+    await snap(page, `2b-menu-${label}.png`);
+    await page.click('#more-pop [data-act="tags"]');
+    await sleep(250);
+    await snap(page, `2c-etiquetas-${label}.png`);
+    await page.click('#sheet-close');
+    if (await page.isVisible('#thread-back')) await page.click('#thread-back');
     // Paso 3 normal (Ajustes del asistente)
     await page.click('#btn-open-settings');
     await page.waitForSelector('#embed-steps:not([hidden])');
@@ -165,6 +188,9 @@ async function main() {
     await page.locator('#step-3').scrollIntoViewIfNeeded();
     await page.locator('#step-3').screenshot({ path: path.join(SHOTS_DIR, `3-paso3-normal-${label}.png`) });
     console.log('  📸 ' + path.join(SHOTS_DIR, `3-paso3-normal-${label}.png`));
+    await page.waitForSelector('#more-list details');
+    await page.click('#more-list details[data-sec="hours"] summary');
+    await sleep(300);
     await snap(page, `3b-ajustes-completo-${label}.png`);
     await ctx.close();
   }

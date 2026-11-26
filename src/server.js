@@ -111,7 +111,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, getBusinessByCrmUserId, createCrmBusiness, createPartnerLoginToken, getPartnerLoginToken, markPartnerLoginTokenUsed, getMonthlyConvCount, getMonthlyUsage, setCrmCapOwnerNotified, setAudioCapNotifiedMonth, setCrmQuota, getPartnerUsageByMonth, createEmbedSession, getEmbedSession, purgeExpiredEmbedSessions, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage: _dbAddMessage, getLastUserMessageAt, getConversationHistory, getConversationMessagesForPanel, setMessageMedia, getMessageMedia, takeExpiredMessageMedia, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, markConversationPausedByCrmCap, getTrialBusinesses, trialEmailAlreadySent, claimTrialEmail, releaseTrialEmail, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setConfigChatEnabled, saveConfigDraft, getConfigDraft, clearConfigDraft, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, getBusinessByCrmUserId, createCrmBusiness, createPartnerLoginToken, getPartnerLoginToken, markPartnerLoginTokenUsed, getMonthlyConvCount, getMonthlyUsage, setCrmCapOwnerNotified, setAudioCapNotifiedMonth, setCrmQuota, getPartnerUsageByMonth, createEmbedSession, getEmbedSession, purgeExpiredEmbedSessions, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage: _dbAddMessage, getLastUserMessageAt, getConversationHistory, getConversationMessagesForPanel, setMessageMedia, getMessageMedia, takeExpiredMessageMedia, takeConversationMedia, setConversationContactName, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, markConversationPausedByCrmCap, getTrialBusinesses, trialEmailAlreadySent, claimTrialEmail, releaseTrialEmail, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setConfigChatEnabled, saveConfigDraft, getConfigDraft, clearConfigDraft, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
   incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
   incrementPreviewCall, getPreviewSpendingToday, setSpendingCapOwnerNotified, setSpendingCapNeedsAttention,
   getConvAssistantCountLastHour, setSpendingCapNotified,
@@ -143,6 +143,9 @@ const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserByI
 // context gets it. One call → at most one attachment.
 const { AsyncLocalStorage } = require('async_hooks');
 const { writeMediaFile, isInsideMediaRoot, deleteMediaFiles } = require('./message-media');
+const { getDiskUsage, diskUsageCached, mb: _mb } = require('./disk');
+// Above this, client media is not saved: the volume also holds the database.
+const MEDIA_DISK_STOP_PCT = 0.9;
 const _mediaCtx = new AsyncLocalStorage();
 function addMessage(conversationId, role, content, silent = 0) {
   const id = _dbAddMessage(conversationId, role, content, silent);
@@ -151,6 +154,11 @@ function addMessage(conversationId, role, content, silent = 0) {
     if (st && st.media && !st.done) {
       st.done = true;
       try {
+        const disk = diskUsageCached();
+        if (disk && disk.pct >= MEDIA_DISK_STOP_PCT) {
+          logError('media-skip-disk', { message: `business_id=${st.businessId} conv_id=${conversationId} disk=${(disk.pct * 100).toFixed(1)}%`, stack: '' });
+          return id;
+        }
         const saved = writeMediaFile(st.businessId, st.media);
         if (saved) setMessageMedia(id, saved);
       } catch (err) {
@@ -1203,7 +1211,7 @@ app.get('/auth/me', requireAuth, (req, res) => {
 
 app.put('/auth/me', requireAuth, (req, res) => {
   const { phone } = req.body;
-  setUserPhone(req.session.userId, phone ? phone.trim() : null);
+  setUserPhone(reqUserId(req), phone ? phone.trim() : null);
   const user = getUserById(reqUserId(req));
   res.json({ id: user.id, email: user.email, phone: user.phone || null });
 });
@@ -2200,7 +2208,9 @@ app.delete('/api/conversations/:id', requireAuth, (req, res) => {
   if (!conv || conv.business_id !== user.business_id) return res.status(404).json({ error: 'Conversación no encontrada.' });
 
   const deleted = softDeleteConversation(conv.id, user.business_id);
-  logError('conv-soft-delete', { message: `conv=${conv.id} business_id=${user.business_id} user=${user.id} deleted=${deleted}`, stack: '' });
+  // Its photos / audios / documents are removed from disk.
+  const filesDeleted = deleteMediaFiles(takeConversationMedia(conv.id));
+  logError('conv-soft-delete', { message: `conv=${conv.id} business_id=${user.business_id} user=${user.id} deleted=${deleted} files=${filesDeleted}`, stack: '' });
   res.json({ ok: true });
 });
 
@@ -2220,7 +2230,9 @@ app.post('/api/conversations/:id/reset', requireAuth, (req, res) => {
   if (!ownerPhoneMatchesCustomer(user.phone, conv.customer_id)) return res.status(403).json({ error: 'Solo podés reiniciar tu propia conversación de prueba.' });
   if (req.body?.confirmation !== 'BORRAR') return res.status(400).json({ error: 'Confirmación inválida.' });
   try {
-    resetConversation(conv.id, user.business_id, req.session.userId);
+    const resetFiles = takeConversationMedia(conv.id);
+    resetConversation(conv.id, user.business_id, reqUserId(req));
+    deleteMediaFiles(resetFiles);
   } catch {
     return res.status(404).json({ error: 'Conversación no encontrada.' });
   }
@@ -3240,7 +3252,14 @@ async function processIncomingMessage(business, waCredentials, args) {
   if (!media && args?.imageData?.base64) {
     media = { kind: 'image', buffer: Buffer.from(args.imageData.base64, 'base64'), mime: args.imageData.mimeType };
   }
-  return withIncomingMedia(business?.id, media, () => _processIncomingMessage(business, waCredentials, args));
+  try {
+    return await withIncomingMedia(business?.id, media, () => _processIncomingMessage(business, waCredentials, args));
+  } finally {
+    // WhatsApp profile name → shown in the chat list instead of only the number.
+    if (args?.waProfileName && business?.id && args.customerPhone) {
+      try { setConversationContactName(business.id, args.customerPhone, args.waProfileName); } catch (_) {}
+    }
+  }
 }
 
 async function _processIncomingMessage(business, waCredentials, { msgId, customerPhone, text, msgTimestamp, msgTimestampField, imageData = null, claudeText = null, waProfileName = null }) {
@@ -6474,6 +6493,35 @@ let _lastWeeklySummaryDate = null;
 let _lastTrialCheckDate    = null;
 let _lastElevenCheckDate   = null;
 
+// Alert the admin when the data volume (database + uploads + client media) passes 80%.
+// At most one email every 24 h while it stays above. Above 90% new client media is not
+// saved (see addMessage) so the database never runs out of space.
+const DISK_ALERT_PCT = 0.8;
+async function checkDiskUsage() {
+  let u;
+  try { u = getDiskUsage(); }
+  catch (e) { logError('disk-usage-check', { message: e.message, stack: '' }); return { error: e.message }; }
+  const out = { pct: parseFloat(u.pct.toFixed(4)), used: _mb(u.usedBytes), total: _mb(u.totalBytes), source: u.source, alerted: false };
+  if (u.pct < DISK_ALERT_PCT) return out;
+  const last = Number((() => { try { return getRuntimeConfig('disk_80_alerted_at'); } catch { return null; } })() || 0);
+  if (Date.now() - last < 24 * 3600 * 1000) return out;
+  setRuntimeConfig('disk_80_alerted_at', String(Date.now()));
+  out.alerted = true;
+  logError('disk-usage', { message: `data volume at ${(u.pct * 100).toFixed(1)}% (${out.used} of ${out.total})`, stack: '' });
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (adminEmail) {
+    sendAdminNotificationEmail({ adminEmail, event: 'disco-80', data: {
+      mensaje: 'El disco de Daxos (volumen de Railway) pasó el 80%. Agrandá el volumen o bajá MEDIA_RETENTION_DAYS. Arriba del 90% se dejan de guardar fotos/audios/documentos de clientes.',
+      usado: out.used, total: out.total, porcentaje: `${(u.pct * 100).toFixed(1)}%`,
+    }}).catch(err => logError('disk-usage-email', { message: err.message, stack: '' }));
+  }
+  return out;
+}
+
+app.post('/admin/api/run-disk-check', requireAdmin, async (_req, res) => {
+  res.json(await checkDiskUsage());
+});
+
 // Alert the admin when the ElevenLabs account reaches 80% of its monthly character limit.
 // Fires once per billing period (keyed by the reset timestamp). Never prints the API key.
 async function checkElevenLabsUsage() {
@@ -6903,6 +6951,9 @@ setInterval(() => {
     runDailyTrialCheck().catch(err => logError('trial-daily-check', { message: err.message, stack: err.stack || '' }));
   }
 
+  // Data volume check every tick (30 min); emails the admin above 80%, max once / 24 h.
+  checkDiskUsage().catch(err => logError('disk-usage-check', { message: err.message, stack: '' }));
+
   // Daily ElevenLabs account usage check at 09:00 Uruguay time (alerts admin at 80%).
   if (uyHour === 9 && _lastElevenCheckDate !== todayStr) {
     _lastElevenCheckDate = todayStr;
@@ -6928,15 +6979,18 @@ const _httpServer = app.listen(PORT, () => {
   setTimeout(() => startupBackupCheck().catch(err => logError('backup-startup', err)), 15_000);
   purgeOldErrorLog();
   setInterval(() => purgeOldErrorLog(), 24 * 60 * 60 * 1000);
-  // Client photos/audios/documents are kept 90 days, then removed from disk.
+  // Client photos/audios/documents are kept MEDIA_RETENTION_DAYS (default 30), then
+  // removed from disk. The volume is small (500 MB) and also holds the database.
+  const MEDIA_RETENTION_DAYS = Math.max(1, parseInt(process.env.MEDIA_RETENTION_DAYS, 10) || 30);
   const purgeOldMedia = () => {
     try {
-      const n = deleteMediaFiles(takeExpiredMessageMedia(90));
+      const n = deleteMediaFiles(takeExpiredMessageMedia(MEDIA_RETENTION_DAYS));
       if (n) logError('media-purge', { message: `deleted=${n}`, stack: '' });
     } catch (err) { logError('media-purge', { message: err.message, stack: '' }); }
   };
   purgeOldMedia();
   setInterval(purgeOldMedia, 24 * 60 * 60 * 1000);
+  setTimeout(() => checkDiskUsage().catch(() => {}), 30_000);
 
   if (process.env.BAILEYS_ENABLED === '1') {
     const { initBaileys } = require('./baileys');
