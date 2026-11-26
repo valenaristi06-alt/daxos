@@ -251,8 +251,9 @@ async function sendTypingIndicator(to, creds) {
 const AUDIO_MAX_BYTES = 2 * 1024 * 1024; // ~2 min at 128 kbps
 
 async function downloadMetaMedia(mediaId, bizToken, { maxBytes = AUDIO_MAX_BYTES, timeoutMs = 15000 } = {}) {
+  // META_BASE equals GRAPH_BASE in production; outside production tests can point it at a mock.
   const metaRes = await metaFetch(
-    `${GRAPH_BASE}/${encodeURIComponent(mediaId)}`,
+    `${META_BASE}/${encodeURIComponent(mediaId)}`,
     { method: 'GET', headers: {} },
     bizToken,
     'downloadMetaMedia'

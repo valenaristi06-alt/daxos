@@ -298,6 +298,7 @@ const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocumen
 const { getFreeSlots, formatSlotsForPrompt, formatSlotsForClient, formatAppointmentsBlock, getMaxBookingDate, isSlotsMapFresh, utcIsoToMvdHHMM, getMvdDow, DOW_LABELS, getBizHoursForDow, getAllSlotsForDate } = require('./agenda');
 const { generateAudioBuffer, transcribeAudio, getSubscriptionUsage } = require('./elevenlabs');
 const { convertToOgg } = require('./audio');
+const { mediaReply, mediaPlaceholder, readIncomingDocument, IMAGE_MAX_BYTES, DOC_MAX_BYTES } = require('./incoming-media');
 
 // "120" → "2 horas", "90" → "1 hora 30 min", "45" → "45 min"
 function _formatMinutes(m) {
@@ -3105,6 +3106,70 @@ function isMsgStale(business, msgTimestamp) {
 
 const _groundingNotifyAt = new Map(); // `${convId}:${hourKey}` → true (owner alert throttle)
 
+// True when this message will be dropped or only stored (message too old, contact excluded).
+// Used to skip media downloads and transcription cost. A muted bot is NOT skipped: the owner
+// is answering by hand and still wants to read the transcript / document in the panel.
+function shouldSkipIncomingMedia(business, customerPhone, msgTimestamp) {
+  if (msgTimestamp != null && isMsgStale(business, msgTimestamp)) return true;
+  const normPhone = normalizeContactPhone(customerPhone);
+  return !!(normPhone && isPhoneExcluded(business.id, normPhone));
+}
+
+// Honest fixed reply for something the assistant cannot read: video, sticker, location,
+// contact, an unknown type, or a photo/audio/document that failed to download or parse.
+// Never silent — but it respects the same gates as a normal reply (stale, muted, excluded,
+// paused conversation, trial ended) and answers at most once per conversation and kind
+// every 10 minutes, so a burst of stickers gets one reply.
+const _mediaReplyAt = new Map(); // `${convId}:${kind}` → ms of last reply
+const MEDIA_REPLY_THROTTLE_MS = 10 * 60_000;
+async function replyUnprocessableMedia(business, waCredentials, { customerPhone, kind, storedText = null, msgTimestamp = null }) {
+  const tag = `type=${kind} business_id=${business.id}`;
+  if (!customerPhone) return { sent: false, reason: 'no_phone' };
+  if (msgTimestamp != null) {
+    const staleReason = isMsgStale(business, msgTimestamp);
+    if (staleReason) {
+      logError('msg-stale', { message: `${tag} reason=${staleReason}`, stack: '' });
+      return { sent: false, reason: 'stale' };
+    }
+  }
+  const conv = getOrCreateConversation(business.id, customerPhone);
+  const stored = storedText || mediaPlaceholder(kind);
+  if (isBotMuted(business)) {
+    addMessage(conv.id, 'user', stored, 1);
+    setConversationSilent(conv.id, 1);
+    return { sent: false, reason: 'muted' };
+  }
+  const normPhone = normalizeContactPhone(customerPhone);
+  if (normPhone && isPhoneExcluded(business.id, normPhone)) {
+    addMessage(conv.id, 'user', stored);
+    return { sent: false, reason: 'excluded' };
+  }
+  addMessage(conv.id, 'user', stored);
+  if (conv.needs_attention || isTrialExpired(business)) {
+    logError('msg-discard', { message: `reason=${conv.needs_attention ? 'paused' : 'trial_expired'} ${tag}`, stack: '' });
+    return { sent: false, reason: 'paused' };
+  }
+  const key = `${conv.id}:${kind}`;
+  const now = Date.now();
+  const last = _mediaReplyAt.get(key);
+  if (last && now - last < MEDIA_REPLY_THROTTLE_MS) {
+    logError('msg-discard', { message: `reason=media_throttled ${tag} conv_id=${conv.id}`, stack: '' });
+    return { sent: false, reason: 'throttled' };
+  }
+  if (_mediaReplyAt.size > 5000) _mediaReplyAt.clear();
+  _mediaReplyAt.set(key, now);
+
+  const replyText = mediaReply(kind);
+  addMessage(conv.id, 'assistant', replyText);
+  try {
+    await sendWhatsAppMessage(customerPhone, replyText, waCredentials);
+  } catch (err) {
+    logError('media-reply-send', { message: `${tag} ${err.message}`, stack: '' });
+  }
+  logError('media-handled', { message: `${tag} conv_id=${conv.id} provider=${waCredentials?.provider || 'meta'}`, stack: '' });
+  return { sent: true, reply: replyText };
+}
+
 async function processIncomingMessage(business, waCredentials, { msgId, customerPhone, text, msgTimestamp, msgTimestampField, imageData = null, claudeText = null, waProfileName = null }) {
   if (!customerPhone) {
     logError('process-incoming', { message: `customerPhone missing — skipping outbound or malformed message msgId=${msgId} business=${business.id}`, stack: '' });
@@ -4539,8 +4604,9 @@ app.post('/webhook', async (req, res) => {
         for (const msg of messages) {
           const msgType = msg.type;
 
-          // Sticker and reaction: log and skip — no reply, no dedup mark needed
-          if (msgType === 'sticker' || msgType === 'reaction') {
+          // Reactions and system notices are not messages a person expects an answer to:
+          // log and skip — no reply, no dedup mark needed. Stickers are answered below.
+          if (msgType === 'reaction' || msgType === 'system' || msgType === 'request_welcome') {
             logError('msg-discard', { message: `reason=unsupported_type type=${msgType} business_id=${business.id} msg_id=${msg.id || 'none'}`, stack: '' });
             continue;
           }
@@ -4605,7 +4671,7 @@ app.post('/webhook', async (req, res) => {
             } else {
               try {
                 const { buffer } = await downloadMetaMedia(
-                  mediaId, business.wa_access_token, { maxBytes: 5 * 1024 * 1024, timeoutMs: 10000 }
+                  mediaId, business.wa_access_token, { maxBytes: IMAGE_MAX_BYTES, timeoutMs: 10000 }
                 );
                 const detected = detectMimeFromBytes(buffer);
                 if (!detected || !IMG_ALLOWED.has(detected)) {
@@ -4642,109 +4708,79 @@ app.post('/webhook', async (req, res) => {
               continue;
             }
 
-            // Fallback: download/validation failed → fixed reply + owner notify
+            // Download/validation failed → honest reply asking to resend or describe it.
             logError('meta-image-fallback', { message: `business_id=${business.id} reason=${downloadErr}`, stack: '' });
-            const imgStaleReason = isMsgStale(business, msgTimestamp);
-            if (imgStaleReason) {
-              if (msg.id) deleteProcessedMessage(business.id, msg.id);
-              if (_rawId)  deleteProcessedMessage(business.id, _rawId);
-              logError('msg-stale', { message: `type=image msgId=${msg.id} business_id=${business.id} reason=${imgStaleReason}`, stack: '' });
-              continue;
-            }
-            const imgConv = getOrCreateConversation(business.id, customerPhone);
-            addMessage(imgConv.id, 'user', caption ? `[imagen] ${caption}` : '[imagen]');
-
-            if (imgConv.needs_attention || isTrialExpired(business)) {
-              logError('msg-discard', { message: `reason=${imgConv.needs_attention ? 'paused' : 'trial_expired'} type=image business_id=${business.id}`, stack: '' });
-              continue;
-            }
-
-            const imgHourKey = Math.floor(Date.now() / 3_600_000);
-            pruneImgMaps(imgHourKey);
-            const imgNotifyKey = `${imgConv.id}:${imgHourKey}`;
-            if (_mediaNotifyAt.has(imgNotifyKey)) {
-              logError('msg-discard', { message: `reason=media_throttled type=image business_id=${business.id} conv_id=${imgConv.id}`, stack: '' });
-              continue;
-            }
-            _mediaNotifyAt.set(imgNotifyKey, true);
-
-            const imgFixedMsg = 'Recibí tu mensaje. Por ahora no puedo ver fotos ni archivos, pero se lo paso a una persona del equipo para que te responda.';
-            addMessage(imgConv.id, 'assistant', imgFixedMsg);
-            sendWhatsAppMessage(customerPhone, imgFixedMsg, waCredentials)
-              .catch(err => logError('media-reply-send', { message: err.message, stack: '' }));
-
-            const imgOwner = getUserByBusinessId(business.id);
-            notifyOwnerOfPause({
-              business, owner: imgOwner,
-              contactId: customerPhone,
-              messageText: '📷 imagen que no pude procesar',
-              conversationId: imgConv.id,
-              waCredentials,
-              subject: '📷 Imagen sin procesar',
-            }).catch(() => {});
-
-            logError('media-handled', { message: `type=image business_id=${business.id} conv_id=${imgConv.id} fallback=true`, stack: '' });
+            await replyUnprocessableMedia(business, waCredentials, {
+              customerPhone, kind: 'image_failed', msgTimestamp,
+              storedText: caption ? `[imagen] ${caption}` : '[imagen]',
+            });
             continue;
           }
 
-          // ── Document, video, location, contacts ─────────────────────────────
-          // Send a fixed reply once per conv per hour; notify owner without pausing.
-          if (msgType === 'document' || msgType === 'video' ||
-              msgType === 'location' || msgType === 'contacts') {
-            const staleReason = isMsgStale(business, msgTimestamp);
-            if (staleReason) {
-              if (msg.id) deleteProcessedMessage(business.id, msg.id);
-              if (_rawId)  deleteProcessedMessage(business.id, _rawId);
-              logError('msg-stale', { message: `type=${msgType} msgId=${msg.id} business_id=${business.id} reason=${staleReason}`, stack: '' });
+          // ── Document → read its text (PDF, Word, plain text) and answer about it ──
+          if (msgType === 'document') {
+            const docCaption = (msg.document?.caption || '').trim();
+            const docName    = msg.document?.filename || 'documento';
+            const docStored  = `[documento: ${String(docName).slice(0, 120)}]${docCaption ? ' ' + docCaption : ''}`;
+            const runDoc = (args) => _enqueueForClient(`${business.id}:${customerPhone}`, async () => {
+              try {
+                await processIncomingMessage(business, waCredentials, {
+                  msgId: msg.id, customerPhone, msgTimestamp, msgTimestampField: 'msg.timestamp', waProfileName, ...args,
+                });
+              } catch (err) {
+                if (msg.id) deleteProcessedMessage(business.id, msg.id);
+                if (_rawId)  deleteProcessedMessage(business.id, _rawId);
+                logError('webhook-process-error', err);
+              }
+            });
+            // Message too old: the pipeline drops it. Skip the download.
+            if (shouldSkipIncomingMedia(business, customerPhone, msgTimestamp)) { runDoc({ text: docStored }); continue; }
+
+            let read = null, docErr = null;
+            if (!msg.document?.id) {
+              docErr = 'no_media_id';
+            } else {
+              try {
+                const { buffer } = await downloadMetaMedia(msg.document.id, business.wa_access_token, { maxBytes: DOC_MAX_BYTES, timeoutMs: 15000 });
+                read = await readIncomingDocument({
+                  buffer, mime: msg.document.mime_type, filename: docName, caption: docCaption,
+                  extractTextFromFile, detectMimeFromBytes,
+                });
+              } catch (dlErr) {
+                docErr = dlErr.message;
+              }
+            }
+            if (!read || !read.ok) {
+              const failKind = read ? read.reason : 'document_failed';
+              logError('meta-document-fallback', { message: `business_id=${business.id} kind=${failKind}${docErr ? ' err=' + String(docErr).slice(0, 160) : ''}`, stack: '' });
+              await replyUnprocessableMedia(business, waCredentials, { customerPhone, kind: failKind, storedText: docStored, msgTimestamp });
               continue;
             }
-            const conv = getOrCreateConversation(business.id, customerPhone);
-            addMessage(conv.id, 'user', `[media:${msgType}]`);
-
-            if (conv.needs_attention || isTrialExpired(business)) {
-              logError('msg-discard', { message: `reason=${conv.needs_attention ? 'paused' : 'trial_expired'} type=${msgType} business_id=${business.id}`, stack: '' });
-              continue;
-            }
-
-            // 1 fixed reply + owner notify per conversation per hour
-            const mediaHourKey = Math.floor(Date.now() / 3_600_000);
-            pruneImgMaps(mediaHourKey);
-            const mediaCntKey = `${conv.id}:${mediaHourKey}`;
-            if (_mediaNotifyAt.has(mediaCntKey)) {
-              logError('msg-discard', { message: `reason=media_throttled type=${msgType} business_id=${business.id} conv_id=${conv.id}`, stack: '' });
-              continue;
-            }
-            _mediaNotifyAt.set(mediaCntKey, true);
-
-            const fixedMsg = 'Recibí tu mensaje. Por ahora no puedo ver fotos ni archivos, pero se lo paso a una persona del equipo para que te responda.';
-            addMessage(conv.id, 'assistant', fixedMsg);
-            sendWhatsAppMessage(customerPhone, fixedMsg, waCredentials)
-              .catch(err => logError('media-reply-send', { message: err.message, stack: '' }));
-
-            const owner = getUserByBusinessId(business.id);
-            notifyOwnerOfPause({
-              business, owner,
-              contactId: customerPhone,
-              messageText: `[${msgType}]`,
-              conversationId: conv.id,
-              waCredentials,
-            }).catch(() => {});
-
-            logError('media-handled', { message: `type=${msgType} business_id=${business.id} conv_id=${conv.id}`, stack: '' });
+            logError('meta-document-read', { message: `business_id=${business.id} as=${read.kind}${read.kind === 'text' ? ` chars=${read.chars} truncated=${read.truncated}` : ''}`, stack: '' });
+            if (read.kind === 'image') runDoc({ text: read.storedText, imageData: read.imageData });
+            else runDoc({ text: read.storedText, claudeText: read.claudeText });
             continue;
           }
 
-          // Other unknown types (future-proof): log and discard
-          if (msgType !== 'text' && msgType !== 'audio') {
-            logError('msg-discard', { message: `reason=unsupported_type type=${msgType} business_id=${business.id} msg_id=${msg.id || 'none'}`, stack: '' });
-            if (msg.id) deleteProcessedMessage(business.id, msg.id);
-            if (_rawId)  deleteProcessedMessage(business.id, _rawId);
+          // Button / list replies carry the text the client tapped: treat them as text.
+          let _tappedText = null;
+          if (msgType === 'button') _tappedText = msg.button?.text || null;
+          if (msgType === 'interactive') _tappedText = msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || null;
+
+          // ── Everything the assistant cannot read: video, sticker, location, contacts,
+          // and any other type. Honest reply, never silence. ──────────────────────────
+          if (msgType !== 'text' && msgType !== 'audio' && !_tappedText) {
+            const kind = ['video', 'sticker', 'location', 'contacts'].includes(msgType) ? msgType : 'other';
+            await replyUnprocessableMedia(business, waCredentials, {
+              customerPhone, kind, msgTimestamp,
+              storedText: kind === 'other' ? `[media:${msgType}]` : null,
+            });
             continue;
           }
 
           let text;
-          if (msgType === 'text') {
-            text = msg.text?.body;
+          if (msgType === 'text' || _tappedText) {
+            text = _tappedText || msg.text?.body;
             if (!text) {
               if (msg.id) deleteProcessedMessage(business.id, msg.id);
               if (_rawId)  deleteProcessedMessage(business.id, _rawId);
@@ -4754,31 +4790,37 @@ app.post('/webhook', async (req, res) => {
           } else {
             // audio — download from Meta then transcribe with ElevenLabs Scribe
             const mediaId = msg.audio?.id;
-            if (!mediaId) {
+            const audioFail = (kind) => replyUnprocessableMedia(business, waCredentials, { customerPhone, kind, storedText: '[audio]', msgTimestamp });
+            if (shouldSkipIncomingMedia(business, customerPhone, msgTimestamp)) {
+              // Message too old: no download, no transcription cost. The pipeline drops it.
+              text = '[audio]';
+            } else if (!mediaId) {
               logError('audio-skip', { message: `business_id=${business.id} from=${customerPhone} no_media_id`, stack: '' });
+              await audioFail('audio_failed');
               continue;
-            }
-            let audioBuffer, audioContentType;
-            try {
-              ({ buffer: audioBuffer, contentType: audioContentType } = await downloadMetaMedia(mediaId, business.wa_access_token));
-              logError('audio-download', { message: `business_id=${business.id} from=${customerPhone} bytes=${audioBuffer.length} mime=${audioContentType}`, stack: '' });
-            } catch (dlErr) {
-              logError('audio-download', { message: `business_id=${business.id} from=${customerPhone} err=${dlErr.message}`, stack: '' });
-              sendWhatsAppMessage(customerPhone, 'No pude escuchar el audio, ¿me lo escribís?', waCredentials).catch(() => {});
-              continue;
-            }
-            try {
-              text = await transcribeAudio(audioBuffer, audioContentType);
-              logError('audio-transcribe', { message: `business_id=${business.id} from=${customerPhone} chars=${text.length}`, stack: '' });
-            } catch (sttErr) {
-              logError('audio-transcribe', { message: `business_id=${business.id} from=${customerPhone} err=${sttErr.message}`, stack: '' });
-              sendWhatsAppMessage(customerPhone, 'No pude escuchar el audio, ¿me lo escribís?', waCredentials).catch(() => {});
-              continue;
-            }
-            if (!text.trim()) {
-              logError('audio-skip', { message: `business_id=${business.id} from=${customerPhone} empty_transcript`, stack: '' });
-              sendWhatsAppMessage(customerPhone, 'No pude escuchar el audio, ¿me lo escribís?', waCredentials).catch(() => {});
-              continue;
+            } else {
+              let audioBuffer, audioContentType;
+              try {
+                ({ buffer: audioBuffer, contentType: audioContentType } = await downloadMetaMedia(mediaId, business.wa_access_token));
+                logError('audio-download', { message: `business_id=${business.id} from=${customerPhone} bytes=${audioBuffer.length} mime=${audioContentType}`, stack: '' });
+              } catch (dlErr) {
+                logError('audio-download', { message: `business_id=${business.id} from=${customerPhone} err=${dlErr.message}`, stack: '' });
+                await audioFail(/^too_large/.test(dlErr.message) ? 'audio_too_long' : 'audio_failed');
+                continue;
+              }
+              try {
+                text = await transcribeAudio(audioBuffer, audioContentType);
+                logError('audio-transcribe', { message: `business_id=${business.id} from=${customerPhone} chars=${text.length}`, stack: '' });
+              } catch (sttErr) {
+                logError('audio-transcribe', { message: `business_id=${business.id} from=${customerPhone} err=${sttErr.message}`, stack: '' });
+                await audioFail('audio_failed');
+                continue;
+              }
+              if (!text.trim()) {
+                logError('audio-skip', { message: `business_id=${business.id} from=${customerPhone} empty_transcript`, stack: '' });
+                await audioFail('audio_failed');
+                continue;
+              }
             }
           }
 
@@ -6815,7 +6857,15 @@ const _httpServer = app.listen(PORT, () => {
 
   if (process.env.BAILEYS_ENABLED === '1') {
     const { initBaileys } = require('./baileys');
-    initBaileys({ processIncomingMessage, logError, getBusinessById, tryMarkProcessed, deleteProcessedMessage })
+    // Media for Baileys (audio, photos, documents, honest reply for the rest) without
+    // touching baileys.js — see src/baileys-media.js.
+    const { createBaileysMediaBridge, installUpsertHook } = require('./baileys-media');
+    const baileysMedia = createBaileysMediaBridge({
+      processIncomingMessage, replyUnprocessable: replyUnprocessableMedia, shouldSkipMedia: shouldSkipIncomingMedia,
+      extractTextFromFile, detectMimeFromBytes, transcribeAudio, logError,
+    });
+    installUpsertHook(baileysMedia.rewriteUpsert, logError);
+    initBaileys({ processIncomingMessage: baileysMedia.processIncomingMessage, logError, getBusinessById, tryMarkProcessed, deleteProcessedMessage })
       .catch(err => logError('baileys-init', { message: err.message, stack: err.stack || '' }));
   }
 });
