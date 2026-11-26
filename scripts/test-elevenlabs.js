@@ -177,6 +177,13 @@ function runUnitTests() {
   assert(el.planTakes({ known: true, exhausted: false, remaining: 50, remainingRatio: 0.0001 }, 100).mode === 'text', 'credits not enough for this reply → text');
   assert(el.planTakes({ known: false, exhausted: false }, 100).takes === 4, 'credits unknown → full recipe');
 
+  // recipe body is pinned: multilingual_v2 and 0.45 even with an old admin stability / v4 model
+  const nb = JSON.parse(_ttsBody('Hola.', el._naturalOpts({ model: 'eleven_v4_turbo', stability: 0.35 })));
+  assert(nb.model_id === 'eleven_multilingual_v2', 'recipe: model pinned to multilingual_v2');
+  assert(nb.voice_settings.stability === 0.45 && nb.voice_settings.similarity_boost === 0.85 && nb.voice_settings.style === 0.3
+    && nb.voice_settings.speed === 1.1 && nb.voice_settings.use_speaker_boost === true && !('speed' in nb),
+    'recipe: 0.45 / 0.85 / 0.3, speed 1.1 inside voice_settings, admin stability ignored');
+
   // ── Instrucciones de voz ────────────────────────────────────
   const cl = require('../src/claude');
   const vi = cl.parseVoiceInstructionsResult('{"velocidad":"rapida","tono":"expresiva","escritura":"Cercano y uruguayo, sin muletillas."}');
@@ -808,6 +815,7 @@ async function runIntegrationTests() {
       phone_number_id: 'pnid-c8', wa_provider: 'meta', wa_access_token: 'fake-wa-token',
       wa_connected_at: new Date().toISOString(), plan: 'crecimiento', plan_paid_at: new Date().toISOString(),
       response_mode: 'audio', voice_id: 'voice-id-c8', response_delay: 0,
+      voice_stability: 0.25, // v4-era admin override: the recipe must ignore it
     });
     aiReplyText = 'Dale, quedó confirmado para el martes. Te mando un recordatorio el día antes. Cualquier cosa me avisás por acá.';
     elTtsRequests = []; elSttCount = 0;

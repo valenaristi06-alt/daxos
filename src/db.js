@@ -968,6 +968,23 @@ db.exec(`
     }
   }
 
+  // Migration 037: Daxos's own number (business 6, Vale's clone) moves from the fixed v4 turbo
+  // model to the natural-voice recipe. Clears the v4-era model and stability override only if
+  // they are still set, so a later manual choice is never undone.
+  if (!applied('037_daxos_voice_recipe')) {
+    try {
+      const r = db.prepare(`
+        UPDATE businesses SET voice_tts_model = NULL, voice_stability = NULL
+        WHERE id = 6 AND voice_id = 'qRJbiqbavxXPG4xzVAYS'
+          AND (voice_tts_model IS NOT NULL OR voice_stability IS NOT NULL)
+      `).run();
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('037_daxos_voice_recipe');
+      console.log(`[migration 037] Daxos voice → natural recipe: ${r.changes} row(s)`);
+    } catch (e) {
+      console.error('[migration 037] failed (non-fatal):', e.message);
+    }
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
