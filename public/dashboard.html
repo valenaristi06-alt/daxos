@@ -706,31 +706,28 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
           <p class="voice-section-desc">Clonamos tu voz para que las respuestas por audio suenen como vos, no como un asistente genérico. Es opcional — si preferís, podés dejar todo en texto.</p>
           <p class="voice-autosave-note">Tu voz se guarda automáticamente cuando confirmás la grabación. No necesitás apretar "Guardar todo".</p>
 
-          <div id="voice-plan-lock" style="display:none" class="voice-plan-lock">
-            <p class="voice-lock-msg" id="voice-lock-msg"></p>
-            <a href="#" target="_blank" rel="noopener" class="voice-lock-link" id="voice-lock-cta"></a>
-          </div>
-
           <div id="voice-status-saved" style="display:none" class="voice-cloned-badge">
             <span class="voice-cloned-dot"></span>
-            Voz clonada activa
+            Voz activa
           </div>
 
           <div id="voice-input">
             <button type="button" class="btn-voice-cancel" id="btn-voice-cancel" style="display:none">← Volver a mi voz activa</button>
-            <div class="field">
+            <div class="field" id="voice-consent-field">
               <label class="consent-label">
                 <input type="checkbox" id="voice-consent" />
                 <span>Confirmo que esta es mi voz (o tengo autorización explícita de su dueño) y autorizo usarla para generar respuestas automáticas de este negocio.</span>
               </label>
             </div>
 
-            <p class="voice-tip"><span class="voice-tip-label">&gt; tip</span> 2–3 min, lugar silencioso, hablá natural — como le responderías a un cliente. Cuanto más variado, mejor resultado.</p>
+            <p class="voice-tip" id="voice-record-tip"><span class="voice-tip-label">&gt; tip</span> 2–3 min, lugar silencioso, hablá natural — como le responderías a un cliente. Cuanto más variado, mejor resultado.</p>
 
             <div class="voice-mode-tabs" id="voice-mode-tabs">
               <button type="button" class="voice-tab active" data-mode="record">Grabar ahora</button>
               <button type="button" class="voice-tab" data-mode="upload">Subir archivo</button>
+              <button type="button" class="voice-tab" data-mode="catalog">Elegir una voz lista</button>
             </div>
+            <button type="button" class="voice-advanced-link" id="voice-advanced-link" aria-expanded="false">Opciones avanzadas</button>
 
             <div class="voice-panel" id="panel-record">
               <div class="record-idle" id="record-idle">
@@ -744,6 +741,22 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
                 <span class="rec-timer" id="rec-timer">0:00</span>
                 <button type="button" class="btn-record-stop" id="btn-record-stop">■ Detener</button>
               </div>
+            </div>
+
+            <div class="voice-panel" id="panel-catalog" style="display:none">
+              <p class="voice-tip">¿No querés grabar? Elegí una de estas voces. Escuchala y tocá "Usar esta voz". Después la podés ajustar igual que una voz grabada.</p>
+              <div class="voice-catalog" id="voice-catalog"></div>
+              <audio id="voice-catalog-audio" style="display:none"></audio>
+              <span class="voice-preview-status" id="voice-catalog-status"></span>
+            </div>
+
+            <div class="voice-panel" id="panel-custom" style="display:none">
+              <p class="voice-tip">¿Encontraste una voz en la biblioteca de ElevenLabs? Pegá acá su código de voz de ElevenLabs. No se pueden usar voces clonadas de otras personas.</p>
+              <div class="voice-custom-row">
+                <input type="text" id="voice-custom-id" class="voice-test-text" maxlength="40" placeholder="Código de voz de ElevenLabs" autocomplete="off" spellcheck="false" />
+                <button type="button" class="btn-voice-preview" id="btn-voice-custom">Usar esta voz</button>
+              </div>
+              <span class="voice-preview-status" id="voice-custom-status"></span>
             </div>
 
             <div class="voice-panel" id="panel-upload" style="display:none">
@@ -769,10 +782,63 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
           </div>
 
           <div class="voice-preview-area" id="voice-preview-area" style="display:none">
-            <button type="button" class="btn-voice-preview" id="btn-voice-preview">▶ Probar voz</button>
-            <button type="button" class="btn-recreate-voice" id="btn-recreate-voice">↺ Recrear voz</button>
+            <button type="button" class="btn-recreate-voice" id="btn-recreate-voice">↺ Cambiar voz</button>
+          </div>
+
+          <div class="voice-style" id="voice-style" style="display:none">
+            <p class="voice-style-title">Cómo suena tu asistente</p>
+            <p class="voice-tip">Elegí, tocá <b>▶ Escuchar prueba</b> y guardá cuando te guste. Se aplica a todos los audios que manda.</p>
+
+            <div class="voice-style-row">
+              <span class="voice-style-label">Velocidad</span>
+              <div class="voice-chips" data-field="voice_speed">
+                <button type="button" class="voice-chip" data-value="lenta">Más lenta</button>
+                <button type="button" class="voice-chip" data-value="normal">Normal</button>
+                <button type="button" class="voice-chip" data-value="rapida">Más rápida</button>
+              </div>
+            </div>
+
+            <div class="voice-style-row">
+              <span class="voice-style-label">Tono</span>
+              <div class="voice-chips" data-field="voice_tone">
+                <button type="button" class="voice-chip" data-value="tranquila">Tranquila</button>
+                <button type="button" class="voice-chip" data-value="natural">Natural</button>
+                <button type="button" class="voice-chip" data-value="expresiva">Expresiva</button>
+              </div>
+            </div>
+            <p class="voice-tip" id="voice-tone-note" style="display:none"></p>
+
+            <label class="voice-style-label" for="voice-instr">Instrucciones de voz</label>
+            <p class="voice-tip">Contá con tus palabras cómo querés que hable. Ej: <i>hablá más rápido, tono cercano y uruguayo, sin muletillas</i>. Lo usamos para ajustar la voz y para cómo escribe lo que dice en los audios.</p>
+            <textarea id="voice-instr" rows="2" class="voice-pron" maxlength="500" placeholder="Hablá más rápido, tono cercano y uruguayo, sin muletillas"></textarea>
+            <div class="voice-instr-actions">
+              <button type="button" class="voice-chip" id="btn-voice-interpret">Ver qué entendí</button>
+              <span class="voice-preview-status" id="voice-instr-status"></span>
+            </div>
+            <div class="voice-understood" id="voice-understood" style="display:none">
+              <span class="voice-understood-label">Entendí:</span> <span id="voice-understood-text"></span>
+            </div>
+
+            <label class="voice-style-label" for="voice-pron">Cómo se dicen las palabras difíciles</label>
+            <p class="voice-tip">Una por línea: cómo se escribe = cómo se dice. Sirve para productos, marcas, siglas y nombres. Ej: <code>Dr. = doctor</code></p>
+            <textarea id="voice-pron" rows="3" class="voice-pron" placeholder="Dr. = doctor&#10;WhatsApp = guatsap"></textarea>
+
+            <label class="voice-style-label" for="voice-test-text">Frase de prueba (opcional)</label>
+            <input type="text" id="voice-test-text" class="voice-test-text" maxlength="200" placeholder="Hola, gracias por escribir. ¿Te paso precios y horarios?" />
+
+            <div class="voice-style-actions">
+              <button type="button" class="btn-voice-preview btn-voice-listen" id="btn-voice-preview">▶ Escuchar prueba</button>
+              <button type="button" class="btn-voice-preview" id="btn-voice-style-save">Guardar cómo suena</button>
+            </div>
+            <p class="voice-tip voice-previews-left" id="voice-previews-left"></p>
             <audio id="voice-audio" controls style="display:none"></audio>
             <span class="voice-preview-status" id="voice-preview-status"></span>
+            <span class="voice-preview-status" id="voice-style-status"></span>
+          </div>
+
+          <div id="voice-plan-lock" style="display:none" class="voice-plan-lock">
+            <p class="voice-lock-msg" id="voice-lock-msg"></p>
+            <a href="#" target="_blank" rel="noopener" class="voice-lock-link" id="voice-lock-cta"></a>
           </div>
         </div>
       </div>
@@ -907,7 +973,7 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
     </a>
   </nav>
 
-  <button class="mobile-corner-logout" id="btn-logout-mobile" type="button">Salir</button>
+  <button class="mobile-corner-logout mobile-corner-logout--scroll" id="btn-logout-mobile" type="button">Salir</button>
 
   <!-- Diálogo: ¿qué hacemos con la voz anterior? -->
   <div id="voice-recreate-dialog" class="voice-dialog-overlay" style="display:none">
@@ -986,7 +1052,7 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
       set('sum-avisos', parts.length ? parts.join(' · ') : 'Sin configurar');
 
       // Voz
-      set('sum-voz', (b && b.voice_id) ? 'Voz clonada activa' : 'Sin clonar');
+      set('sum-voz', (b && b.voice_id) ? 'Voz activa' : 'Sin clonar');
 
       // Plan y facturación
       const planMap = { arranque: 'Arranque', crecimiento: 'Crecimiento', a_medida: 'Negocio' };
@@ -1413,6 +1479,7 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
       document.getElementById('voice-confirm').style.display  = 'none';
 
       if (planAllowsVoice && b.voice_id) showVoiceCloned();
+      loadVoiceStyle(b);
 
       // Billing fields
       const billingInvEl = document.getElementById('billing_requires_invoice');
@@ -1696,14 +1763,28 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
     let hasExistingVoice = false;
 
     // ── Mode tabs ──
-    document.querySelectorAll('.voice-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        document.querySelectorAll('.voice-tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        currentMode = tab.dataset.mode;
+    function setVoiceMode(mode) {
+        document.querySelectorAll('.voice-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
+        const adv = document.getElementById('voice-advanced-link');
+        adv.classList.toggle('active', mode === 'custom');
+        adv.setAttribute('aria-expanded', mode === 'custom' ? 'true' : 'false');
+        currentMode = mode;
         document.getElementById('panel-record').style.display = currentMode === 'record' ? 'block' : 'none';
         document.getElementById('panel-upload').style.display = currentMode === 'upload' ? 'block' : 'none';
-      });
+        document.getElementById('panel-catalog').style.display = currentMode === 'catalog' ? 'block' : 'none';
+        document.getElementById('panel-custom').style.display = currentMode === 'custom' ? 'block' : 'none';
+        // Consent and recording tips are about recording your own voice: hidden for ready-made voices.
+        const ownVoice = currentMode === 'record' || currentMode === 'upload';
+        document.getElementById('voice-consent-field').style.display = ownVoice ? '' : 'none';
+        document.getElementById('voice-record-tip').style.display = ownVoice ? '' : 'none';
+        if (currentMode === 'catalog') renderVoiceCatalog();
+    }
+    document.querySelectorAll('.voice-tab').forEach(tab => {
+      tab.addEventListener('click', () => setVoiceMode(tab.dataset.mode));
+    });
+    // "Opciones avanzadas": paste an ElevenLabs voice code (toggles back to recording).
+    document.getElementById('voice-advanced-link').addEventListener('click', () => {
+      setVoiceMode(currentMode === 'custom' ? 'record' : 'custom');
     });
 
     // ── State transitions ──
@@ -1741,13 +1822,16 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
       document.getElementById('voice-input').style.display = 'none';
       document.getElementById('voice-confirm').style.display = 'none';
       document.getElementById('voice-preview-area').style.display = 'flex';
+      document.getElementById('voice-style').style.display = 'block';
       document.getElementById('voice-audio').style.display = 'none';
+      loadVoiceInfo();
     }
 
     // ── Recrear voz ──
     document.getElementById('btn-recreate-voice').addEventListener('click', () => {
       document.getElementById('btn-voice-cancel').style.display = 'block';
       document.getElementById('voice-preview-area').style.display = 'none';
+      document.getElementById('voice-style').style.display = 'none';
       showVoiceInput();
     });
 
@@ -2415,7 +2499,11 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
       status.textContent = 'Generando audio…';
       status.className = 'voice-preview-status info';
 
-      const res = await fetch('/api/business/voice/preview', { method: 'POST' });
+      const res = await fetch('/api/business/voice/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...readVoiceStyle(), text: document.getElementById('voice-test-text').value }),
+      });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         status.textContent = d.error || 'Error al generar';
@@ -2424,12 +2512,191 @@ Consultorio: No des diagnósticos ni interpretés resultados de estudios. Siempr
         return;
       }
 
+      const left = res.headers.get('X-Previews-Left');
+      if (left !== null) paintPreviewsLeft(parseInt(left, 10));
       const blob = await res.blob();
       audio.src = URL.createObjectURL(blob);
       audio.style.display = 'block';
-      audio.play();
+      audio.play().catch(() => {});
       status.textContent = '';
       btn.disabled = false;
+    });
+
+    function paintPreviewsLeft(n) {
+      const el = document.getElementById('voice-previews-left');
+      el.textContent = n > 0 ? `Te ${n === 1 ? 'queda 1 prueba' : `quedan ${n} pruebas`} hoy.` : 'Ya usaste las pruebas de hoy. Mañana podés probar de nuevo.';
+      document.getElementById('btn-voice-preview').disabled = n <= 0;
+    }
+
+    async function loadVoiceInfo() {
+      try {
+        const r = await fetch('/api/business/voice/info');
+        if (!r.ok) return;
+        const info = await r.json();
+        paintPreviewsLeft(info.previews_left);
+        const note = document.getElementById('voice-tone-note');
+        note.textContent = info.tone_note || '';
+        note.style.display = info.tone_note ? '' : 'none';
+      } catch (_) {}
+    }
+
+    // ── Pegar código de voz (voice_id de ElevenLabs) ──
+    document.getElementById('btn-voice-custom').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-voice-custom');
+      const status = document.getElementById('voice-custom-status');
+      const voice_id = document.getElementById('voice-custom-id').value.trim();
+      if (!voice_id) { status.textContent = 'Pegá el código de la voz.'; status.className = 'voice-preview-status err'; return; }
+      btn.disabled = true;
+      status.textContent = 'Buscando la voz…'; status.className = 'voice-preview-status info';
+      const r = await fetch('/api/business/voice/custom', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voice_id }),
+      });
+      const d = await r.json().catch(() => ({}));
+      btn.disabled = false;
+      if (!r.ok) { status.textContent = d.error || 'No se pudo usar esa voz.'; status.className = 'voice-preview-status err'; return; }
+      status.textContent = '';
+      const sum = document.getElementById('sum-voz');
+      if (sum) sum.textContent = d.name ? `Voz: ${d.name}` : 'Voz activa';
+      showVoiceCloned();
+    });
+
+    // ── Instrucciones de voz: mostrar qué entendió ──
+    let voiceInstrSummary = '';
+    function paintUnderstood(text) {
+      voiceInstrSummary = text || '';
+      document.getElementById('voice-understood-text').textContent = voiceInstrSummary;
+      document.getElementById('voice-understood').style.display = voiceInstrSummary ? '' : 'none';
+    }
+    document.getElementById('voice-instr').addEventListener('input', () => paintUnderstood(''));
+    document.getElementById('btn-voice-interpret').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-voice-interpret');
+      const status = document.getElementById('voice-instr-status');
+      const text = document.getElementById('voice-instr').value.trim();
+      if (!text) { paintUnderstood(''); return; }
+      btn.disabled = true;
+      status.textContent = 'Leyendo…'; status.className = 'voice-preview-status info';
+      const r = await fetch('/api/business/voice/interpret', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }),
+      });
+      const d = await r.json().catch(() => ({}));
+      btn.disabled = false;
+      if (!r.ok) { status.textContent = d.error || 'No se pudo leer'; status.className = 'voice-preview-status err'; return; }
+      status.textContent = '';
+      if (d.voice_speed) voiceStyle.voice_speed = d.voice_speed;
+      if (d.voice_tone)  voiceStyle.voice_tone  = d.voice_tone;
+      paintVoiceChips();
+      paintUnderstood(d.resumen || 'Lo tomo en cuenta al escribir los audios.');
+    });
+
+    // ── Catálogo de voces listas ──
+    let voiceCatalog = null;
+    async function renderVoiceCatalog() {
+      const box = document.getElementById('voice-catalog');
+      const status = document.getElementById('voice-catalog-status');
+      if (!voiceCatalog) {
+        const r = await fetch('/api/voice-catalog');
+        voiceCatalog = r.ok ? (await r.json()).voices : [];
+      }
+      box.innerHTML = '';
+      voiceCatalog.forEach(v => {
+        const row = document.createElement('div');
+        row.className = 'voice-catalog-item';
+        const info = document.createElement('div');
+        const name = document.createElement('strong'); name.textContent = v.nombre;
+        const desc = document.createElement('span'); desc.textContent = v.descripcion;
+        info.append(name, desc);
+        const listen = document.createElement('button');
+        listen.type = 'button'; listen.className = 'voice-chip'; listen.textContent = '▶ Escuchar';
+        listen.addEventListener('click', () => {
+          const a = document.getElementById('voice-catalog-audio');
+          a.src = `/api/voice-catalog/${encodeURIComponent(v.id)}/sample`;
+          status.textContent = 'Cargando…'; status.className = 'voice-preview-status info';
+          a.oncanplay = () => { status.textContent = ''; };
+          a.onerror = () => { status.textContent = 'No se pudo cargar la muestra'; status.className = 'voice-preview-status err'; };
+          a.play().catch(() => {});
+        });
+        const use = document.createElement('button');
+        use.type = 'button'; use.className = 'btn-voice-preview'; use.textContent = 'Usar esta voz';
+        use.addEventListener('click', async () => {
+          use.disabled = true;
+          const r = await fetch('/api/business/voice/catalog', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ voice_id: v.id }),
+          });
+          const d = await r.json().catch(() => ({}));
+          use.disabled = false;
+          if (!r.ok) { status.textContent = d.error || 'No se pudo elegir'; status.className = 'voice-preview-status err'; return; }
+          status.textContent = '';
+          document.getElementById('sum-voz') && (document.getElementById('sum-voz').textContent = `Voz: ${v.nombre}`);
+          showVoiceCloned();
+        });
+        row.append(info, listen, use);
+        box.appendChild(row);
+      });
+    }
+
+    // ── Cómo suena (velocidad, tono, pronunciaciones) ──
+    const voiceStyle = { voice_speed: 'normal', voice_tone: 'natural' };
+
+    function paintVoiceChips() {
+      document.querySelectorAll('.voice-chips').forEach(group => {
+        group.querySelectorAll('.voice-chip').forEach(chip => {
+          chip.classList.toggle('active', chip.dataset.value === voiceStyle[group.dataset.field]);
+        });
+      });
+    }
+
+    function loadVoiceStyle(b) {
+      voiceStyle.voice_speed = (b && b.voice_speed) || 'normal';
+      voiceStyle.voice_tone  = (b && b.voice_tone)  || 'natural';
+      let list = [];
+      try { list = JSON.parse((b && b.voice_pronunciations) || '[]') || []; } catch (_) {}
+      document.getElementById('voice-pron').value = list.map(p => `${p.de} = ${p.a}`).join('\n');
+      document.getElementById('voice-instr').value = (b && b.voice_instructions) || '';
+      paintUnderstood((b && b.voice_instructions_summary) || '');
+      paintVoiceChips();
+    }
+
+    function readVoiceStyle() {
+      const voice_pronunciations = document.getElementById('voice-pron').value
+        .split('\n')
+        .map(line => line.split('='))
+        .filter(parts => parts.length === 2 && parts[0].trim() && parts[1].trim())
+        .map(([de, a]) => ({ de: de.trim(), a: a.trim() }));
+      const voice_instructions = document.getElementById('voice-instr').value.trim();
+      return { ...voiceStyle, voice_pronunciations, voice_instructions,
+        voice_instructions_summary: voice_instructions ? voiceInstrSummary : '' };
+    }
+
+    document.querySelectorAll('.voice-chips').forEach(group => {
+      group.addEventListener('click', e => {
+        const chip = e.target.closest('.voice-chip');
+        if (!chip) return;
+        voiceStyle[group.dataset.field] = chip.dataset.value;
+        paintVoiceChips();
+      });
+    });
+
+    document.getElementById('btn-voice-style-save').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-voice-style-save');
+      const status = document.getElementById('voice-style-status');
+      btn.disabled = true;
+      status.textContent = 'Guardando…';
+      status.className = 'voice-preview-status info';
+      const res = await fetch('/api/business/voice/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(readVoiceStyle()),
+      });
+      const d = await res.json().catch(() => ({}));
+      btn.disabled = false;
+      if (!res.ok) {
+        status.textContent = d.error || 'No se pudo guardar';
+        status.className = 'voice-preview-status err';
+        return;
+      }
+      status.textContent = 'Guardado. Los próximos audios ya salen así.';
+      status.className = 'voice-preview-status';
     });
 
     // ── WhatsApp Embedded Signup ──

@@ -69,6 +69,66 @@ function _ttsPricePer1k(model) {
   const m = model || 'eleven_multilingual_v2'; // NULL column = default multilingual_v2
   return _TTS_PRICE_PER_1K[m] ?? _TTS_PRICE_PER_1K.eleven_multilingual_v2;
 }
+// Scribe transcription used to pick the best take (overridable via env).
+const _STT_PRICE_PER_HOUR = parseFloat(process.env.STT_PRICE_PER_HOUR || '0.40');
+// Rough speech rate used to estimate transcription seconds before generating.
+const _TTS_CHARS_PER_SEC = 14;
+function _audioCostUsd(model, billedChars, sttSeconds = 0) {
+  return billedChars / 1000 * _ttsPricePer1k(model) + sttSeconds / 3600 * _STT_PRICE_PER_HOUR;
+}
+// Audio spent this month. Real spend (all takes, transcription, previews) is in
+// spending_counters; claude_usage.tts_chars covers audios sent before that column existed.
+function _monthAudioCostUsd(business) {
+  const legacy = getMonthlyUsage(business.id).tts_chars / 1000 * _ttsPricePer1k(business.voice_tts_model);
+  let real = 0;
+  try { real = getMonthlyAudioCostUsd(business.id); } catch (_) {}
+  return Math.max(legacy, real);
+}
+
+const VOICE_INSTRUCTIONS_MAX = 500;
+const DEFAULT_VOICE_PREVIEW_TEXT = 'Hola, gracias por escribirnos. Sí, tenemos lugar esta semana. ¿Querés que te pase los horarios?';
+function _voicePreviewDailyLimit() {
+  const o = (() => { try { return getRuntimeConfig('voice_preview_daily_limit'); } catch { return null; } })();
+  const n = parseInt(o ?? process.env.VOICE_PREVIEW_DAILY_LIMIT ?? '5', 10);
+  return Number.isFinite(n) && n >= 0 ? n : 5;
+}
+function _planAllowsVoice(business) {
+  return !!business.plan_cortesia || ['crecimiento', 'a_medida'].includes(business.plan);
+}
+// Voices that are a person's and must never be picked by voice_id (e.g. the Daxos founder's).
+function _privateVoiceIds() {
+  return String(process.env.PRIVATE_VOICE_IDS || '').split(',').map(x => x.trim()).filter(Boolean);
+}
+
+// Decides how a reply's audio is made right now: the ElevenLabs credits pick 4 takes, 1 take
+// (< 20% left) or text (none left); the estimate feeds the monthly plan cap.
+async function _audioPlanFor(business, text) {
+  const opts = voiceOptsFor(business);
+  const natural = usesNaturalRecipe(opts);
+  let credit;
+  try { credit = await getCreditState(); } catch (_) { credit = { known: false, exhausted: false }; }
+  const plan = planTakes(credit, text.length);
+  const takes = natural ? (plan.takes || 1) : 1;
+  const estCost = _audioCostUsd(business.voice_tts_model, text.length * takes,
+    takes > 1 ? text.length / _TTS_CHARS_PER_SEC * takes : 0);
+  return { ...plan, takes, natural, estCost, opts };
+}
+
+// Builds the audio for a reply and records what it cost. Throws on ElevenLabs/ffmpeg errors.
+async function _buildReplyAudio(business, text, plan) {
+  let mp3, billedChars, sttSeconds = 0;
+  if (plan.natural) {
+    const r = await generateNaturalAudio(business.voice_id, text, plan.opts, { takes: plan.takes });
+    mp3 = r.mp3; billedChars = r.billedChars; sttSeconds = r.sttSeconds;
+  } else {
+    mp3 = await generateAudioBuffer(business.voice_id, text, plan.opts);
+    billedChars = text.length;
+  }
+  const costUsd = _audioCostUsd(business.voice_tts_model, billedChars, sttSeconds);
+  try { if (billedChars) incrementElevenLabsChars(business.id, billedChars); } catch (_) {}
+  try { addAudioCost(business.id, costUsd); } catch (_) {}
+  return { mp3, billedChars, costUsd };
+}
 function _getConvHourlyCap() {
   const override = getRuntimeConfig ? (() => { try { return getRuntimeConfig('cap_conv_hourly'); } catch { return null; } })() : null;
   return override ? parseInt(override, 10) : _CAP_CONV_HOURLY;
@@ -111,7 +171,7 @@ const BetterSQLiteStore = require('better-sqlite3-session-store')(session);
 const Database = require('better-sqlite3');
 
 const multer = require('multer');
-const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, getBusinessByCrmUserId, createCrmBusiness, createPartnerLoginToken, getPartnerLoginToken, markPartnerLoginTokenUsed, getMonthlyConvCount, getMonthlyUsage, setCrmCapOwnerNotified, setAudioCapNotifiedMonth, setCrmQuota, getPartnerUsageByMonth, createEmbedSession, getEmbedSession, purgeExpiredEmbedSessions, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage: _dbAddMessage, getLastUserMessageAt, getConversationHistory, getConversationMessagesForPanel, setMessageMedia, getMessageMedia, takeExpiredMessageMedia, takeConversationMedia, setConversationContactName, getLastUserMessageAtForPhone, setAppointmentNoticeText, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, markConversationPausedByCrmCap, getTrialBusinesses, trialEmailAlreadySent, claimTrialEmail, releaseTrialEmail, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setConfigChatEnabled, saveConfigDraft, getConfigDraft, clearConfigDraft, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
+const { createUser, getUserByEmail, changeUserEmail, setPlanCortesia, getUserById, getUserByBusinessId, getBusinessByCrmUserId, createCrmBusiness, createPartnerLoginToken, getPartnerLoginToken, markPartnerLoginTokenUsed, getMonthlyConvCount, getMonthlyUsage, setCrmCapOwnerNotified, setAudioCapNotifiedMonth, setCrmQuota, getPartnerUsageByMonth, createEmbedSession, getEmbedSession, purgeExpiredEmbedSessions, upsertBusiness, getBusinessById, getBusinessByWhatsappNumber, getBusinessByPhoneNumberId, getBusinessByWabaId, getBusinessByUserId, setUserBusiness, setUserPhone, setStyleProfile, setWebsiteSummary, saveVoiceConsent, setVoiceConfig, setVoiceStyle, setVoiceIdByAdmin, setVoiceInstructions, setVoiceIdByOwner, addAudioCost, getMonthlyAudioCostUsd, incrementVoicePreviews, getVoicePreviewsToday, getConversationsByBusinessId, getConversationCountByBusinessId, getLastCustomerMessage, getConversationById, getOrCreateConversation, addMessage: _dbAddMessage, getLastUserMessageAt, getConversationHistory, getConversationMessagesForPanel, setMessageMedia, getMessageMedia, takeExpiredMessageMedia, takeConversationMedia, setConversationContactName, getLastUserMessageAtForPhone, setAppointmentNoticeText, markConversationPaused, markConversationResumed, resetConversation, setNeedsHuman, setHumanPaused, setOwnerReplyPaused, clearHumanPause, setOwnerPaused, autoResumeOwnerPaused, setOwnerPauseHours, softDeleteConversation, getAssistantMessagesSince, setMaxPricesPerClient, setOwnerRulesWarning, getConversationsNeedingHumanResume, autoResumeExpiredConversations, getDailyConversationStats, getTodayStats, getDailyMessageStats, setConversationLabel, setBusinessDocument, clearBusinessDocument, upgradePlan, setSubscriptionStatus, savePayment, savePendingPayment, getPendingPayments, getAllBusinesses, getGlobalStats, getBusinessAdminMetrics, saveWabaCredentials, clearWabaCredentials, setWaPaymentConfirmed, getTrialMessageCount, getTrialConversationCount, setTrialWarnedAt, setTrialGraceStartedAt, setTrialGraceNotifiedAt, setTrialEndedNotifiedAt, markConversationPausedByTrial, markConversationPausedByCrmCap, getTrialBusinesses, trialEmailAlreadySent, claimTrialEmail, releaseTrialEmail, setBillingData, setBillingNotifiedAt, createBooking, setBookingState, getBookingState, setBookingEnabled, setWeeklySummaryEnabled, setBotPaused, setConfigChatEnabled, saveConfigDraft, getConfigDraft, clearConfigDraft, setRuntimeConfig, getRuntimeConfig, logError, getRecentErrors, getErrorsFiltered, checkpoint, closeDb, setKapsoCustomerId, setKapsoSetupLinkId, getBusinessByKapsoCustomerId, setKapsoConnectStartedAt, setKapsoIncompleteAlertedAt, getBusinessesWithIncompleteKapso, addBusinessImage, getBusinessImages, deleteBusinessImage, getBusinessDocuments, getBusinessDocumentTexts, addBusinessDocument, deleteBusinessDocument, getTagsByBusiness, createTag, deleteTag, setConversationTags, getConversationTags, tryMarkProcessed, deleteProcessedMessage, purgeOldProcessedMessages, setSilentUntil, clearSilentUntil, setConversationSilent, setClaudeUsageTtsChars, getClaudeUsageDailySummary, getClaudeUsageByBusiness, markConversationPausedByKeyword, recordKeywordPauseReply, setPauseNotifiedAt, setPauseFollowupSent, setPause24hSent, getKeywordPausedNeedingFollowup, getKeywordPausedNeeding24h, getConnectedBusinesses, setWaSilenceAlertedAt, clearWaSilenceAlertedAt, setWaHealthAlertedAt, clearWaHealthAlertedAt, purgeOldErrorLog,
   incrementAnthropicCall, incrementElevenLabsChars, getSpendingToday,
   incrementPreviewCall, getPreviewSpendingToday, setSpendingCapOwnerNotified, setSpendingCapNeedsAttention,
   getConvAssistantCountLastHour, setSpendingCapNotified,
@@ -186,14 +246,14 @@ if (_apiKey) {
   try { setRuntimeConfig('ANTHROPIC_API_KEY', _apiKey); } catch (_) {}
   console.log('[startup] PID=' + process.pid + ' key saved to DB');
 }
-const { generateReply, analyzeStyle, summarizeWebsite, initAnthropicKey, getLastClaudeUsageId, checkOwnerRulesConflict } = require('./claude');
+const { generateReply, analyzeStyle, summarizeWebsite, initAnthropicKey, getLastClaudeUsageId, checkOwnerRulesConflict, interpretVoiceInstructions } = require('./claude');
 initAnthropicKey(_apiKey);
 const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = require('./bookings');
 const { extractPricesFromMany, enforcePriceCap } = require('./pricecap');
 const { buildSources: buildGroundingSources, groundReply, summarizeViolations, groundingMode, isTeamDeferral } = require('./grounding');
 const { handleDemoFlow, processFollowups } = require('./demo-flow');
 const { sendWeeklySummaries } = require('./weekly');
-const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
+const { cloneVoice, generatePreview, deleteVoice, getVoice, voiceOptsFor, VOICE_CATALOG, CATALOG_SAMPLE_TEXT, isCatalogVoice, parsePronunciations, VOICE_SPEEDS, VOICE_TONES, MAX_PRONUNCIATIONS } = require('./elevenlabs');
 const { sendPauseEmail, sendUrgentAlertEmail, sendUnmatchedPaymentAlert, sendAdminNotificationEmail, sendTrialWarningEmail, sendTrialGraceEmail, sendTrialEndedEmail, sendBillingDataEmail, sendPauseFollowupEmail, sendPause24hReminderEmail, sendWaSilenceAlertEmail, sendWaSilenceRecoveryEmail, sendWaHealthAlertEmail, sendWaHealthRecoveryEmail, sendPasswordResetEmail, sendSpendingCapEmail, sendOwnerBotStoppedEmail, sendClaudeErrorAdminEmail, sendSaleIntentEmail, sendBookingNotificationEmail, sendAgendaNewAppointmentEmail } = require('./email');
 const { runBackup, maybeScheduledBackup, maybeSilenceAlert, startupBackupCheck, getLatestBackupMeta, listAllBackups } = require('./backup');
 
@@ -339,7 +399,7 @@ async function extractTextFromFile(buffer, mimetype, originalname) {
 const fs = require('fs');
 const { sendWhatsAppMessage, uploadMedia, sendWhatsAppAudio, sendWhatsAppDocument, sendWhatsAppImage, markAsRead, sendTypingIndicator, markReadAndTyping, downloadKapsoMedia, downloadMetaMedia, parseSplitParts, splitAndSend, sanitizeForClient } = require('./whatsapp');
 const { getFreeSlots, formatSlotsForPrompt, formatSlotsForClient, formatAppointmentsBlock, getMaxBookingDate, isSlotsMapFresh, utcIsoToMvdHHMM, getMvdDow, DOW_LABELS, getBizHoursForDow, getAllSlotsForDate } = require('./agenda');
-const { generateAudioBuffer, transcribeAudio, getSubscriptionUsage } = require('./elevenlabs');
+const { generateAudioBuffer, transcribeAudio, getSubscriptionUsage, generateNaturalAudio, usesNaturalRecipe, getCreditState, planTakes, onCreditsExhausted } = require('./elevenlabs');
 const { convertToOgg, analyzeVoiceNote } = require('./audio');
 const { mediaReply, mediaPlaceholder, readIncomingDocument, IMAGE_MAX_BYTES, DOC_MAX_BYTES } = require('./incoming-media');
 
@@ -716,7 +776,8 @@ const OWNER_BUSINESS_FIELDS = new Set([
   'document_name',
   'response_mode', 'response_delay', 'pause_keywords', 'pause_reply_text',
   'business_hours_start', 'business_hours_end', 'human_resume_timeout',
-  'voice_id', 'voice_consent_at',
+  'voice_id', 'voice_consent_at', 'voice_speed', 'voice_tone', 'voice_pronunciations',
+  'voice_instructions', 'voice_instructions_summary',
   'plan', 'plan_cortesia', 'subscription_status',
   'plan_paid_at', 'plan_expires_at',
   'trial_starts_at', 'trial_ends_at',
@@ -1964,7 +2025,10 @@ app.post('/api/business/voice', requireAuth, upload.single('audio'), async (req,
     return res.status(403).json({ error: 'La clonación de voz es parte del plan Crecimiento. Actualizá tu plan para usar esta función.' });
   }
 
-  const shouldDeleteOld = req.body.delete_old === 'true' && business.voice_id;
+  // Only delete the old voice when it is this business's own clone: a catalog voice or one
+  // assigned by admin is shared and must stay in the ElevenLabs account.
+  const shouldDeleteOld = req.body.delete_old === 'true' && business.voice_id &&
+    !isCatalogVoice(business.voice_id) && business.consent_by !== 'admin';
 
   try {
     if (shouldDeleteOld) {
@@ -1983,28 +2047,186 @@ app.post('/api/business/voice', requireAuth, upload.single('audio'), async (req,
   }
 });
 
+// Catalog of ready-made voices (no recording needed). Sample audio is cached in memory.
+app.get('/api/voice-catalog', requireAuth, (req, res) => {
+  res.json({ voices: VOICE_CATALOG });
+});
+
+app.get('/api/voice-catalog/:id/sample', requireAuth, async (req, res) => {
+  if (!isCatalogVoice(req.params.id)) return res.status(404).json({ error: 'Voz no encontrada.' });
+  try {
+    const mp3 = await generateAudioBuffer(req.params.id, CATALOG_SAMPLE_TEXT, {});
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.end(mp3);
+  } catch (err) {
+    console.error('[elevenlabs] catalog sample error:', err.message);
+    res.status(502).json({ error: 'No se pudo generar la muestra.' });
+  }
+});
+
+app.post('/api/business/voice/catalog', requireAuth, (req, res) => {
+  const user = getUserById(reqUserId(req));
+  if (!user.business_id) return res.status(400).json({ error: 'Guardá el negocio antes de elegir la voz.' });
+  const business = getBusinessById(user.business_id);
+  if (!['crecimiento', 'a_medida'].includes(business.plan)) {
+    return res.status(403).json({ error: 'La voz es parte del plan Crecimiento. Actualizá tu plan para usar esta función.' });
+  }
+  const voiceId = req.body?.voice_id;
+  if (!isCatalogVoice(voiceId)) return res.status(400).json({ error: 'Esa voz no está en el catálogo.' });
+  // The business's own clone (if any) is kept in ElevenLabs: it can go back to it by re-recording.
+  saveVoiceConsent(business.id, {
+    voiceId,
+    consentText: 'Voz de catálogo de Daxos (no es la voz de una persona del negocio)',
+    consentBy: user.email,
+  });
+  res.json({ voice_id: voiceId });
+});
+
+// Owner-tunable voice: speed, tone and pronunciations. Only the preset names are accepted,
+// so a business can't push ElevenLabs into settings that sound broken.
+app.put('/api/business/voice/settings', requireAuth, (req, res) => {
+  const user = getUserById(reqUserId(req));
+  if (!user.business_id) return res.status(400).json({ error: 'No tenés un negocio configurado.' });
+  const business = getBusinessById(user.business_id);
+  if (!['crecimiento', 'a_medida'].includes(business.plan)) {
+    return res.status(403).json({ error: 'La voz es parte del plan Crecimiento.' });
+  }
+  const b = req.body || {};
+  const speed = b.voice_speed ?? null;
+  const tone  = b.voice_tone ?? null;
+  if (speed !== null && !VOICE_SPEEDS[speed]) return res.status(400).json({ error: 'Velocidad inválida.' });
+  if (tone  !== null && !VOICE_TONES[tone])   return res.status(400).json({ error: 'Tono inválido.' });
+  if (b.voice_pronunciations !== undefined && b.voice_pronunciations !== null && !Array.isArray(b.voice_pronunciations)) {
+    return res.status(400).json({ error: 'Pronunciaciones inválidas.' });
+  }
+  if (Array.isArray(b.voice_pronunciations) && b.voice_pronunciations.length > MAX_PRONUNCIATIONS) {
+    return res.status(400).json({ error: `Máximo ${MAX_PRONUNCIATIONS} pronunciaciones.` });
+  }
+  const list = parsePronunciations(b.voice_pronunciations || []);
+  if (b.voice_instructions !== undefined && b.voice_instructions !== null && typeof b.voice_instructions !== 'string') {
+    return res.status(400).json({ error: 'Instrucciones de voz inválidas.' });
+  }
+  setVoiceStyle(business.id, {
+    voice_speed: speed,
+    voice_tone: tone,
+    voice_pronunciations: list.length ? JSON.stringify(list) : null,
+  });
+  let instructions = business.voice_instructions ?? null;
+  let summary = business.voice_instructions_summary ?? null;
+  if (b.voice_instructions !== undefined) {
+    instructions = (b.voice_instructions || '').trim().slice(0, VOICE_INSTRUCTIONS_MAX) || null;
+    summary = instructions && typeof b.voice_instructions_summary === 'string'
+      ? b.voice_instructions_summary.trim().slice(0, 300) || null
+      : null;
+    setVoiceInstructions(business.id, { voice_instructions: instructions, voice_instructions_summary: summary });
+  }
+  res.json({ ok: true, voice_speed: speed, voice_tone: tone, voice_pronunciations: list,
+    voice_instructions: instructions, voice_instructions_summary: summary });
+});
+
+// "Escuchar prueba": a short audio with the current (or unsaved) settings, made exactly like
+// the real replies. Limited per day, counted in the monthly audio cap, never above it.
 app.post('/api/business/voice/preview', requireAuth, async (req, res) => {
   const user = getUserById(reqUserId(req));
   if (!user.business_id) return res.status(400).json({ error: 'No tenés un negocio configurado.' });
 
   const business = getBusinessById(user.business_id);
-  if (!business.voice_id) return res.status(400).json({ error: 'No hay voz clonada todavía.' });
+  if (!business.voice_id) return res.status(400).json({ error: 'Elegí o grabá una voz primero.' });
+  if (!_planAllowsVoice(business)) return res.status(403).json({ error: 'La voz es parte del plan Crecimiento.' });
+
+  const used = getVoicePreviewsToday(business.id);
+  const limit = _voicePreviewDailyLimit();
+  if (used >= limit) {
+    return res.status(429).json({ error: `Ya usaste las ${limit} pruebas de hoy. Mañana podés probar de nuevo.`, previews_left: 0 });
+  }
+
+  // The panel can send unsaved settings (and a test phrase) to hear them before saving.
+  const b = req.body || {};
+  const opts = voiceOptsFor(business);
+  if (b.voice_speed !== undefined && VOICE_SPEEDS[b.voice_speed]) opts.speed = b.voice_speed;
+  if (b.voice_tone  !== undefined && VOICE_TONES[b.voice_tone])   opts.tone  = b.voice_tone;
+  if (b.voice_pronunciations !== undefined) opts.pronunciations = parsePronunciations(b.voice_pronunciations);
+  const text = (typeof b.text === 'string' ? b.text.trim().slice(0, 200) : '') || DEFAULT_VOICE_PREVIEW_TEXT;
+
+  const plan = await _audioPlanFor(business, text);
+  plan.opts = opts;
+  if (plan.mode === 'text') {
+    return res.status(503).json({ error: 'Los audios no están disponibles en este momento. Probá más tarde.' });
+  }
+  const capUsd = business.plan_cortesia ? Infinity : _getAudioMonthlyCapUsd(business.plan);
+  if (capUsd !== Infinity && _monthAudioCostUsd(business) + plan.estCost > capUsd) {
+    return res.status(429).json({ error: 'Llegaste al límite de audios del mes. Las pruebas vuelven el mes que viene.' });
+  }
 
   try {
-    const upstream = await generatePreview(business.voice_id);
+    const { mp3 } = await _buildReplyAudio(business, text, plan);
+    const nowUsed = incrementVoicePreviews(business.id);
     res.setHeader('Content-Type', 'audio/mpeg');
-    const reader = upstream.body.getReader();
-    const pump = async () => {
-      const { done, value } = await reader.read();
-      if (done) { res.end(); return; }
-      res.write(Buffer.from(value));
-      await pump();
-    };
-    await pump();
+    res.setHeader('X-Previews-Left', String(Math.max(0, limit - nowUsed)));
+    res.end(mp3);
   } catch (err) {
     console.error('[elevenlabs] preview error:', err.message);
-    res.status(502).json({ error: 'Error al generar la preview: ' + err.message });
+    res.status(502).json({ error: 'No se pudo generar la prueba. Probá de nuevo en un rato.' });
   }
+});
+
+// What the Voz panel needs besides the business row: tests left today and what the
+// business's model accepts (the default recipe accepts speed and tone).
+app.get('/api/business/voice/info', requireAuth, (req, res) => {
+  const user = getUserById(reqUserId(req));
+  if (!user.business_id) return res.status(400).json({ error: 'No tenés un negocio configurado.' });
+  const business = getBusinessById(user.business_id);
+  const limit = _voicePreviewDailyLimit();
+  const v4 = !usesNaturalRecipe(voiceOptsFor(business));
+  res.json({
+    plan_allows: _planAllowsVoice(business),
+    previews_left: Math.max(0, limit - getVoicePreviewsToday(business.id)),
+    previews_limit: limit,
+    accepts_speed: true,
+    accepts_tone: true,
+    tone_note: v4 ? 'Con la voz de esta cuenta el tono se ajusta solo con la estabilidad.' : null,
+  });
+});
+
+// Owner pastes the voice_id of an ElevenLabs voice. Only ready-made/library voices that are
+// in the Daxos account are accepted: a cloned voice is a real person's and can't be reused
+// by another business (only its own clone, recorded with consent, can be used).
+app.post('/api/business/voice/custom', requireAuth, async (req, res) => {
+  const user = getUserById(reqUserId(req));
+  if (!user.business_id) return res.status(400).json({ error: 'Guardá el negocio antes de elegir la voz.' });
+  const business = getBusinessById(user.business_id);
+  if (!_planAllowsVoice(business)) {
+    return res.status(403).json({ error: 'La voz es parte del plan Crecimiento. Actualizá tu plan para usar esta función.' });
+  }
+  const voiceId = typeof req.body?.voice_id === 'string' ? req.body.voice_id.trim() : '';
+  if (!/^[A-Za-z0-9]{10,40}$/.test(voiceId)) {
+    return res.status(400).json({ error: 'Ese código de voz no es válido. Copialo entero desde ElevenLabs.' });
+  }
+  if (voiceId === business.voice_id) return res.json({ voice_id: voiceId, name: null });
+  let voice;
+  try { voice = await getVoice(voiceId); }
+  catch (_) {
+    return res.status(400).json({ error: 'No encontramos esa voz. Elegí una de la lista o escribinos para sumarla.' });
+  }
+  if (voice.category === 'cloned' || _privateVoiceIds().includes(voiceId)) {
+    return res.status(400).json({ error: 'Esa voz es la voz clonada de una persona y no se puede usar. Elegí una de la lista o grabá la tuya.' });
+  }
+  setVoiceIdByOwner(business.id, voiceId, user.email);
+  res.json({ voice_id: voiceId, name: voice.name });
+});
+
+// Reads the owner's free "Instrucciones de voz" and says what Daxos understood: the speed
+// and tone presets it maps to, and how the replies will be written. Nothing is saved here.
+app.post('/api/business/voice/interpret', requireAuth, async (req, res) => {
+  const user = getUserById(reqUserId(req));
+  if (!user.business_id) return res.status(400).json({ error: 'No tenés un negocio configurado.' });
+  const business = getBusinessById(user.business_id);
+  if (!_planAllowsVoice(business)) return res.status(403).json({ error: 'La voz es parte del plan Crecimiento.' });
+  const text = typeof req.body?.text === 'string' ? req.body.text.trim().slice(0, VOICE_INSTRUCTIONS_MAX) : '';
+  if (!text) return res.json({ voice_speed: null, voice_tone: null, escritura: '', resumen: '' });
+  const r = await interpretVoiceInstructions(text);
+  res.json(r);
 });
 
 app.get('/api/debug/seed-conversations', requireAdmin, (req, res) => {
@@ -2636,13 +2858,18 @@ app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
     const isFirstMessage = history.length === 0;
     const wantsAudio = business.response_mode === 'audio' ||
                        (business.response_mode === 'audio_key' && isFirstMessage);
-    const sent_audio = wantsAudio && !!business.voice_id && planAllowsAudio && replyFitsAudio;
+    let sent_audio = wantsAudio && !!business.voice_id && planAllowsAudio && replyFitsAudio;
+    let _pvPlan = null;
+    if (sent_audio) {
+      _pvPlan = await _audioPlanFor(business, _pvReplyForTTS);
+      const capUsd = business.plan_cortesia ? Infinity : _getAudioMonthlyCapUsd(business.plan);
+      if (_pvPlan.mode === 'text' || (capUsd !== Infinity && _monthAudioCostUsd(business) + _pvPlan.estCost > capUsd)) sent_audio = false;
+    }
 
     let audio_b64 = null;
     if (sent_audio) {
       try {
-        const mp3 = await generateAudioBuffer(business.voice_id, _pvReplyForTTS,
-        { model: business.voice_tts_model, stability: business.voice_stability });
+        const { mp3 } = await _buildReplyAudio(business, _pvReplyForTTS, _pvPlan);
         audio_b64 = mp3.toString('base64');
       } catch (audioErr) {
         console.error('[preview-audio] ElevenLabs failed:', audioErr.message);
@@ -3812,6 +4039,8 @@ async function _processIncomingMessage(business, waCredentials, { msgId, custome
     urgentPhone: _hoursResult.open === false ? (business.urgent_phone || null) : null,
     agenda: agendaCtx,
     priceCap: _priceCapCtx,
+    // The reply will be a voice note (same rule as wantsAudio below): voice instructions apply.
+    forAudio: business.response_mode === 'audio' || (business.response_mode === 'audio_key' && history.length === 0),
   };
   logError('webhook-claude-call', {
     message: `business_id=${business.id} customer=****${customerPhone.slice(-4)}`,
@@ -4353,14 +4582,21 @@ async function _processIncomingMessage(business, waCredentials, { msgId, custome
   // business on turbo gets more audio for the same cap. When hit, the bot keeps replying in
   // TEXT (never goes silent) and the owner is told once per month.
   const audioMonthlyCapUsd = business.plan_cortesia ? Infinity : _getAudioMonthlyCapUsd(business.plan);
-  const ttsPrice = _ttsPricePer1k(business.voice_tts_model);
-  const monthAudioChars = (audioMonthlyCapUsd === Infinity) ? 0 : getMonthlyUsage(business.id).tts_chars;
-  const monthAudioCost  = monthAudioChars / 1000 * ttsPrice;
-  const thisAudioCost   = _replyForTTS.length / 1000 * ttsPrice;
+  const audioCandidate = wantsAudio && !!business.voice_id && planAllowsAudio && replyFitsAudio;
+  // ElevenLabs credits decide 4 takes / 1 take / text before the plan cap is checked.
+  const audioPlan = audioCandidate ? await _audioPlanFor(business, _replyForTTS) : null;
+  const creditsBlockAudio = !!audioPlan && audioPlan.mode === 'text';
+  if (creditsBlockAudio) {
+    logError('audio-credits-text', { message: `biz=${business.id} reason=${audioPlan.reason}`, stack: '' });
+  } else if (audioPlan && audioPlan.reason === 'credits_low') {
+    logError('audio-credits-low', { message: `biz=${business.id} takes=1`, stack: '' });
+  }
+  const monthAudioCost = (audioMonthlyCapUsd === Infinity || !audioPlan) ? 0 : _monthAudioCostUsd(business);
+  const thisAudioCost  = audioPlan ? audioPlan.estCost : 0;
   const ttsCapHit = audioMonthlyCapUsd !== Infinity && (monthAudioCost + thisAudioCost > audioMonthlyCapUsd);
 
   // Owner notice once per month when audio would have been sent but the monthly cap blocks it.
-  if (ttsCapHit && wantsAudio && business.voice_id && planAllowsAudio && replyFitsAudio) {
+  if (ttsCapHit && audioCandidate && !creditsBlockAudio) {
     const capMonth = new Date().toISOString().slice(0, 7);
     if (business.audio_cap_notified_month !== capMonth) {
       setAudioCapNotifiedMonth(business.id, capMonth);
@@ -4411,13 +4647,12 @@ async function _processIncomingMessage(business, waCredentials, { msgId, custome
   }
 
   try {
-    if (wantsAudio && business.voice_id && planAllowsAudio && replyFitsAudio && !ttsCapHit) {
+    if (audioCandidate && !creditsBlockAudio && !ttsCapHit) {
       try {
-        logError('tts-text', { message: `business_id=${business.id} chars=${_replyForTTS.length}`, stack: '' });
-        const mp3 = await generateAudioBuffer(business.voice_id, _replyForTTS,
-          { model: business.voice_tts_model, stability: business.voice_stability });
-        try { setClaudeUsageTtsChars(getLastClaudeUsageId(conversation.id), _replyForTTS.length); } catch (_) {}
-        try { incrementElevenLabsChars(business.id, _replyForTTS.length); } catch (_) {}
+        logError('tts-text', { message: `business_id=${business.id} chars=${_replyForTTS.length} takes=${audioPlan.takes} natural=${audioPlan.natural}`, stack: '' });
+        const { mp3, billedChars } = await _buildReplyAudio(business, _replyForTTS, audioPlan);
+        // tts_chars = characters ElevenLabs billed (every take), so /admin costs stay real.
+        try { setClaudeUsageTtsChars(getLastClaudeUsageId(conversation.id), billedChars); } catch (_) {}
         logError('tts-buffers', { message: `mp3=${mp3.length}b`, stack: '' });
         const ogg = await convertToOgg(mp3);
         logError('tts-buffers', { message: `ogg=${ogg.length}b mime=audio/ogg; codecs=opus`, stack: '' });
@@ -6534,7 +6769,6 @@ resumeHumanTimedOut();
 
 let _lastWeeklySummaryDate = null;
 let _lastTrialCheckDate    = null;
-let _lastElevenCheckDate   = null;
 
 // Alert the admin when the data volume (database + uploads + client media) passes 80%.
 // At most one email every 24 h while it stays above. Above 90% new client media is not
@@ -6565,34 +6799,44 @@ app.post('/admin/api/run-disk-check', requireAdmin, async (_req, res) => {
   res.json(await checkDiskUsage());
 });
 
-// Alert the admin when the ElevenLabs account reaches 80% of its monthly character limit.
-// Fires once per billing period (keyed by the reset timestamp). Never prints the API key.
-async function checkElevenLabsUsage() {
+// Alert the admin when the ElevenLabs account reaches 80% and 100% of its monthly credits.
+// Each alert fires once per billing period (keyed by the reset timestamp). Below 20% left
+// the bot already makes 1 take per sentence; at 100% it answers in text (see planTakes).
+// Never prints the API key.
+async function checkElevenLabsUsage({ forceExhausted = false } = {}) {
   if (!process.env.ELEVENLABS_API_KEY) return { skipped: 'no_api_key' };
-  let usage;
-  try { usage = await getSubscriptionUsage(); }
-  catch (e) { logError('elevenlabs-usage-check', { message: e.message, stack: '' }); return { error: e.message }; }
-  const { character_count, character_limit, next_reset_unix } = usage;
-  if (!character_limit) return { skipped: 'no_limit' };
-  const pct = character_count / character_limit;
-  const periodKey = String(next_reset_unix || new Date().toISOString().slice(0, 7));
-  let alerted = false;
-  if (pct >= 0.8) {
-    const already = (() => { try { return getRuntimeConfig('elevenlabs_80_alerted_period'); } catch { return null; } })();
-    if (already !== periodKey) {
-      setRuntimeConfig('elevenlabs_80_alerted_period', periodKey);
-      alerted = true;
-      logError('elevenlabs-usage', { message: `ElevenLabs at ${(pct * 100).toFixed(1)}% (${character_count}/${character_limit})`, stack: '' });
-      const adminEmail = process.env.ADMIN_EMAIL;
-      if (adminEmail) {
-        sendAdminNotificationEmail({ adminEmail, event: 'elevenlabs-usage-80', data: {
-          usado: character_count, limite: character_limit, porcentaje: `${(pct * 100).toFixed(1)}%`,
-        }}).catch(err => logError('elevenlabs-usage-email', { message: err.message, stack: '' }));
-      }
+  const c = await getCreditState({ maxAgeMs: forceExhausted ? 60_000 : 0 });
+  if (!c.known && !forceExhausted) return { skipped: 'no_limit' };
+  const pct = c.known ? c.count / c.limit : 1;
+  const periodKey = String(c.reset || new Date().toISOString().slice(0, 7));
+  const alerted = [];
+  const levels = [
+    { at: 0.8, key: 'elevenlabs_80_alerted_period', event: 'elevenlabs-usage-80',
+      mensaje: 'ElevenLabs pasó el 80% de los créditos del mes. Debajo del 20% restante los audios se hacen con 1 toma por frase.' },
+    { at: 1.0, key: 'elevenlabs_100_alerted_period', event: 'elevenlabs-usage-100',
+      mensaje: 'ElevenLabs se quedó sin créditos del mes. Los negocios con audio están respondiendo en texto hasta que se renueven o se carguen más.' },
+  ];
+  for (const lv of levels) {
+    const hit = lv.at >= 1 ? (forceExhausted || c.exhausted) : pct >= lv.at;
+    if (!hit) continue;
+    const already = (() => { try { return getRuntimeConfig(lv.key); } catch { return null; } })();
+    if (already === periodKey) continue;
+    setRuntimeConfig(lv.key, periodKey);
+    alerted.push(Math.round(lv.at * 100));
+    logError('elevenlabs-usage', { message: `ElevenLabs at ${(pct * 100).toFixed(1)}% (${c.count}/${c.limit}) alert=${lv.event}`, stack: '' });
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (adminEmail) {
+      sendAdminNotificationEmail({ adminEmail, event: lv.event, data: {
+        mensaje: lv.mensaje, usado: c.count, limite: c.limit, porcentaje: `${(pct * 100).toFixed(1)}%`,
+      }}).catch(err => logError('elevenlabs-usage-email', { message: err.message, stack: '' }));
     }
   }
-  return { pct: parseFloat(pct.toFixed(4)), character_count, character_limit, alerted };
+  return { pct: parseFloat(pct.toFixed(4)), character_count: c.count, character_limit: c.limit, alerted: alerted.length > 0, alerts: alerted };
 }
+// A TTS call that fails for lack of credits triggers the 100% alert right away.
+onCreditsExhausted(() => {
+  checkElevenLabsUsage({ forceExhausted: true }).catch(err => logError('elevenlabs-usage-check', { message: err.message, stack: '' }));
+});
 
 // Plans screen in the panel (3 plans with their Mercado Pago buttons). Never WhatsApp.
 const TRIAL_ACTIVATE_LINK = `${process.env.APP_URL || 'https://daxos.lat'}/dashboard.html#planes`;
@@ -6997,11 +7241,9 @@ setInterval(() => {
   // Data volume check every tick (30 min); emails the admin above 80%, max once / 24 h.
   checkDiskUsage().catch(err => logError('disk-usage-check', { message: err.message, stack: '' }));
 
-  // Daily ElevenLabs account usage check at 09:00 Uruguay time (alerts admin at 80%).
-  if (uyHour === 9 && _lastElevenCheckDate !== todayStr) {
-    _lastElevenCheckDate = todayStr;
-    checkElevenLabsUsage().catch(err => logError('elevenlabs-usage-check', { message: err.message, stack: err.stack || '' }));
-  }
+  // ElevenLabs credits every tick (30 min): refreshes the cached state the send path uses
+  // and emails the admin at 80% and 100%, once per billing period each.
+  checkElevenLabsUsage().catch(err => logError('elevenlabs-usage-check', { message: err.message, stack: err.stack || '' }));
 }, 30 * 60 * 1000);
 
 // Demo follow-up scheduler — every 10 minutes
@@ -7348,14 +7590,14 @@ const VOICE_ALLOWED_MODELS = [null, 'eleven_v4_turbo', 'eleven_v4'];
 
 // Set per-business voice model and stability.
 // Protected by ADMIN_SET_WA_TOKEN Bearer token (same as other /admin/api routes).
-app.post('/admin/api/business/:id/voice-config', requireBearerToken, (req, res) => {
+app.post('/admin/api/business/:id/voice-config', requireBearerToken, async (req, res) => {
   const bizId = parseInt(req.params.id, 10);
   if (!bizId || isNaN(bizId)) return res.status(400).json({ error: 'id inválido' });
 
   const biz = getBusinessById(bizId);
   if (!biz) return res.status(404).json({ error: `Negocio ${bizId} no encontrado` });
 
-  const { voice_tts_model, voice_stability } = req.body ?? {};
+  const { voice_tts_model, voice_stability, voice_id } = req.body ?? {};
 
   // Validate model — only listed values or null/undefined (to clear)
   const model = voice_tts_model === undefined ? biz.voice_tts_model : (voice_tts_model || null);
@@ -7370,14 +7612,29 @@ app.post('/admin/api/business/:id/voice-config', requireBearerToken, (req, res) 
       return res.status(400).json({ error: 'voice_stability debe ser un número entre 0 y 1, o null para limpiar' });
   }
 
-  const prev = { voice_tts_model: biz.voice_tts_model, voice_stability: biz.voice_stability };
+  // Optional: point the business at a voice that already exists in the ElevenLabs account
+  // (e.g. Daxos's own number with the same clone as the videos). Checked before saving.
+  let voiceName = null;
+  if (voice_id !== undefined) {
+    if (typeof voice_id !== 'string' || !/^[A-Za-z0-9]{10,40}$/.test(voice_id))
+      return res.status(400).json({ error: 'voice_id inválido' });
+    try { voiceName = (await getVoice(voice_id)).name; }
+    catch (e) { return res.status(400).json({ error: `La voz ${voice_id} no existe en la cuenta de ElevenLabs (${e.message})` }); }
+  }
+
+  const prev = { voice_tts_model: biz.voice_tts_model, voice_stability: biz.voice_stability, voice_id: biz.voice_id };
   setVoiceConfig(bizId, { voice_tts_model: model, voice_stability: stability });
+  if (voice_id !== undefined) {
+    setVoiceIdByAdmin(bizId, voice_id);
+    recordRuntimeConfigAudit(`biz:${bizId}:voice_id`, String(prev.voice_id), voice_id, req.ip || 'admin');
+  }
 
   const changedBy = req.ip || req.headers['x-forwarded-for'] || 'admin';
   recordRuntimeConfigAudit(`biz:${bizId}:voice_tts_model`, String(prev.voice_tts_model), String(model), changedBy);
   recordRuntimeConfigAudit(`biz:${bizId}:voice_stability`, String(prev.voice_stability), String(stability), changedBy);
 
-  res.json({ ok: true, business_id: bizId, voice_tts_model: model, voice_stability: stability, previous: prev });
+  res.json({ ok: true, business_id: bizId, voice_tts_model: model, voice_stability: stability,
+    ...(voice_id !== undefined ? { voice_id, voice_name: voiceName } : {}), previous: prev });
 });
 
 app.post('/admin/backup-now', requireBearerToken, async (req, res) => {

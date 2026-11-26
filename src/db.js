@@ -933,6 +933,41 @@ db.exec(`
     }
   }
 
+  // Migration 035: owner-tunable voice. Speed and tone are simple presets the clinic picks
+  // in the panel; pronunciations is a JSON list of {de, a} replacements applied before TTS
+  // ("HIFU" → "jifu"). NULL everywhere = the voice keeps sounding as before.
+  if (!applied('035_voice_style')) {
+    try {
+      const bizCols035 = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+      if (!bizCols035.includes('voice_speed'))          db.exec('ALTER TABLE businesses ADD COLUMN voice_speed TEXT');
+      if (!bizCols035.includes('voice_tone'))           db.exec('ALTER TABLE businesses ADD COLUMN voice_tone TEXT');
+      if (!bizCols035.includes('voice_pronunciations')) db.exec('ALTER TABLE businesses ADD COLUMN voice_pronunciations TEXT');
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('035_voice_style');
+      console.log('[migration 035] voice_speed + voice_tone + voice_pronunciations added');
+    } catch (e) {
+      console.error('[migration 035] failed (non-fatal):', e.message);
+    }
+  }
+
+  // Migration 036: voice instructions + audio spend tracking. voice_instructions is the owner's
+  // free text ("hablá más rápido, tono cercano"); voice_instructions_summary is what Daxos
+  // understood from it, shown back to the owner. spending_counters gains the real audio cost
+  // (every take + transcription, previews included) and the daily preview count.
+  if (!applied('036_voice_instructions')) {
+    try {
+      const bizCols036 = db.prepare('PRAGMA table_info(businesses)').all().map(c => c.name);
+      if (!bizCols036.includes('voice_instructions'))         db.exec('ALTER TABLE businesses ADD COLUMN voice_instructions TEXT');
+      if (!bizCols036.includes('voice_instructions_summary')) db.exec('ALTER TABLE businesses ADD COLUMN voice_instructions_summary TEXT');
+      const spCols036 = db.prepare('PRAGMA table_info(spending_counters)').all().map(c => c.name);
+      if (!spCols036.includes('audio_cost_usd')) db.exec('ALTER TABLE spending_counters ADD COLUMN audio_cost_usd REAL NOT NULL DEFAULT 0');
+      if (!spCols036.includes('voice_previews')) db.exec('ALTER TABLE spending_counters ADD COLUMN voice_previews INTEGER NOT NULL DEFAULT 0');
+      db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('036_voice_instructions');
+      console.log('[migration 036] voice_instructions + audio_cost_usd + voice_previews added');
+    } catch (e) {
+      console.error('[migration 036] failed (non-fatal):', e.message);
+    }
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -997,6 +1032,56 @@ function incrementElevenLabsChars(businessId, chars) {
     INSERT INTO spending_counters (business_id, date, elevenlabs_chars) VALUES (?, ?, ?)
     ON CONFLICT(business_id, date) DO UPDATE SET elevenlabs_chars = elevenlabs_chars + ?
   `).run(businessId, date, chars, chars);
+}
+
+// Real audio spend in USD (all takes + transcription), previews included.
+function addAudioCost(businessId, usd) {
+  if (!(usd > 0)) return;
+  const date = _getMvdDateStr();
+  db.prepare(`
+    INSERT INTO spending_counters (business_id, date, audio_cost_usd) VALUES (?, ?, ?)
+    ON CONFLICT(business_id, date) DO UPDATE SET audio_cost_usd = audio_cost_usd + ?
+  `).run(businessId, date, usd, usd);
+}
+
+// Sum of audio_cost_usd for the current calendar month (Montevideo dates, 'YYYY-MM-DD').
+function getMonthlyAudioCostUsd(businessId) {
+  const month = _getMvdDateStr().slice(0, 7);
+  const r = db.prepare(
+    "SELECT COALESCE(SUM(audio_cost_usd), 0) AS usd FROM spending_counters WHERE business_id = ? AND substr(date, 1, 7) = ?"
+  ).get(businessId, month);
+  return r ? r.usd : 0;
+}
+
+// Counts one "Escuchar prueba" for today and returns the new count.
+function incrementVoicePreviews(businessId) {
+  const date = _getMvdDateStr();
+  db.prepare(`
+    INSERT INTO spending_counters (business_id, date, voice_previews) VALUES (?, ?, 1)
+    ON CONFLICT(business_id, date) DO UPDATE SET voice_previews = voice_previews + 1
+  `).run(businessId, date);
+  return db.prepare('SELECT voice_previews FROM spending_counters WHERE business_id = ? AND date = ?')
+    .get(businessId, date).voice_previews;
+}
+
+function getVoicePreviewsToday(businessId) {
+  const r = db.prepare('SELECT voice_previews FROM spending_counters WHERE business_id = ? AND date = ?')
+    .get(businessId, _getMvdDateStr());
+  return r ? r.voice_previews : 0;
+}
+
+function setVoiceInstructions(businessId, { voice_instructions, voice_instructions_summary }) {
+  db.prepare('UPDATE businesses SET voice_instructions = ?, voice_instructions_summary = ? WHERE id = ?')
+    .run(voice_instructions ?? null, voice_instructions_summary ?? null, businessId);
+}
+
+// Owner pasted a voice_id that exists in the Daxos ElevenLabs account. Consent says so.
+function setVoiceIdByOwner(businessId, voiceId, ownerEmail) {
+  db.prepare(`
+    UPDATE businesses
+    SET voice_id = ?, voice_consent_at = datetime('now'), consent_text = ?, consent_by = ?
+    WHERE id = ?
+  `).run(voiceId, 'Voz de ElevenLabs elegida por el dueño con su voice_id', ownerEmail, businessId);
 }
 
 function getSpendingToday(businessId) {
@@ -1144,6 +1229,22 @@ function saveVoiceConsent(businessId, { voiceId, consentText, consentBy }) {
     SET voice_id = ?, voice_consent_at = datetime('now'), consent_text = ?, consent_by = ?
     WHERE id = ?
   `).run(voiceId, consentText, consentBy, businessId);
+}
+
+function setVoiceStyle(businessId, { voice_speed, voice_tone, voice_pronunciations }) {
+  db.prepare(`
+    UPDATE businesses SET voice_speed = ?, voice_tone = ?, voice_pronunciations = ? WHERE id = ?
+  `).run(voice_speed ?? null, voice_tone ?? null, voice_pronunciations ?? null, businessId);
+}
+
+// Admin only: point a business at a voice that already exists in the ElevenLabs account
+// (e.g. Daxos's own number using the same clone as the videos). The consent record says so.
+function setVoiceIdByAdmin(businessId, voiceId) {
+  db.prepare(`
+    UPDATE businesses
+    SET voice_id = ?, voice_consent_at = datetime('now'), consent_text = ?, consent_by = 'admin'
+    WHERE id = ?
+  `).run(voiceId, 'Voz existente asignada por admin', businessId);
 }
 
 function setVoiceConfig(businessId, { voice_tts_model, voice_stability }) {
@@ -2653,6 +2754,14 @@ module.exports = {
   setWebsiteSummary,
   saveVoiceConsent,
   setVoiceConfig,
+  setVoiceStyle,
+  setVoiceIdByAdmin,
+  setVoiceInstructions,
+  setVoiceIdByOwner,
+  addAudioCost,
+  getMonthlyAudioCostUsd,
+  incrementVoicePreviews,
+  getVoicePreviewsToday,
   createUser,
   getUserByEmail,
   changeUserEmail,

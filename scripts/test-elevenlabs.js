@@ -114,48 +114,103 @@ function runUnitTests() {
   process.env.ELEVENLABS_API_KEY = 'unit-test-fake';
   const { _ttsBody, _normalizeTtsText } = require('../src/elevenlabs');
 
-  // ── Comparison against origin/main body (Condición 4) ──────────
-  // origin/main ttsBody(text) produced exactly:
-  //   { text: normalizeTtsText(T), model_id: 'eleven_multilingual_v2', speed: 1.1,
-  //     voice_settings: { stability: 0.5, similarity_boost: 0.85, style: 0.2, use_speaker_boost: true } }
-  // New code with voice_tts_model=NULL must produce IDENTICAL body.
+  // ── Default body = natural-voice recipe (blind test 26/11) ──────
+  // NULL model → multilingual_v2, stability 0.45, similarity 0.85, style 0.3, speed 1.1
+  // (speed inside voice_settings: a top-level "speed" is ignored by ElevenLabs).
   // Text without terminal punctuation so normalizeTtsText adds '.' — matches origin/main behavior
   const TEST_TEXT = 'Hola cómo andás, en qué te puedo ayudar';
   const originMainExpected = {
     text: TEST_TEXT + '.', // normalizeTtsText adds terminal period (no markdown, no terminal punct)
     model_id: 'eleven_multilingual_v2',
-    speed: 1.1,
-    voice_settings: { stability: 0.5, similarity_boost: 0.85, style: 0.2, use_speaker_boost: true },
+    // speed lives inside voice_settings: ElevenLabs ignores a top-level "speed" (fixed 26/11)
+    voice_settings: { stability: 0.45, similarity_boost: 0.85, style: 0.3, use_speaker_boost: true, speed: 1.1 },
   };
   // NULL model (from DB column = NULL after migration)
   const nullModelFromDB = JSON.parse(_ttsBody(TEST_TEXT, { model: null, stability: null }));
   assert(JSON.stringify(nullModelFromDB) === JSON.stringify(originMainExpected),
-    'NULL model: body identical to origin/main (field-by-field)');
+    'NULL model: body = natural recipe (field-by-field)');
 
   // Undefined opts (call site before Fase 1) — also identical
   const undefOpts = JSON.parse(_ttsBody(TEST_TEXT));
   assert(JSON.stringify(undefOpts) === JSON.stringify(originMainExpected),
-    'undefined opts: body identical to origin/main');
+    'undefined opts: body = natural recipe');
+
+  // ── Owner presets: speed, tone, pronunciations ──────────────
+  const videos = JSON.parse(_ttsBody('Hola.', { tone: 'expresiva', speed: 'rapida' }));
+  assert(videos.voice_settings.stability === 0.35 && videos.voice_settings.style === 0.45, 'tone expresiva: stability 0.35 / style 0.45');
+  assert(videos.voice_settings.speed === 1.18, 'speed rapida: 1.18');
+  const calm = JSON.parse(_ttsBody('Hola.', { tone: 'tranquila', speed: 'lenta' }));
+  assert(calm.voice_settings.stability === 0.6 && calm.voice_settings.style === 0.15 && calm.voice_settings.speed === 1.0, 'tranquila + lenta');
+  const junk = JSON.parse(_ttsBody('Hola.', { tone: 'gritona', speed: 'x' }));
+  assert(JSON.stringify(junk.voice_settings) === JSON.stringify(originMainExpected.voice_settings), 'unknown presets: default settings');
+  const adminWins = JSON.parse(_ttsBody('Hola.', { tone: 'expresiva', stability: 0.7 }));
+  assert(adminWins.voice_settings.stability === 0.7, 'admin stability overrides tone preset');
+  const pron = JSON.parse(_ttsBody('El HIFU y el hifu-x, hifux.', { pronunciations: JSON.stringify([{ de: 'hifu', a: 'jifu' }]) }));
+  assert(pron.text === 'El jifu y el jifu-x, hifux.', 'pronunciations: whole word, case-insensitive');
+  const { _applyPronunciations } = require('../src/elevenlabs');
+  assert(_applyPronunciations('Ácido hialurónico', [{ de: 'ácido', a: 'asido' }]) === 'asido hialurónico', 'pronunciations: accents');
+  assert(_applyPronunciations('a.b axb', [{ de: 'a.b', a: 'ok' }]) === 'ok axb', 'pronunciations: regex chars escaped');
+  assert(_applyPronunciations('hola', 'not json') === 'hola', 'pronunciations: bad JSON ignored');
+
+
+  // ── Natural-voice recipe (receta A, variante 1) ─────────────
+  const el = require('../src/elevenlabs');
+  const sp = el._splitSentences('Hola, ¿cómo andás? Mañana a las tres tenemos lugar. ¿Te lo agendo?');
+  assert(sp.length === 3, 'split: 3 sentences');
+  assert(sp[1] === 'Mañana a las tres tenemos lugar.', 'split: sentence kept with its period');
+  const ab = el._splitSentences('El Dr. García atiende los martes. Dale');
+  assert(ab.length === 1 && ab[0] === 'El Dr. García atiende los martes. Dale.', 'split: "Dr." is not a sentence end; short tail merged; final period added');
+  assert(el._splitSentences('Sin punto final').join('|') === 'Sin punto final.', 'split: adds the closing period');
+  assert(el._splitSentences('').length === 0, 'split: empty text → no sentences');
+  const many = el._splitSentences(Array.from({ length: 12 }, (_, i) => `Frase número ${i + 1} de prueba.`).join(' '));
+  assert(many.length === 8, 'split: at most 8 sentences');
+  assert(el._wordSimilarity('Te lo agendo.', 'te lo agendo') === 1, 'similarity: same words (case/punct) = 1');
+  assert(el._wordSimilarity('Te lo agendo.', 'te la gendo') < 0.5, 'similarity: different words < 0.5');
+  const takes = [Buffer.alloc(100), Buffer.alloc(110), Buffer.alloc(105), Buffer.alloc(500)];
+  assert(el._pickBestTake('Mañana a las tres.', takes, ['mañana a las tres y', 'mañana a las tres', null, 'mañana a las tres']) === 1,
+    'pick: best transcription wins; tie → duration closest to median');
+  assert(el._pickBestTake('Hola.', takes, [null, null, null, null]) === 0, 'pick: all transcriptions failed → first take');
+  // credits → takes
+  assert(el.planTakes({ known: true, exhausted: false, remaining: 900, remainingRatio: 0.9 }, 100).takes === 4, 'credits 90% left → 4 takes');
+  assert(el.planTakes({ known: true, exhausted: false, remaining: 150, remainingRatio: 0.15 }, 100).takes === 1, 'credits 15% left → 1 take');
+  assert(el.planTakes({ known: true, exhausted: true, remaining: 0, remainingRatio: 0 }, 100).mode === 'text', 'credits exhausted → text');
+  assert(el.planTakes({ known: true, exhausted: false, remaining: 50, remainingRatio: 0.0001 }, 100).mode === 'text', 'credits not enough for this reply → text');
+  assert(el.planTakes({ known: false, exhausted: false }, 100).takes === 4, 'credits unknown → full recipe');
+
+  // ── Instrucciones de voz ────────────────────────────────────
+  const cl = require('../src/claude');
+  const vi = cl.parseVoiceInstructionsResult('{"velocidad":"rapida","tono":"expresiva","escritura":"Cercano y uruguayo, sin muletillas."}');
+  assert(vi.voice_speed === 'rapida' && vi.voice_tone === 'expresiva', 'instructions: presets mapped');
+  assert(vi.resumen === 'Velocidad: más rápida. Tono: expresiva. Al hablar: cercano y uruguayo, sin muletillas.', 'instructions: summary shown to owner');
+  const viBad = cl.parseVoiceInstructionsResult('{"velocidad":"turbo","tono":"gritona"}');
+  assert(viBad.voice_speed === null && viBad.voice_tone === null && viBad.resumen === '', 'instructions: unknown presets ignored');
+  assert(cl.parseVoiceInstructionsResult('no json').resumen === '', 'instructions: bad model output → nothing understood');
+  assert(cl.buildVoiceInstructionsPrompt('hablá rápido').includes('<instrucciones>\nhablá rápido\n</instrucciones>'), 'instructions: owner text fenced in prompt');
+  const bizV = { name: 'X', voice_id: 'v1', voice_instructions: 'tono cercano y uruguayo', response_mode: 'audio' };
+  const withAudio = cl.buildSystemPrompt(bizV, null, null, { forAudio: true });
+  const sysText = s => JSON.stringify(s);
+  assert(sysText(withAudio).includes('tono cercano y uruguayo') && sysText(withAudio).includes('NOTA DE VOZ'), 'prompt: voice instructions when reply is audio');
+  assert(!sysText(cl.buildSystemPrompt(bizV, null, null, { forAudio: false })).includes('tono cercano y uruguayo'), 'prompt: no voice instructions for text replies');
 
   // ── Standard legacy assertions ───────────────────────────────
   const legacyBody = JSON.parse(_ttsBody('Hola cómo andás.'));
   assert(legacyBody.model_id === 'eleven_multilingual_v2', 'legacy: model_id=eleven_multilingual_v2');
-  assert(legacyBody.speed === 1.1, 'legacy: speed=1.1');
-  assert(legacyBody.voice_settings.style === 0.2, 'legacy: voice_settings.style=0.2');
-  assert(legacyBody.voice_settings.stability === 0.5, 'legacy: voice_settings.stability=0.5');
+  assert(legacyBody.voice_settings.speed === 1.1 && !('speed' in legacyBody), 'legacy: voice_settings.speed=1.1 (not top-level)');
+  assert(legacyBody.voice_settings.style === 0.3, 'default: voice_settings.style=0.3');
+  assert(legacyBody.voice_settings.stability === 0.45, 'default: voice_settings.stability=0.45');
   assert(legacyBody.voice_settings.similarity_boost === 0.85, 'legacy: similarity_boost=0.85');
   assert(legacyBody.voice_settings.use_speaker_boost === true, 'legacy: use_speaker_boost=true');
 
   // NULL model from business → same as legacy
   const nullModelBody = JSON.parse(_ttsBody('Hola.', { model: null, stability: null }));
   assert(nullModelBody.model_id === 'eleven_multilingual_v2', 'null model: same legacy model_id');
-  assert(nullModelBody.voice_settings.style === 0.2, 'null model: has style (legacy)');
-  assert(nullModelBody.speed === 1.1, 'null model: has speed (legacy)');
+  assert(nullModelBody.voice_settings.style === 0.3, 'null model: has style (recipe)');
+  assert(nullModelBody.voice_settings.speed === 1.1, 'null model: has speed (legacy)');
 
   // Undefined model from business (column not yet set) → same as legacy
   const undefModelBody = JSON.parse(_ttsBody('Hola.', {}));
   assert(undefModelBody.model_id === 'eleven_multilingual_v2', 'undefined model: same legacy model_id');
-  assert(undefModelBody.voice_settings.style === 0.2, 'undefined model: has style (legacy)');
+  assert(undefModelBody.voice_settings.style === 0.3, 'undefined model: has style (recipe)');
 
   // v4 turbo path
   const v4Body = JSON.parse(_ttsBody('Hola cómo andás.', { model: 'eleven_v4_turbo' }));
@@ -177,7 +232,7 @@ function runUnitTests() {
 
   // eleven_multilingual_v2 explicit → NOT v4 → legacy path
   const v2Explicit = JSON.parse(_ttsBody('Hola.', { model: 'eleven_multilingual_v2' }));
-  assert(v2Explicit.voice_settings.style === 0.2, 'v2 explicit: legacy path with style');
+  assert(v2Explicit.voice_settings.style === 0.3, 'v2 explicit: recipe path with style');
 
   // Unknown model → warning + fallback to legacy
   const origError = console.error;
@@ -186,7 +241,7 @@ function runUnitTests() {
   const unknownModelBody = JSON.parse(_ttsBody('Hola.', { model: 'eleven_turbo_v2_5' }));
   console.error = origError;
   assert(warnCaptured.includes('unknown model'), 'unknown model: warning logged');
-  assert(unknownModelBody.voice_settings.style === 0.2, 'unknown model: falls back to legacy (has style)');
+  assert(unknownModelBody.voice_settings.style === 0.3, 'unknown model: falls back to default (has style)');
   assert(!unknownModelBody.model_id.includes('eleven_turbo_v2_5'), 'unknown model: not passed to EL');
 
   // voice_stability out of range → warning + default
@@ -278,6 +333,9 @@ async function runIntegrationTests() {
 
   // State captured by mocks
   let lastElRequest = null;   // { voiceId, body }
+  let elTtsRequests = [];     // every TTS call
+  let elSttCount = 0;
+  let aiReplyText = 'Hola cómo andás.';
   let metaCalls = [];         // all calls to mock meta
   // Mutable ElevenLabs account subscription (for the 80% admin alert tests)
   let elSubscription = { character_count: 0, character_limit: 1000000, next_character_count_reset_unix: 1111 };
@@ -290,11 +348,22 @@ async function runIntegrationTests() {
       req.on('end', () => {
         // POST /v1/text-to-speech/:voiceId → return silent MP3
         if (req.method === 'POST' && req.url.startsWith('/v1/text-to-speech/')) {
-          const voiceId = req.url.split('/')[3];
+          const voiceId = req.url.split('/')[3].split('?')[0];
           try { lastElRequest = { voiceId, body: JSON.parse(body) }; }
           catch { lastElRequest = { voiceId, body }; }
+          elTtsRequests.push(lastElRequest);
           res.writeHead(200, { 'Content-Type': 'audio/mpeg' });
           res.end(MOCK_MP3);
+        } else if (req.method === 'POST' && req.url === '/v1/speech-to-text') {
+          elSttCount++;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ text: 'texto transcripto' }));
+        } else if (req.method === 'GET' && req.url.startsWith('/v1/voices/')) {
+          const id = req.url.split('/')[3];
+          const voices = { libraryVoice1234: { voice_id: 'libraryVoice1234', name: 'Lib Voice', category: 'premade' },
+                           cloneVoice12345:  { voice_id: 'cloneVoice12345',  name: 'Alguien', category: 'cloned' } };
+          if (voices[id]) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(voices[id])); }
+          else { res.writeHead(404); res.end('{}'); }
         } else if (req.method === 'GET' && req.url === '/v1/user/subscription') {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(elSubscription));
@@ -345,7 +414,7 @@ async function runIntegrationTests() {
             id: 'msg_test',
             type: 'message',
             role: 'assistant',
-            content: [{ type: 'text', text: 'Hola cómo andás.' }],
+            content: [{ type: 'text', text: aiReplyText }],
             model: 'claude-haiku-4-5-20251001',
             stop_reason: 'end_turn',
             usage: { input_tokens: 10, output_tokens: 5,
@@ -449,6 +518,39 @@ async function runIntegrationTests() {
     }
   }
 
+  // ── Test C1b: owner voice settings + catalog ─────────────────
+  {
+    console.log('\n  C1b: owner saves speed/tone/pronunciations; catalog voice');
+    const cookie = await seedUser('c1b@el-test.com');
+    const biz = getBusinessByEmail('c1b@el-test.com');
+    configBusiness(biz.id, {
+      phone_number_id: 'pnid-c1b', wa_provider: 'meta', wa_access_token: 'fake-wa-token',
+      wa_connected_at: new Date().toISOString(), plan: 'crecimiento', plan_paid_at: new Date().toISOString(),
+      response_mode: 'audio', voice_id: 'voice-id-c1b', response_delay: 0,
+    });
+
+    const bad = await req('PUT', '/api/business/voice/settings', { voice_tone: 'gritona' }, { cookie });
+    assert(bad.status === 400, 'C1b: unknown tone rejected');
+    const ok = await req('PUT', '/api/business/voice/settings', {
+      voice_speed: 'rapida', voice_tone: 'expresiva', voice_pronunciations: [{ de: 'HIFU', a: 'jifu' }],
+    }, { cookie });
+    assert(ok.status === 200, 'C1b: settings saved');
+    const row = db.prepare('SELECT voice_speed, voice_tone, voice_pronunciations FROM businesses WHERE id = ?').get(biz.id);
+    assert(row.voice_speed === 'rapida' && row.voice_tone === 'expresiva', 'C1b: speed/tone stored');
+    assert(JSON.parse(row.voice_pronunciations)[0].a === 'jifu', 'C1b: pronunciations stored');
+
+    const cat = await req('GET', '/api/voice-catalog', null, { cookie });
+    assert(cat.status === 200 && cat.body.voices.length >= 2, 'C1b: catalog listed');
+    assert(!cat.body.voices.some(v => v.id === 'qRJbiqbavxXPG4xzVAYS' || v.id === 'JtLxORajLGYcUUERfNcK'),
+      'C1b: Vale\'s clone is not in the catalog');
+    const notCat = await req('POST', '/api/business/voice/catalog', { voice_id: 'qRJbiqbavxXPG4xzVAYS' }, { cookie });
+    assert(notCat.status === 400, 'C1b: non-catalog voice rejected');
+    const pick = await req('POST', '/api/business/voice/catalog', { voice_id: cat.body.voices[0].id }, { cookie });
+    assert(pick.status === 200, 'C1b: catalog voice picked');
+    const after = db.prepare('SELECT voice_id FROM businesses WHERE id = ?').get(biz.id);
+    assert(after.voice_id === cat.body.voices[0].id, 'C1b: business now uses the catalog voice');
+  }
+
   // ── Test C2: NULL voice_tts_model → legacy body ───────────────
   {
     console.log('\n  C2: voice_tts_model=NULL → legacy body (identical to before Fase 1)');
@@ -473,9 +575,9 @@ async function runIntegrationTests() {
 
     assert(lastElRequest !== null, 'C2: EL mock was called');
     if (lastElRequest) {
-      assert(lastElRequest.body?.voice_settings?.style === 0.2, 'C2: NULL model → style=0.2 (legacy)');
-      assert(lastElRequest.body?.speed === 1.1, 'C2: NULL model → speed=1.1 (legacy)');
-      assert(lastElRequest.body?.voice_settings?.stability === 0.5, 'C2: NULL model → stability=0.5 (legacy)');
+      assert(lastElRequest.body?.voice_settings?.style === 0.3, 'C2: NULL model → style=0.3 (recipe)');
+      assert(lastElRequest.body?.voice_settings?.speed === 1.1, 'C2: NULL model → voice_settings.speed=1.1 (legacy)');
+      assert(lastElRequest.body?.voice_settings?.stability === 0.45, 'C2: NULL model → stability=0.45 (recipe)');
       assert(lastElRequest.body?.voice_settings?.use_speaker_boost === true, 'C2: NULL model → use_speaker_boost (legacy)');
     }
   }
@@ -695,6 +797,126 @@ async function runIntegrationTests() {
     assert(r5.status === 403, 'C7: wrong token → 403');
   }
 
+  // ── C8: NULL model → natural recipe in the real webhook ──────
+  {
+    console.log('\n  C8: natural recipe — 4 takes per sentence, prev/next text, no next on the last');
+    elSubscription = { character_count: 0, character_limit: 1000000, next_character_count_reset_unix: 5555 };
+    await adminReq('POST', '/admin/api/run-elevenlabs-check');
+    const cookie = await seedUser('c8@el-test.com');
+    const biz = getBusinessByEmail('c8@el-test.com');
+    configBusiness(biz.id, {
+      phone_number_id: 'pnid-c8', wa_provider: 'meta', wa_access_token: 'fake-wa-token',
+      wa_connected_at: new Date().toISOString(), plan: 'crecimiento', plan_paid_at: new Date().toISOString(),
+      response_mode: 'audio', voice_id: 'voice-id-c8', response_delay: 0,
+    });
+    aiReplyText = 'Dale, quedó confirmado para el martes. Te mando un recordatorio el día antes. Cualquier cosa me avisás por acá.';
+    elTtsRequests = []; elSttCount = 0;
+    await req('POST', '/webhook', metaPayload('pnid-c8', '59899000008', 'Hola'));
+    await sleep(4000);
+    const voiceReqs = elTtsRequests.filter(r => r.voiceId === 'voice-id-c8');
+    assert(voiceReqs.length === 12, `C8: 3 sentences × 4 takes = 12 TTS calls (got ${voiceReqs.length})`);
+    const texts = [...new Set(voiceReqs.map(r => r.body.text))];
+    assert(texts.length === 3 && texts.every(t => /[.!?]$/.test(t)), 'C8: each sentence ends with punctuation');
+    const last = voiceReqs.find(r => r.body.text.startsWith('Cualquier cosa'));
+    const first = voiceReqs.find(r => r.body.text.startsWith('Dale'));
+    assert(last && !('next_text' in last.body) && last.body.previous_text, 'C8: last sentence has previous_text and NO next_text');
+    assert(first && first.body.next_text && !('previous_text' in first.body), 'C8: first sentence has next_text, no previous_text');
+    const vs = first ? first.body.voice_settings : {};
+    assert(vs.stability === 0.45 && vs.similarity_boost === 0.85 && vs.style === 0.3 && vs.speed === 1.1 && first.body.model_id === 'eleven_multilingual_v2',
+      'C8: multilingual_v2, stability 0.45, similarity 0.85, style 0.3, speed 1.1 inside voice_settings');
+    assert(elSttCount === 12, `C8: every take transcribed to pick the best (got ${elSttCount})`);
+    const audioSent = metaCalls.some(c => c.url.includes('/messages') && c.body?.type === 'audio' && c.body?.to === '59899000008');
+    assert(audioSent, 'C8: voice note sent');
+    const cost = db.prepare('SELECT COALESCE(SUM(audio_cost_usd),0) AS usd FROM spending_counters WHERE business_id = ?').get(biz.id).usd;
+    assert(cost > 0, 'C8: real audio cost recorded');
+    const billed = db.prepare('SELECT tts_chars FROM claude_usage WHERE business_id = ? ORDER BY id DESC LIMIT 1').get(biz.id);
+    assert(billed && billed.tts_chars >= aiReplyText.length * 4 - 10, 'C8: tts_chars = billed chars (all takes)');
+  }
+
+  // ── C9: credits under 20% → 1 take per sentence ─────────────
+  {
+    console.log('\n  C9: ElevenLabs credits < 20% → 1 take per sentence');
+    elSubscription = { character_count: 850000, character_limit: 1000000, next_character_count_reset_unix: 6666 };
+    await adminReq('POST', '/admin/api/run-elevenlabs-check');
+    const biz = getBusinessByEmail('c8@el-test.com');
+    db.prepare('UPDATE businesses SET voice_id = ? WHERE id = ?').run('voice-id-c9', biz.id); db.pragma('wal_checkpoint(FULL)');
+    aiReplyText = 'Sí, tenemos lugar el jueves a la tarde. ¿Querés que te lo reserve?';
+    elTtsRequests = []; elSttCount = 0;
+    await req('POST', '/webhook', metaPayload('pnid-c8', '59899000009', 'Hola'));
+    await sleep(3000);
+    const n = elTtsRequests.filter(r => r.voiceId === 'voice-id-c9').length;
+    assert(n === 2, `C9: 2 sentences × 1 take = 2 TTS calls (got ${n})`);
+    assert(elSttCount === 0, 'C9: no transcription with a single take');
+  }
+
+  // ── C10: credits exhausted → text + 100% alert once ─────────
+  {
+    console.log('\n  C10: ElevenLabs out of credits → text reply + admin alert at 100%');
+    elSubscription = { character_count: 1000000, character_limit: 1000000, next_character_count_reset_unix: 7777 };
+    const a1 = await adminReq('POST', '/admin/api/run-elevenlabs-check');
+    assert(a1.body.alerted === true && a1.body.alerts.includes(100) && a1.body.alerts.includes(80), 'C10: 80% and 100% alerts sent');
+    const a2 = await adminReq('POST', '/admin/api/run-elevenlabs-check');
+    assert(a2.body.alerted === false, 'C10: not re-alerted in the same period');
+    const biz = getBusinessByEmail('c8@el-test.com');
+    db.prepare('UPDATE businesses SET voice_id = ? WHERE id = ?').run('voice-id-c10', biz.id); db.pragma('wal_checkpoint(FULL)');
+    aiReplyText = 'Perfecto, te espero.';
+    elTtsRequests = []; metaCalls.length = 0;
+    await req('POST', '/webhook', metaPayload('pnid-c8', '59899000010', 'Hola'));
+    await sleep(2500);
+    assert(elTtsRequests.filter(r => r.voiceId === 'voice-id-c10').length === 0, 'C10: no TTS call');
+    assert(metaCalls.some(c => c.url.includes('/messages') && c.body?.type === 'text'), 'C10: replied in text');
+    elSubscription = { character_count: 0, character_limit: 1000000, next_character_count_reset_unix: 8888 };
+    await adminReq('POST', '/admin/api/run-elevenlabs-check');
+  }
+
+  // ── C11: Voz panel — preview limit, custom voice_id, instructions ──
+  {
+    console.log('\n  C11: Voz panel endpoints');
+    const cookie = await seedUser('c11@el-test.com');
+    const biz = getBusinessByEmail('c11@el-test.com');
+    configBusiness(biz.id, { plan: 'crecimiento', plan_paid_at: new Date().toISOString(), voice_id: 'voice-id-c11' });
+    db.prepare("INSERT OR REPLACE INTO runtime_config (key, value) VALUES ('voice_preview_daily_limit', '2')").run(); db.pragma('wal_checkpoint(FULL)');
+
+    const info = await req('GET', '/api/business/voice/info', null, { cookie });
+    assert(info.status === 200 && info.body.previews_left === 2 && info.body.accepts_speed === true, 'C11: info → 2 tests left, speed accepted');
+    const p1 = await req('POST', '/api/business/voice/preview', { voice_speed: 'rapida', text: 'Hola. ¿Te ayudo?' }, { cookie });
+    assert(p1.status === 200, 'C11: preview 1 ok');
+    const p2 = await req('POST', '/api/business/voice/preview', {}, { cookie });
+    assert(p2.status === 200, 'C11: preview 2 ok');
+    const p3 = await req('POST', '/api/business/voice/preview', {}, { cookie });
+    assert(p3.status === 429 && /pruebas de hoy/.test(p3.body.error || ''), 'C11: preview 3 → daily limit');
+    const prevCost = db.prepare('SELECT audio_cost_usd, voice_previews FROM spending_counters WHERE business_id = ?').get(biz.id);
+    assert(prevCost && prevCost.voice_previews === 2 && prevCost.audio_cost_usd > 0, 'C11: previews counted in the monthly audio spend');
+
+    const bad = await req('POST', '/api/business/voice/custom', { voice_id: 'x y' }, { cookie });
+    assert(bad.status === 400, 'C11: malformed voice_id → 400');
+    const cloned = await req('POST', '/api/business/voice/custom', { voice_id: 'cloneVoice12345' }, { cookie });
+    assert(cloned.status === 400 && /clonada/.test(cloned.body.error || ''), 'C11: someone else\'s cloned voice rejected');
+    const missing = await req('POST', '/api/business/voice/custom', { voice_id: 'missingVoice1234' }, { cookie });
+    assert(missing.status === 400, 'C11: voice not in the account → 400');
+    const ok = await req('POST', '/api/business/voice/custom', { voice_id: 'libraryVoice1234' }, { cookie });
+    assert(ok.status === 200 && ok.body.name === 'Lib Voice', 'C11: library voice accepted');
+    assert(getBusinessByEmail('c11@el-test.com').voice_id === 'libraryVoice1234', 'C11: voice_id saved');
+
+    const save = await req('PUT', '/api/business/voice/settings', {
+      voice_speed: 'rapida', voice_tone: 'natural', voice_pronunciations: [],
+      voice_instructions: 'hablá más rápido, tono cercano', voice_instructions_summary: 'Velocidad: más rápida.',
+    }, { cookie });
+    assert(save.status === 200 && save.body.voice_instructions === 'hablá más rápido, tono cercano', 'C11: instructions saved');
+    const row = getBusinessByEmail('c11@el-test.com');
+    assert(row.voice_instructions_summary === 'Velocidad: más rápida.' && row.voice_speed === 'rapida', 'C11: summary + speed stored');
+    const keep = await req('PUT', '/api/business/voice/settings', { voice_speed: 'normal', voice_tone: 'natural' }, { cookie });
+    assert(keep.status === 200 && getBusinessByEmail('c11@el-test.com').voice_instructions === 'hablá más rápido, tono cercano', 'C11: omitted instructions are kept');
+
+    const cookieA = await seedUser('c11a@el-test.com');
+    const bizA = getBusinessByEmail('c11a@el-test.com');
+    configBusiness(bizA.id, { plan: 'arranque', voice_id: 'voice-id-c11a' });
+    const pA = await req('POST', '/api/business/voice/preview', {}, { cookie: cookieA });
+    assert(pA.status === 403, 'C11: plan Arranque → no voice preview');
+    const cA = await req('POST', '/api/business/voice/custom', { voice_id: 'libraryVoice1234' }, { cookie: cookieA });
+    assert(cA.status === 403, 'C11: plan Arranque → no custom voice');
+  }
+
   db.close();
 }
 
@@ -722,7 +944,8 @@ async function main() {
   const total = passed + failed;
   console.log(`\n${'='.repeat(40)}`);
   console.log(`${total} tests — ${passed} passed, ${failed} failed`);
-  if (failed > 0) process.exit(1);
+  cleanup();
+  process.exit(failed > 0 ? 1 : 0);
 }
 
 main().catch(e => {
