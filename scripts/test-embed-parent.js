@@ -35,16 +35,18 @@ function req(method, p, body) {
 (async () => {
   // "Pupi": a page that frames the embed and records what it receives from Daxos only.
   host = http.createServer((q, s) => {
-    const src = new URL(q.url, HOST).searchParams.get('src') || '';
+    const params = new URL(q.url, HOST).searchParams;
+    const src = params.get('src') || '';
+    const lateMs = Number(params.get('late') || 0); // listener attached late, like a slow React effect
     s.writeHead(200, { 'Content-Type': 'text/html' });
     s.end(`<!doctype html><body><script>
       window.__msgs = [];
-      window.addEventListener('message', e => {
+      setTimeout(() => window.addEventListener('message', e => {
         if (e.origin !== 'http://localhost:${PORT}') return;
         if (!e.data || e.data.source !== 'assistant-embed') return;
         window.__msgs.push(e.data);
         if (e.data.event === 'resize') document.getElementById('f').style.height = e.data.height + 'px';
-      });
+      }), ${lateMs});
     </script><iframe id="f" src="${src.replace(/"/g, '')}" style="width:900px;height:200px;border:0"
       allow="microphone; clipboard-write"></iframe></body>`);
   }).listen(HOST_PORT);
@@ -56,10 +58,10 @@ function req(method, p, body) {
   await req('POST', '/api/partner/businesses', { crm_user_id: 'p1', name: 'P1', email: 'p1@t.com' });
 
   const browser = await chromium.launch({ headless: true });
-  const open = async (url) => {
+  const open = async (url, late = 0) => {
     const page = await (await browser.newContext()).newPage();
     await page.route('**/connect.facebook.net/**', r => r.abort());
-    await page.goto(`${HOST}/?src=${encodeURIComponent(url)}`);
+    await page.goto(`${HOST}/?late=${late}&src=${encodeURIComponent(url)}`);
     return page;
   };
   const msgs = (page) => page.evaluate(() => window.__msgs);
@@ -91,6 +93,18 @@ function req(method, p, body) {
   page = await open(link);
   ready = await waitEvent(page, 'ready');
   ok('"ready" says connected (Pupi shows "Conectado")', ready && ready.connected === true);
+  // Pupi asks for the state whenever it wants.
+  await page.evaluate(() => { window.__msgs = []; });
+  await page.evaluate((origin) => document.getElementById('f').contentWindow.postMessage({ source: 'assistant-host', event: 'get_state' }, origin), `http://localhost:${PORT}`);
+  const asked = await waitEvent(page, 'ready', 4000);
+  ok('"get_state" from the parent → "ready" again', asked && asked.connected === true);
+
+  console.log('Parent listener attached late (2.5 s after the iframe)');
+  link = (await req('POST', '/api/partner/login-link', { crm_user_id: 'p1', mode: 'embed' })).url;
+  const late = await open(link, 2500);
+  const lateReady = await waitEvent(late, 'ready', 8000);
+  ok('late listener still gets "ready" (repeated for a few seconds)', lateReady && lateReady.connected === true);
+
   db.prepare('UPDATE embed_sessions SET expires_at = ?').run(Math.floor(Date.now() / 1000) - 5);
   ok('"expired" when the 8 h session ends (next refresh)', !!(await waitEvent(page, 'expired', 12000)));
   const frame = page.frames().find(f => f.url().includes(`localhost:${PORT}`));
