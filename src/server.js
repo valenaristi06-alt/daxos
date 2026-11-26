@@ -147,6 +147,7 @@ const { generateReply, analyzeStyle, summarizeWebsite, initAnthropicKey, getLast
 initAnthropicKey(_apiKey);
 const { handleOwnerBookingReply, checkBookingTimeouts, notifyOwnerOfBooking } = require('./bookings');
 const { extractPricesFromMany, enforcePriceCap } = require('./pricecap');
+const { buildSources: buildGroundingSources, groundReply, summarizeViolations, groundingMode } = require('./grounding');
 const { handleDemoFlow, processFollowups } = require('./demo-flow');
 const { sendWeeklySummaries } = require('./weekly');
 const { cloneVoice, generatePreview, deleteVoice } = require('./elevenlabs');
@@ -2474,9 +2475,28 @@ app.post('/api/business/preview-chat', requireAuth, async (req, res) => {
       needsHuman: false,
       images:    getBusinessImages(user.business_id),
       documents: getBusinessDocumentTexts(user.business_id),
+      hoursText: formatWeeklyHours(business),
     };
-    const rawReply = await generateReply(business, history, message.trim(), null, null, previewCtx);
+    let rawReply = await generateReply(business, history, message.trim(), null, null, previewCtx);
     incrementPreviewCall(business.id);
+    // Same grounding check as the live bot, so the owner previews what clients really get.
+    {
+      const _pvGrounding = await groundReply({
+        reply: rawReply,
+        sources: buildGroundingSources({ business, runtimeCtx: previewCtx, history, userTexts: [message] }),
+        regenerate: async (note) => {
+          const r = await generateReply(business, history, message.trim(), null, null, { ...previewCtx, groundingNote: note });
+          incrementPreviewCall(business.id);
+          return r;
+        },
+        mode: groundingMode(),
+        names: process.env.GROUNDING_NAMES !== 'off',
+      });
+      if (_pvGrounding.first.length > 0) {
+        logError('grounding', { message: `action=${_pvGrounding.action} biz=${business.id} conv=preview first=[${summarizeViolations(_pvGrounding.first)}] second=[${summarizeViolations(_pvGrounding.second)}]`, stack: '' });
+      }
+      rawReply = _pvGrounding.reply;
+    }
     let sent_doc = false;
     let needs_human = false;
     let reply = rawReply;
@@ -2963,6 +2983,22 @@ function _resolveBusinessHours(business) {
   return null;
 }
 
+// Weekly schedule as plain text for the system prompt, or null when no hours are loaded.
+// e.g. "lunes 09:00 a 18:00; sábado 10:00 a 14:00; domingo cerrado".
+function formatWeeklyHours(business) {
+  const hours = _resolveBusinessHours(business);
+  if (!hours) return null;
+  const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+  const parts = [];
+  for (const d of [1, 2, 3, 4, 5, 6, 0]) {
+    const slots = (hours[d] || []).filter(([s, e]) => Number.isFinite(s) && Number.isFinite(e));
+    parts.push(slots.length
+      ? `${DIAS[d]} ${slots.map(([s, e]) => `${_minToHHMM(s)} a ${_minToHHMM(e)}`).join(' y ')}`
+      : `${DIAS[d]} cerrado`);
+  }
+  return parts.join('; ');
+}
+
 // Returns { open: bool|null, closesAt: string|null, nextOpen: {day, time, today}|null }
 // open=null means no hours configured.
 // Supports midnight-crossing slots (end < start) and the fallback business_hours_start/end.
@@ -3066,6 +3102,8 @@ function isMsgStale(business, msgTimestamp) {
   if (nowSec - msgTimestamp > MSG_MAX_AGE_MINUTES * 60) return 'too_old';
   return null;
 }
+
+const _groundingNotifyAt = new Map(); // `${convId}:${hourKey}` → true (owner alert throttle)
 
 async function processIncomingMessage(business, waCredentials, { msgId, customerPhone, text, msgTimestamp, msgTimestampField, imageData = null, claudeText = null, waProfileName = null }) {
   if (!customerPhone) {
@@ -3600,6 +3638,7 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     images: businessImages,
     documents: businessDocs,
     isOpenResult: _hoursResult,
+    hoursText: formatWeeklyHours(business),
     afterHoursInstructions: _hoursResult.open === false ? (business.after_hours_instructions || null) : null,
     urgentPhone: _hoursResult.open === false ? (business.urgent_phone || null) : null,
     agenda: agendaCtx,
@@ -3610,13 +3649,38 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
     stack: '',
   });
   let rawReply;
+  let _grounding = null;
   try {
-    rawReply = await generateReply(business, history, claudeText ?? text, conversation.label || null, {
+    const _generate = (ctx) => generateReply(business, history, claudeText ?? text, conversation.label || null, {
       enabled: !!business.booking_enabled && !agendaOk,
       state: agendaOk ? null : currentBookingState,
-    }, runtimeCtx, conversation.id, imageData);
+    }, ctx, conversation.id, imageData);
+    rawReply = await _generate(runtimeCtx);
     logError('webhook-claude-ok', { message: `business_id=${business.id} reply_length=${rawReply.length}`, stack: '' });
     incrementAnthropicCall(business.id);
+
+    // ── Grounding: never send data that is not in the business config or the conversation.
+    // Violation → one regeneration naming the data → still violating → fixed deferral + owner alert.
+    _grounding = await groundReply({
+      reply: rawReply,
+      sources: buildGroundingSources({
+        business, runtimeCtx, bookingState: currentBookingState, history,
+        userTexts: [text, claudeText], customerPhone, extraTexts: [waProfileName],
+      }),
+      regenerate: async (note) => {
+        const r = await _generate({ ...runtimeCtx, groundingNote: note });
+        incrementAnthropicCall(business.id);
+        return r;
+      },
+      mode: groundingMode(),
+      hasImage: !!imageData,
+      names: process.env.GROUNDING_NAMES !== 'off',
+    });
+    if (_grounding.first.length > 0) {
+      // No personal data: business/conversation ids, the kind of data and the invented value.
+      logError('grounding', { message: `action=${_grounding.action} biz=${business.id} conv=${conversation.id} first=[${summarizeViolations(_grounding.first)}] second=[${summarizeViolations(_grounding.second)}]`, stack: '' });
+    }
+    rawReply = _grounding.reply;
   } catch (claudeErr) {
     logError('webhook-claude-error', claudeErr);
     // Send fallback message once (not if already needs_attention to avoid looping)
@@ -4234,13 +4298,27 @@ async function processIncomingMessage(business, waCredentials, { msgId, customer
   }
 
   // Derivación: notificar al dueño pero NO pausar el bot — sigue respondiendo
+  const _groundingBlocked = _grounding?.action === 'replaced';
   if (needsHuman && !conversation.needs_human) {
     setNeedsHuman(conversation.id, 1);
     const owner = getUserByBusinessId(business.id);
     notifyOwnerOfPause({
       business, owner, channel: 'whatsapp', contactId: customerPhone,
       messageText: text, conversationId: conversation.id, waCredentials,
+      ...(_groundingBlocked ? { subject: '❓ Dato sin cargar — el cliente espera respuesta' } : {}),
     }).catch(err => console.error('[notify-human]', err.message));
+  } else if (_groundingBlocked) {
+    // Conversation was already flagged: still tell the owner, at most once per hour per conversation.
+    const _gKey = `${conversation.id}:${Math.floor(Date.now() / 3_600_000)}`;
+    if (!_groundingNotifyAt.has(_gKey)) {
+      if (_groundingNotifyAt.size > 5000) _groundingNotifyAt.clear();
+      _groundingNotifyAt.set(_gKey, true);
+      notifyOwnerOfPause({
+        business, owner: getUserByBusinessId(business.id), channel: 'whatsapp', contactId: customerPhone,
+        messageText: text, conversationId: conversation.id, waCredentials,
+        subject: '❓ Dato sin cargar — el cliente espera respuesta',
+      }).catch(err => console.error('[notify-grounding]', err.message));
+    }
   }
 
   if (isUrgente && business.urgent_alert_enabled) {
