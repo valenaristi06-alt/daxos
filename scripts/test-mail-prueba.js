@@ -5,7 +5,7 @@
  *
  * Suite A — HTTP: 401, 503 missing RESEND_API_KEY (no env vars set)
  * Suite B — HTTP: 503 missing ADMIN_EMAIL (only RESEND_API_KEY set)
- * Suite C — HTTP: rate limit 429, 200 with 9 results (both env vars set)
+ * Suite C — HTTP: rate limit 429, 200 with 12 results (both env vars set)
  * Suite D — Direct email function tests with mocked fetch:
  *             each template renders without errors,
  *             only sends to adminEmail,
@@ -156,12 +156,12 @@ async function suiteC() {
   try {
     await waitForServer(PORT_C);
 
-    // C1: first call → 200, 9 keys in body (Resend will fail per template, but endpoint returns 200)
+    // C1: first call → 200, 12 keys in body (Resend will fail per template, but endpoint returns 200)
     const r1 = await req(PORT_C, '/admin/api/test-mails', { bearer: BEARER });
     assert(r1.status === 200, `C1: primera llamada → 200 (got ${r1.status})`);
     const keys = Object.keys(r1.body || {});
-    assert(keys.length === 9, `C1: resultado tiene 9 claves (got ${keys.length})`);
-    const expected = ['hourly_cap','api_error','wa_error','sale_intent','turno_nuevo','pausa','urgente','claude_sin_creditos','claude_5xx'];
+    assert(keys.length === 12, `C1: resultado tiene 12 claves (9 de siempre + 3 de fin de prueba) (got ${keys.length})`);
+    const expected = ['hourly_cap','api_error','wa_error','sale_intent','turno_nuevo','pausa','urgente','claude_sin_creditos','claude_5xx','trial_aviso','trial_gracia','trial_terminada'];
     assert(expected.every(k => keys.includes(k)), 'C1: todas las claves esperadas presentes');
     assert(Object.values(r1.body || {}).every(v => typeof v === 'string'), 'C1: cada valor es string');
 
@@ -264,7 +264,7 @@ async function suiteE() {
     try { parsed = JSON.parse(row?.result || 'null'); } catch { parsed = null; }
     assert(parsed !== null && typeof parsed === 'object', 'E3: result es JSON objeto');
     const keys = Object.keys(parsed || {});
-    assert(keys.length === 9, `E4: resultado tiene 9 claves (got ${keys.length})`);
+    assert(keys.length === 12, `E4: resultado tiene 12 claves (got ${keys.length})`);
   } finally {
     db.close();
     try { execSync(`rm -rf ${DB_C}`); } catch {}

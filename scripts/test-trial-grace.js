@@ -147,7 +147,7 @@ async function testEmailFunctions() {
   calls.length = 0;
   await sendTrialWarningEmail({ to: 'a@b.com', businessName: rawName, convCount: 120, convLimit: 150, dayNum: 11, dayLimit: 14 });
   assert(calls.length === 1, 'sendTrialWarningEmail: called fetch once');
-  assert(calls[0].subject.includes('Tu prueba de Daxos está llegando al final'), 'sendTrialWarningEmail: correct subject');
+  assert(calls[0].subject.includes('Tu prueba de Daxos está por terminar'), 'sendTrialWarningEmail: correct subject');
   assert(calls[0].html.includes(PLAN_LINK), 'sendTrialWarningEmail: plan link present');
   assert(calls[0].html.includes(escaped), 'sendTrialWarningEmail: biz name escaped');
   assert(!calls[0].html.includes('<&>'), 'sendTrialWarningEmail: no raw < & > in HTML');
@@ -156,7 +156,7 @@ async function testEmailFunctions() {
   calls.length = 0;
   await sendTrialGraceEmail({ to: 'a@b.com', businessName: rawName, graceConvsLeft: 20, graceHoursLeft: 48 });
   assert(calls.length === 1, 'sendTrialGraceEmail: called fetch once');
-  assert(calls[0].subject.includes('Tu prueba de Daxos venció'), 'sendTrialGraceEmail: correct subject');
+  assert(calls[0].subject.includes('Tu prueba de Daxos terminó'), 'sendTrialGraceEmail: correct subject');
   assert(calls[0].html.includes(PLAN_LINK), 'sendTrialGraceEmail: plan link present');
   assert(calls[0].html.includes(escaped), 'sendTrialGraceEmail: biz name escaped');
 
@@ -164,7 +164,7 @@ async function testEmailFunctions() {
   calls.length = 0;
   await sendTrialEndedEmail({ to: 'a@b.com', businessName: rawName });
   assert(calls.length === 1, 'sendTrialEndedEmail: called fetch once');
-  assert(calls[0].subject.includes('El período de prueba de Daxos terminó'), 'sendTrialEndedEmail: correct subject');
+  assert(calls[0].subject.includes('Tu asistente de Daxos dejó de responder'), 'sendTrialEndedEmail: correct subject');
   assert(calls[0].html.includes(PLAN_LINK), 'sendTrialEndedEmail: plan link present');
   assert(calls[0].html.includes(escaped), 'sendTrialEndedEmail: biz name escaped');
 

@@ -878,6 +878,38 @@ db.exec(`
     }
   }
 
+  // Migration 033: trial emails are now sent once per business and per stage, tracked in
+  // owner_alert_log ('trial_email_warning' | 'trial_email_grace' | 'trial_email_ended').
+  // Notices that already went out under the old "one per day" logic are recorded here, so
+  // the first real run of the daily job does not send them a second time. Data only.
+  //   warning → trial_warned_at is set
+  //   grace   → a notice was sent on/after the day grace started
+  //   ended   → a client already got the "trial ended" reply (the owner was notified then)
+  if (!applied('033_trial_email_backfill')) {
+    try {
+      const toMs = v => { if (!v) return null; const t = String(v); const ms = Date.parse(t.includes('T') ? t : t.replace(' ', 'T') + 'Z'); return Number.isFinite(ms) ? ms : null; };
+      const nowSec = Math.floor(Date.now() / 1000);
+      const ins = db.prepare('INSERT INTO owner_alert_log (business_id, conversation_id, kind, sent_at) VALUES (?, NULL, ?, ?)');
+      const firstEnded = db.prepare('SELECT MIN(trial_ended_notified_at) AS at FROM conversations WHERE business_id = ? AND trial_ended_notified_at IS NOT NULL');
+      const rows = db.prepare("SELECT id, trial_warned_at, trial_grace_started_at, trial_grace_notified_at FROM businesses WHERE plan = 'arranque' AND trial_starts_at IS NOT NULL").all();
+      const count = { warning: 0, grace: 0, ended: 0 };
+      db.transaction(() => {
+        for (const b of rows) {
+          const notified = toMs(b.trial_grace_notified_at);
+          const graceStart = toMs(b.trial_grace_started_at);
+          const endedAt = toMs(firstEnded.get(b.id)?.at);
+          if (b.trial_warned_at) { ins.run(b.id, 'trial_email_warning', nowSec); count.warning++; }
+          if (graceStart != null && notified != null && notified >= graceStart) { ins.run(b.id, 'trial_email_grace', nowSec); count.grace++; }
+          if (endedAt != null && notified != null && notified >= endedAt) { ins.run(b.id, 'trial_email_ended', nowSec); count.ended++; }
+        }
+        db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run('033_trial_email_backfill');
+      })();
+      console.log(`[migration 033] trial email history recorded: warning=${count.warning} grace=${count.grace} ended=${count.ended}`);
+    } catch (e) {
+      console.error('[migration 033] failed (non-fatal):', e.message);
+    }
+  }
+
 })();
 
 db.exec(`CREATE TABLE IF NOT EXISTS es_pending (
@@ -1314,7 +1346,7 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
   }
 
   if (whatsapp_number) {
-    const result = db.prepare(`
+    db.prepare(`
       INSERT INTO businesses (name, whatsapp_number, sales_examples, survey_answers, business_context, website_url, response_mode, response_delay, pricing_info)
       VALUES (@name, @whatsapp_number, @sales_examples, @survey_answers, @business_context, @website_url, @response_mode, @response_delay, @pricing_info)
       ON CONFLICT(whatsapp_number) DO UPDATE SET
@@ -1323,7 +1355,10 @@ function upsertBusiness({ id, name, whatsapp_number = null, sales_examples = nul
         website_url=excluded.website_url, response_mode=excluded.response_mode,
         response_delay=excluded.response_delay, pricing_info=excluded.pricing_info
     `).run(serialized);
-    const rowId = result.lastInsertRowid || db.prepare('SELECT id FROM businesses WHERE whatsapp_number = ?').get(whatsapp_number).id;
+    // Look the row up by its unique number. lastInsertRowid is NOT reliable here: when the
+    // statement takes the UPDATE branch it still holds the rowid of whatever was inserted
+    // last on this connection (a log line, a migration row…), i.e. another table's id.
+    const rowId = db.prepare('SELECT id FROM businesses WHERE whatsapp_number = ?').get(whatsapp_number).id;
     return getBusinessById(rowId);
   }
 
@@ -1871,6 +1906,37 @@ function setTrialGraceStartedAt(businessId, isoUtc) {
 
 function setTrialGraceNotifiedAt(businessId, isoUtc) {
   db.prepare('UPDATE businesses SET trial_grace_notified_at = ? WHERE id = ?').run(isoUtc, businessId);
+}
+
+// ── Trial emails: once per business and per stage ────────────────────────────
+// Stages: 'warning' (trial about to end), 'grace' (trial over, bot still answering),
+// 'ended' (bot stopped). Stored in owner_alert_log as kind 'trial_email_<stage>'.
+// Only entries after the current trial start count, so a restarted trial notifies again.
+function _trialStartEpoch(trialStartsAt) {
+  if (!trialStartsAt) return 0;
+  const str = String(trialStartsAt);
+  const ms = Date.parse(str.includes('T') ? str : str.replace(' ', 'T') + 'Z');
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) : 0;
+}
+
+function trialEmailAlreadySent(businessId, stage, trialStartsAt) {
+  return !!db.prepare(
+    'SELECT 1 FROM owner_alert_log WHERE business_id = ? AND kind = ? AND sent_at >= ? LIMIT 1'
+  ).get(businessId, `trial_email_${stage}`, _trialStartEpoch(trialStartsAt));
+}
+
+// Atomic check-and-mark. Returns true only for the caller that gets to send.
+const claimTrialEmail = db.transaction((businessId, stage, trialStartsAt) => {
+  if (trialEmailAlreadySent(businessId, stage, trialStartsAt)) return false;
+  db.prepare('INSERT INTO owner_alert_log (business_id, conversation_id, kind, sent_at) VALUES (?, NULL, ?, ?)')
+    .run(businessId, `trial_email_${stage}`, Math.floor(Date.now() / 1000));
+  return true;
+});
+
+// Undo a claim when the email could not be sent, so the next run retries.
+function releaseTrialEmail(businessId, stage, trialStartsAt) {
+  db.prepare('DELETE FROM owner_alert_log WHERE business_id = ? AND kind = ? AND sent_at >= ?')
+    .run(businessId, `trial_email_${stage}`, _trialStartEpoch(trialStartsAt));
 }
 
 function setTrialEndedNotifiedAt(convId, isoUtc) {
@@ -2579,6 +2645,9 @@ module.exports = {
   markConversationPausedByTrial,
   resumeTrialPausedConversations,
   getTrialBusinesses,
+  trialEmailAlreadySent,
+  claimTrialEmail,
+  releaseTrialEmail,
   setBillingData,
   setBillingNotifiedAt,
   createBooking,
